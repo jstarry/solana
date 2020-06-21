@@ -10,6 +10,7 @@ pub mod abi_example;
 
 pub mod account;
 pub mod account_utils;
+pub mod bank_forks_client;
 pub mod bpf_loader;
 pub mod clock;
 pub mod commitment_config;

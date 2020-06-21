@@ -2,6 +2,7 @@ use crate::{bank::Bank, bank_forks::BankForks};
 use futures::future::Future;
 use futures::future::{self, Ready};
 use solana_sdk::{
+    bank_forks_client::BankForksRpc,
     clock::Slot,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -19,17 +20,6 @@ use std::{
 };
 use tarpc::context::Context;
 use tokio::time::delay_for;
-
-#[tarpc::service]
-trait BankForksRpc {
-    async fn get_recent_blockhash() -> (Hash, FeeCalculator, Slot);
-    async fn send_transaction(transaction: Transaction) -> Signature;
-    async fn get_signature_status(signature: Signature) -> Option<transaction::Result<()>>;
-    async fn get_root_slot() -> Slot;
-    async fn send_and_confirm_transaction(
-        transaction: Transaction,
-    ) -> Option<transaction::Result<()>>;
-}
 
 #[derive(Clone)]
 pub struct BankForksServer {
@@ -140,7 +130,10 @@ mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use futures::prelude::*;
-    use solana_sdk::{message::Message, pubkey::Pubkey, signature::Signer, system_instruction};
+    use solana_sdk::{
+        bank_forks_client::BankForksRpcClient, message::Message, pubkey::Pubkey, signature::Signer,
+        system_instruction,
+    };
     use std::io;
     use tarpc::{
         client, context,

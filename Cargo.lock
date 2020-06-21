@@ -4685,6 +4685,7 @@ dependencies = [
  "solana-logger",
  "solana-sdk-macro 1.3.0",
  "solana-sdk-macro-frozen-abi",
+ "tarpc",
  "thiserror",
  "tiny-bip39",
 ]

@@ -1,4 +1,5 @@
 use crate::{bank::Bank, bank_forks::BankForks};
+use futures::future::Future;
 use futures::future::{self, Ready};
 use solana_sdk::{
     clock::Slot,
@@ -8,13 +9,16 @@ use solana_sdk::{
     transaction::{self, Transaction},
 };
 use std::{
+    pin::Pin,
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc,
     },
     thread::Builder,
+    time::Duration,
 };
 use tarpc::context::Context;
+use tokio::time::delay_for;
 
 #[tarpc::service]
 trait BankForksRpc {
@@ -22,6 +26,9 @@ trait BankForksRpc {
     async fn send_transaction(transaction: Transaction) -> Signature;
     async fn get_signature_status(signature: Signature) -> Option<transaction::Result<()>>;
     async fn get_root_slot() -> Slot;
+    async fn send_and_confirm_transaction(
+        transaction: Transaction,
+    ) -> Option<transaction::Result<()>>;
 }
 
 #[derive(Clone)]
@@ -67,6 +74,23 @@ impl BankForksServer {
     }
 }
 
+async fn poll_transaction_status(
+    root_bank: Arc<Bank>,
+    signature: Signature,
+    last_valid_slot: Slot,
+) -> Option<transaction::Result<()>> {
+    let mut status = root_bank.get_signature_status(&signature);
+    while status.is_none() {
+        let root_slot = root_bank.slot();
+        if root_slot > last_valid_slot {
+            break;
+        }
+        delay_for(Duration::from_millis(100)).await;
+        status = root_bank.get_signature_status(&signature);
+    }
+    status
+}
+
 impl BankForksRpc for BankForksServer {
     type GetRecentBlockhashFut = Ready<(Hash, FeeCalculator, Slot)>;
     fn get_recent_blockhash(self, _: Context) -> Self::GetRecentBlockhashFut {
@@ -93,6 +117,22 @@ impl BankForksRpc for BankForksServer {
     fn get_root_slot(self, _: Context) -> Self::GetRootSlotFut {
         future::ready(self.bank_forks.root())
     }
+
+    type SendAndConfirmTransactionFut =
+        Pin<Box<dyn Future<Output = Option<transaction::Result<()>>> + Send>>;
+    fn send_and_confirm_transaction(
+        self,
+        _: Context,
+        transaction: Transaction,
+    ) -> Self::SendAndConfirmTransactionFut {
+        let blockhash = &transaction.message.recent_blockhash;
+        let root_bank = self.bank_forks.root_bank();
+        let last_valid_slot = root_bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
+        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        self.transaction_sender.send(transaction).unwrap();
+        let status = poll_transaction_status(root_bank.clone(), signature, last_valid_slot);
+        Box::pin(status)
+    }
 }
 
 #[cfg(test)]
@@ -101,7 +141,7 @@ mod tests {
     use crate::genesis_utils::create_genesis_config;
     use futures::prelude::*;
     use solana_sdk::{message::Message, pubkey::Pubkey, signature::Signer, system_instruction};
-    use std::{io, time::Duration};
+    use std::io;
     use tarpc::{
         client, context,
         server::{self, Handler},
@@ -132,7 +172,7 @@ mod tests {
         let message = Message::new_with_payer(&[instruction], Some(&mint_pubkey));
         let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
         let signature = client
-            .send_transaction(context::current(), transaction)
+            .send_transaction(context::current(), transaction.clone())
             .await?;
 
         let mut status = client
@@ -143,12 +183,19 @@ mod tests {
             if root_slot > last_valid_slot {
                 break;
             }
-            tokio::time::delay_for(Duration::from_millis(100u64)).await;
+            delay_for(Duration::from_millis(100)).await;
             status = client
                 .get_signature_status(context::current(), signature)
                 .await?;
         }
 
+        assert_eq!(status, Some(Ok(())));
+
+        // Same thing, but all server-side
+        // TODO: Why didn't this fail with a duplicate signature?
+        let status = client
+            .send_and_confirm_transaction(context::current(), transaction)
+            .await?;
         assert_eq!(status, Some(Ok(())));
 
         Ok(())

@@ -10,7 +10,6 @@ pub mod abi_example;
 
 pub mod account;
 pub mod account_utils;
-pub mod bank_forks_client;
 pub mod bpf_loader;
 pub mod clock;
 pub mod commitment_config;
@@ -78,6 +77,8 @@ pub mod program_error;
 pub mod program_stubs;
 
 // Modules not usable by on-chain programs
+#[cfg(not(feature = "program"))]
+pub mod bank_forks_client;
 #[cfg(not(feature = "program"))]
 pub mod client;
 #[cfg(not(feature = "program"))]

@@ -160,6 +160,7 @@ mod tests {
         system_instruction,
     };
     use tarpc::context;
+    use tokio::runtime::Runtime;
 
     #[tokio::test]
     async fn test_bank_forks_rpc_client_send() -> io::Result<()> {
@@ -221,6 +222,23 @@ mod tests {
                 .await?,
             1
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_bank_forks_rpc_client_blocking_transfer() -> io::Result<()> {
+        let genesis = create_genesis_config(10);
+        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
+
+        let mut runtime = Runtime::new()?;
+        let rpc_client = runtime.enter(|| start_local_server(&bank_forks))?;
+        let mut thin_client = ThinClient::new(rpc_client);
+
+        let bob_pubkey = Pubkey::new_rand();
+        let status =
+            runtime.block_on(thin_client.transfer(&genesis.mint_keypair, &bob_pubkey, 1))?;
+        assert_eq!(status, Some(Ok(())));
+        assert_eq!(runtime.block_on(thin_client.get_balance(&bob_pubkey))?, 1);
         Ok(())
     }
 }

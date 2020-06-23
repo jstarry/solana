@@ -77,6 +77,12 @@ impl ThinClient {
         self.send_and_confirm_message(&[from_keypair], message)
             .await
     }
+
+    pub async fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
+        self.rpc_client
+            .get_balance(context::current(), *pubkey)
+            .await
+    }
 }
 
 #[cfg(test)]

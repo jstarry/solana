@@ -163,10 +163,37 @@ mod tests {
     use solana_sdk::{message::Message, pubkey::Pubkey, signature::Signer, system_instruction};
 
     #[test]
-    fn test_banks_server_transfer_via_client() -> io::Result<()> {
-        let mut runtime = Runtime::new()?;
+    fn test_banks_server_transfer_via_server() -> io::Result<()> {
+        // This test shows the preferred way to interact with BanksServer.
+        // It creates a runtime explicitly (no globals via tokio macros) and calls
+        // `runtime.block_on()` just once, to run all the async code.
+
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
+        let mut runtime = Runtime::new()?;
+        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
+
+        let bob_pubkey = Pubkey::new_rand();
+
+        runtime.block_on(async {
+            let status = banks_client
+                .transfer(&genesis.mint_keypair, &bob_pubkey, 1)
+                .await?;
+            assert_eq!(status, Some(Ok(())));
+            assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_banks_server_transfer_via_client() -> io::Result<()> {
+        // The caller may not want to hold the connection open until the transaction
+        // is processed (or blockhash expires). In this test, we verify the
+        // server-side functionality is available to the client.
+
+        let genesis = create_genesis_config(10);
+        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
+        let mut runtime = Runtime::new()?;
         let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
@@ -197,26 +224,11 @@ mod tests {
     }
 
     #[test]
-    fn test_banks_server_transfer_via_server() -> io::Result<()> {
-        let mut runtime = Runtime::new()?;
-        let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
-        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
-
-        let bob_pubkey = Pubkey::new_rand();
-
-        runtime.block_on(async {
-            let status = banks_client
-                .transfer(&genesis.mint_keypair, &bob_pubkey, 1)
-                .await?;
-            assert_eq!(status, Some(Ok(())));
-            assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
-            Ok(())
-        })
-    }
-
-    #[test]
     fn test_banks_server_transfer_via_blocking_call() -> io::Result<()> {
+        // This test shows how `runtime.block_on()` could be used to implement
+        // a fully synchronous interface. Ideally, you'd only use this as a shim
+        // to replace some existing synchronous interface.
+
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
 

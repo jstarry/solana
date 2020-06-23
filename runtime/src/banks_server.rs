@@ -4,7 +4,7 @@ use futures::{
     prelude::stream,
 };
 use solana_sdk::{
-    bank_forks_client::{BankForksRpc, BankForksRpcClient},
+    banks_client::{BanksClient, BanksRpc, BanksRpcClient},
     clock::Slot,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -26,17 +26,18 @@ use tarpc::{
     client,
     context::Context,
     server::{self, Handler},
+    transport,
 };
 use tokio::{runtime::Runtime, time::delay_for};
 
 #[derive(Clone)]
-pub struct BankForksServer {
+pub struct BanksServer {
     bank_forks: Arc<BankForks>,
     transaction_sender: Sender<Transaction>,
 }
 
-impl BankForksServer {
-    /// Return a BankForksServer that forwards transactions to the
+impl BanksServer {
+    /// Return a BanksServer that forwards transactions to the
     /// given sender. If unit-testing, those transactions can go to
     /// a bank in the given BankForks. Otherwise, the receiver should
     /// forward them to a validator in the leader schedule.
@@ -89,7 +90,7 @@ async fn poll_transaction_status(
     status
 }
 
-impl BankForksRpc for BankForksServer {
+impl BanksRpc for BanksServer {
     type GetRecentBlockhashFut = Ready<(Hash, FeeCalculator, Slot)>;
     fn get_recent_blockhash(self, _: Context) -> Self::GetRecentBlockhashFut {
         let bank = self.bank_forks.root_bank();
@@ -142,35 +143,32 @@ impl BankForksRpc for BankForksServer {
 pub fn start_local_server(
     runtime: &mut Runtime,
     bank_forks: &Arc<BankForks>,
-) -> io::Result<BankForksRpcClient> {
-    let bank_forks_server = BankForksServer::new(bank_forks.clone());
-    let (client_transport, server_transport) = tarpc::transport::channel::unbounded();
+) -> io::Result<BanksClient> {
+    let banks_server = BanksServer::new(bank_forks.clone());
+    let (client_transport, server_transport) = transport::channel::unbounded();
     let server = server::new(server::Config::default())
         .incoming(stream::once(future::ready(server_transport)))
-        .respond_with(bank_forks_server.serve());
+        .respond_with(banks_server.serve());
     runtime.spawn(server);
 
-    let client = BankForksRpcClient::new(client::Config::default(), client_transport);
-    runtime.enter(|| client.spawn())
+    let banks_rpc_client = BanksRpcClient::new(client::Config::default(), client_transport);
+    let rpc_client = runtime.enter(|| banks_rpc_client.spawn())?;
+    Ok(BanksClient::new(rpc_client))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
-    use solana_sdk::{
-        bank_forks_client::ThinClient, message::Message, pubkey::Pubkey, signature::Signer,
-        system_instruction,
-    };
+    use solana_sdk::{message::Message, pubkey::Pubkey, signature::Signer, system_instruction};
     use tarpc::context;
 
     #[test]
-    fn test_bank_forks_rpc_client_send() -> io::Result<()> {
+    fn test_banks_server_transfer_via_client() -> io::Result<()> {
         let mut runtime = Runtime::new()?;
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
-        let rpc_client = start_local_server(&mut runtime, &bank_forks)?;
-        let mut thin_client = ThinClient::new(rpc_client);
+        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
@@ -178,54 +176,52 @@ mod tests {
         let message = Message::new_with_payer(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
-            let (signature, last_valid_slot) = thin_client
+            let (signature, last_valid_slot) = banks_client
                 .send_message(&[&genesis.mint_keypair], message)
                 .await?;
 
-            let rpc_client = &mut thin_client.rpc_client;
-            let mut status = rpc_client
+            let mut status = banks_client
+                .rpc_client
                 .get_signature_status(context::current(), signature)
                 .await?;
             assert_eq!(status, None, "process_transaction() called synchronously");
 
             while status.is_none() {
-                let root_slot = rpc_client.get_root_slot(context::current()).await?;
+                let root_slot = banks_client
+                    .rpc_client
+                    .get_root_slot(context::current())
+                    .await?;
                 if root_slot > last_valid_slot {
                     break;
                 }
                 delay_for(Duration::from_millis(100)).await;
-                status = rpc_client
+                status = banks_client
+                    .rpc_client
                     .get_signature_status(context::current(), signature)
                     .await?;
             }
             assert_eq!(status, Some(Ok(())));
-            assert_eq!(
-                rpc_client
-                    .get_balance(context::current(), bob_pubkey)
-                    .await?,
-                1
-            );
+            assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
             Ok(())
         })
     }
 
     #[test]
-    fn test_bank_forks_rpc_client_send_and_confirm() -> io::Result<()> {
+    fn test_banks_server_transfer_via_server() -> io::Result<()> {
         let mut runtime = Runtime::new()?;
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
-        let rpc_client = start_local_server(&mut runtime, &bank_forks)?;
-        let mut thin_client = ThinClient::new(rpc_client);
+        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let bob_pubkey = Pubkey::new_rand();
 
         runtime.block_on(async {
-            let status = thin_client
+            let status = banks_client
                 .transfer(&genesis.mint_keypair, &bob_pubkey, 1)
                 .await?;
             assert_eq!(status, Some(Ok(())));
             assert_eq!(
-                thin_client
+                banks_client
                     .rpc_client
                     .get_balance(context::current(), bob_pubkey)
                     .await?,
@@ -236,19 +232,18 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_forks_rpc_client_blocking_transfer() -> io::Result<()> {
+    fn test_banks_server_transfer_via_blocking_call() -> io::Result<()> {
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
 
         let mut runtime = Runtime::new()?;
-        let rpc_client = start_local_server(&mut runtime, &bank_forks)?;
-        let mut thin_client = ThinClient::new(rpc_client);
+        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let bob_pubkey = Pubkey::new_rand();
         let status =
-            runtime.block_on(thin_client.transfer(&genesis.mint_keypair, &bob_pubkey, 1))?;
+            runtime.block_on(banks_client.transfer(&genesis.mint_keypair, &bob_pubkey, 1))?;
         assert_eq!(status, Some(Ok(())));
-        assert_eq!(runtime.block_on(thin_client.get_balance(&bob_pubkey))?, 1);
+        assert_eq!(runtime.block_on(banks_client.get_balance(&bob_pubkey))?, 1);
         Ok(())
     }
 }

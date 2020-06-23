@@ -78,7 +78,7 @@ pub mod program_stubs;
 
 // Modules not usable by on-chain programs
 #[cfg(not(feature = "program"))]
-pub mod bank_forks_client;
+pub mod banks_client;
 #[cfg(not(feature = "program"))]
 pub mod client;
 #[cfg(not(feature = "program"))]

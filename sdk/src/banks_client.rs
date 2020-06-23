@@ -13,7 +13,7 @@ use std::io;
 use tarpc::context;
 
 #[tarpc::service]
-pub trait BankForksRpc {
+pub trait BanksRpc {
     async fn get_recent_blockhash() -> (Hash, FeeCalculator, Slot);
     async fn send_transaction(transaction: Transaction) -> Signature;
     async fn get_signature_status(signature: Signature) -> Option<transaction::Result<()>>;
@@ -24,12 +24,12 @@ pub trait BankForksRpc {
     async fn get_balance(pubkey: Pubkey) -> u64;
 }
 
-pub struct ThinClient {
-    pub rpc_client: BankForksRpcClient,
+pub struct BanksClient {
+    pub rpc_client: BanksRpcClient,
 }
 
-impl ThinClient {
-    pub fn new(rpc_client: BankForksRpcClient) -> Self {
+impl BanksClient {
+    pub fn new(rpc_client: BanksRpcClient) -> Self {
         Self { rpc_client }
     }
 
@@ -91,8 +91,8 @@ mod tests {
     use tarpc::{client, transport};
 
     #[test]
-    fn test_bank_forks_rpc_client_new() {
+    fn test_banks_rpc_client_new() {
         let (client_transport, _server_transport) = transport::channel::unbounded();
-        BankForksRpcClient::new(client::Config::default(), client_transport);
+        BanksRpcClient::new(client::Config::default(), client_transport);
     }
 }

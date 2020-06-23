@@ -7,7 +7,7 @@ pub mod bank;
 pub mod bank_client;
 pub mod bank_forks;
 pub mod bank_utils;
-pub mod bank_forks_client;
+pub mod banks_server;
 mod blockhash_queue;
 pub mod bloom;
 pub mod builtin_programs;

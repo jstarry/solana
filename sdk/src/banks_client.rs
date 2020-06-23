@@ -25,7 +25,7 @@ pub trait BanksRpc {
 }
 
 pub struct BanksClient {
-    pub rpc_client: BanksRpcClient,
+    rpc_client: BanksRpcClient,
 }
 
 impl BanksClient {
@@ -82,6 +82,19 @@ impl BanksClient {
         self.rpc_client
             .get_balance(context::current(), *pubkey)
             .await
+    }
+
+    pub async fn get_signature_status(
+        &mut self,
+        signature: &Signature,
+    ) -> io::Result<Option<transaction::Result<()>>> {
+        self.rpc_client
+            .get_signature_status(context::current(), *signature)
+            .await
+    }
+
+    pub async fn get_root_slot(&mut self) -> io::Result<u64> {
+        self.rpc_client.get_root_slot(context::current()).await
     }
 }
 

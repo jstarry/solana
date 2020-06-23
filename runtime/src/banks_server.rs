@@ -161,7 +161,6 @@ mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use solana_sdk::{message::Message, pubkey::Pubkey, signature::Signer, system_instruction};
-    use tarpc::context;
 
     #[test]
     fn test_banks_server_transfer_via_client() -> io::Result<()> {
@@ -180,25 +179,16 @@ mod tests {
                 .send_message(&[&genesis.mint_keypair], message)
                 .await?;
 
-            let mut status = banks_client
-                .rpc_client
-                .get_signature_status(context::current(), signature)
-                .await?;
+            let mut status = banks_client.get_signature_status(&signature).await?;
             assert_eq!(status, None, "process_transaction() called synchronously");
 
             while status.is_none() {
-                let root_slot = banks_client
-                    .rpc_client
-                    .get_root_slot(context::current())
-                    .await?;
+                let root_slot = banks_client.get_root_slot().await?;
                 if root_slot > last_valid_slot {
                     break;
                 }
                 delay_for(Duration::from_millis(100)).await;
-                status = banks_client
-                    .rpc_client
-                    .get_signature_status(context::current(), signature)
-                    .await?;
+                status = banks_client.get_signature_status(&signature).await?;
             }
             assert_eq!(status, Some(Ok(())));
             assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
@@ -220,13 +210,7 @@ mod tests {
                 .transfer(&genesis.mint_keypair, &bob_pubkey, 1)
                 .await?;
             assert_eq!(status, Some(Ok(())));
-            assert_eq!(
-                banks_client
-                    .rpc_client
-                    .get_balance(context::current(), bob_pubkey)
-                    .await?,
-                1
-            );
+            assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
             Ok(())
         })
     }

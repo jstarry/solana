@@ -27,8 +27,7 @@ use tarpc::{
     context::Context,
     server::{self, Handler},
 };
-
-use tokio::time::delay_for;
+use tokio::{runtime::Runtime, time::delay_for};
 
 #[derive(Clone)]
 pub struct BankForksServer {
@@ -140,15 +139,19 @@ impl BankForksRpc for BankForksServer {
     }
 }
 
-pub fn start_local_server(bank_forks: &Arc<BankForks>) -> io::Result<BankForksRpcClient> {
+pub fn start_local_server(
+    runtime: &mut Runtime,
+    bank_forks: &Arc<BankForks>,
+) -> io::Result<BankForksRpcClient> {
     let bank_forks_server = BankForksServer::new(bank_forks.clone());
     let (client_transport, server_transport) = tarpc::transport::channel::unbounded();
     let server = server::new(server::Config::default())
         .incoming(stream::once(future::ready(server_transport)))
         .respond_with(bank_forks_server.serve());
-    tokio::spawn(server);
+    runtime.spawn(server);
 
-    BankForksRpcClient::new(client::Config::default(), client_transport).spawn()
+    let client = BankForksRpcClient::new(client::Config::default(), client_transport);
+    runtime.enter(|| client.spawn())
 }
 
 #[cfg(test)]
@@ -160,69 +163,76 @@ mod tests {
         system_instruction,
     };
     use tarpc::context;
-    use tokio::runtime::Runtime;
 
-    #[tokio::test]
-    async fn test_bank_forks_rpc_client_send() -> io::Result<()> {
+    #[test]
+    fn test_bank_forks_rpc_client_send() -> io::Result<()> {
+        let mut runtime = Runtime::new()?;
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
-        let rpc_client = start_local_server(&bank_forks)?;
+        let rpc_client = start_local_server(&mut runtime, &bank_forks)?;
         let mut thin_client = ThinClient::new(rpc_client);
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let instruction = system_instruction::transfer(&mint_pubkey, &bob_pubkey, 1);
         let message = Message::new_with_payer(&[instruction], Some(&mint_pubkey));
-        let (signature, last_valid_slot) = thin_client
-            .send_message(&[&genesis.mint_keypair], message)
-            .await?;
 
-        let rpc_client = &mut thin_client.rpc_client;
-        let mut status = rpc_client
-            .get_signature_status(context::current(), signature)
-            .await?;
-        assert_eq!(status, None, "process_transaction() called synchronously");
+        runtime.block_on(async {
+            let (signature, last_valid_slot) = thin_client
+                .send_message(&[&genesis.mint_keypair], message)
+                .await?;
 
-        while status.is_none() {
-            let root_slot = rpc_client.get_root_slot(context::current()).await?;
-            if root_slot > last_valid_slot {
-                break;
-            }
-            delay_for(Duration::from_millis(100)).await;
-            status = rpc_client
+            let rpc_client = &mut thin_client.rpc_client;
+            let mut status = rpc_client
                 .get_signature_status(context::current(), signature)
                 .await?;
-        }
-        assert_eq!(status, Some(Ok(())));
-        assert_eq!(
-            rpc_client
-                .get_balance(context::current(), bob_pubkey)
-                .await?,
-            1
-        );
-        Ok(())
+            assert_eq!(status, None, "process_transaction() called synchronously");
+
+            while status.is_none() {
+                let root_slot = rpc_client.get_root_slot(context::current()).await?;
+                if root_slot > last_valid_slot {
+                    break;
+                }
+                delay_for(Duration::from_millis(100)).await;
+                status = rpc_client
+                    .get_signature_status(context::current(), signature)
+                    .await?;
+            }
+            assert_eq!(status, Some(Ok(())));
+            assert_eq!(
+                rpc_client
+                    .get_balance(context::current(), bob_pubkey)
+                    .await?,
+                1
+            );
+            Ok(())
+        })
     }
 
-    #[tokio::test]
-    async fn test_bank_forks_rpc_client_send_and_confirm() -> io::Result<()> {
+    #[test]
+    fn test_bank_forks_rpc_client_send_and_confirm() -> io::Result<()> {
+        let mut runtime = Runtime::new()?;
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
-        let rpc_client = start_local_server(&bank_forks)?;
+        let rpc_client = start_local_server(&mut runtime, &bank_forks)?;
         let mut thin_client = ThinClient::new(rpc_client);
 
         let bob_pubkey = Pubkey::new_rand();
-        let status = thin_client
-            .transfer(&genesis.mint_keypair, &bob_pubkey, 1)
-            .await?;
-        assert_eq!(status, Some(Ok(())));
-        assert_eq!(
-            thin_client
-                .rpc_client
-                .get_balance(context::current(), bob_pubkey)
-                .await?,
-            1
-        );
-        Ok(())
+
+        runtime.block_on(async {
+            let status = thin_client
+                .transfer(&genesis.mint_keypair, &bob_pubkey, 1)
+                .await?;
+            assert_eq!(status, Some(Ok(())));
+            assert_eq!(
+                thin_client
+                    .rpc_client
+                    .get_balance(context::current(), bob_pubkey)
+                    .await?,
+                1
+            );
+            Ok(())
+        })
     }
 
     #[test]
@@ -231,7 +241,7 @@ mod tests {
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
 
         let mut runtime = Runtime::new()?;
-        let rpc_client = runtime.enter(|| start_local_server(&bank_forks))?;
+        let rpc_client = start_local_server(&mut runtime, &bank_forks)?;
         let mut thin_client = ThinClient::new(rpc_client);
 
         let bob_pubkey = Pubkey::new_rand();

@@ -45,7 +45,7 @@ symlink = "0.1.0"
 tar = "0.4.28"
 tarpc = { version = "0.20.0", features = ["full"] }
 tempfile = "3.1.0"
-tokio = { version = "0.2", features = ["macros"] }
+tokio = "0.2"
 thiserror = "1.0"
 zstd = "0.5.1"
 

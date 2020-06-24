@@ -65,7 +65,7 @@ impl BanksClient {
             .await
     }
 
-    pub async fn transfer(
+    pub async fn transfer_and_confirm(
         &mut self,
         from_keypair: &Keypair,
         to_pubkey: &Pubkey,
@@ -73,7 +73,7 @@ impl BanksClient {
     ) -> io::Result<Option<transaction::Result<()>>> {
         let from_pubkey = from_keypair.pubkey();
         let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, lamports);
-        let message = Message::new_with_payer(&[instruction], Some(&from_pubkey));
+        let message = Message::new(&[instruction], Some(&from_pubkey));
         self.send_and_confirm_message(&[from_keypair], message)
             .await
     }

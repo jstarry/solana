@@ -177,7 +177,7 @@ mod tests {
 
         runtime.block_on(async {
             let status = banks_client
-                .transfer(&genesis.mint_keypair, &bob_pubkey, 1)
+                .transfer_and_confirm(&genesis.mint_keypair, &bob_pubkey, 1)
                 .await?;
             assert_eq!(status, Some(Ok(())));
             assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
@@ -199,7 +199,7 @@ mod tests {
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
         let instruction = system_instruction::transfer(&mint_pubkey, &bob_pubkey, 1);
-        let message = Message::new_with_payer(&[instruction], Some(&mint_pubkey));
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
             let (signature, last_valid_slot) = banks_client
@@ -236,8 +236,11 @@ mod tests {
         let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let bob_pubkey = Pubkey::new_rand();
-        let status =
-            runtime.block_on(banks_client.transfer(&genesis.mint_keypair, &bob_pubkey, 1))?;
+        let status = runtime.block_on(banks_client.transfer_and_confirm(
+            &genesis.mint_keypair,
+            &bob_pubkey,
+            1,
+        ))?;
         assert_eq!(status, Some(Ok(())));
         assert_eq!(runtime.block_on(banks_client.get_balance(&bob_pubkey))?, 1);
         Ok(())

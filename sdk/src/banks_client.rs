@@ -15,7 +15,7 @@ use tarpc::context;
 #[tarpc::service]
 pub trait BanksRpc {
     async fn get_recent_blockhash() -> (Hash, FeeCalculator, Slot);
-    async fn send_transaction(transaction: Transaction) -> Signature;
+    async fn send_transaction(transaction: Transaction);
     async fn get_signature_status(signature: Signature) -> Option<transaction::Result<()>>;
     async fn get_root_slot() -> Slot;
     async fn send_and_confirm_transaction(
@@ -37,32 +37,33 @@ impl BanksClient {
         &mut self,
         signers: &S,
         message: Message,
-    ) -> io::Result<(Signature, u64)> {
+    ) -> io::Result<(Transaction, u64)> {
         let (recent_blockhash, _fee_calculator, last_valid_slot) = self
             .rpc_client
             .get_recent_blockhash(context::current())
             .await?;
         let transaction = Transaction::new(signers, message, recent_blockhash);
-        let signature = self
+        self
             .rpc_client
-            .send_transaction(context::current(), transaction)
+            .send_transaction(context::current(), transaction.clone())
             .await?;
-        Ok((signature, last_valid_slot))
+        Ok((transaction, last_valid_slot))
     }
 
     pub async fn send_and_confirm_message<S: Signers>(
         &mut self,
         signers: &S,
         message: Message,
-    ) -> io::Result<Option<transaction::Result<()>>> {
+    ) -> io::Result<(Transaction, Option<transaction::Result<()>>)> {
         let (recent_blockhash, _fee_calculator, _last_valid_slot) = self
             .rpc_client
             .get_recent_blockhash(context::current())
             .await?;
         let transaction = Transaction::new(signers, message, recent_blockhash);
-        self.rpc_client
-            .send_and_confirm_transaction(context::current(), transaction)
-            .await
+        let result = self.rpc_client
+            .send_and_confirm_transaction(context::current(), transaction.clone())
+            .await?;
+        Ok((transaction, result))
     }
 
     pub async fn transfer_and_confirm(
@@ -70,7 +71,7 @@ impl BanksClient {
         from_keypair: &Keypair,
         to_pubkey: &Pubkey,
         lamports: u64,
-    ) -> io::Result<Option<transaction::Result<()>>> {
+    ) -> io::Result<(Transaction, Option<transaction::Result<()>>)> {
         let from_pubkey = from_keypair.pubkey();
         let instruction = system_instruction::transfer(&from_pubkey, &to_pubkey, lamports);
         let message = Message::new(&[instruction], Some(&from_pubkey));

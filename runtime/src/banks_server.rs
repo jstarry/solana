@@ -99,11 +99,10 @@ impl BanksRpc for BanksServer {
         future::ready((blockhash, fee_calculator, last_valid_slot))
     }
 
-    type SendTransactionFut = Ready<Signature>;
+    type SendTransactionFut = Ready<()>;
     fn send_transaction(self, _: Context, transaction: Transaction) -> Self::SendTransactionFut {
-        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         self.transaction_sender.send(transaction).unwrap();
-        future::ready(signature)
+        future::ready(())
     }
 
     type GetSignatureStatusFut = Ready<Option<transaction::Result<()>>>;
@@ -176,7 +175,7 @@ mod tests {
         let bob_pubkey = Pubkey::new_rand();
 
         runtime.block_on(async {
-            let status = banks_client
+            let (_transaction, status) = banks_client
                 .transfer_and_confirm(&genesis.mint_keypair, &bob_pubkey, 1)
                 .await?;
             assert_eq!(status, Some(Ok(())));
@@ -202,9 +201,10 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
-            let (signature, last_valid_slot) = banks_client
+            let (transaction, last_valid_slot) = banks_client
                 .send_message(&[&genesis.mint_keypair], message)
                 .await?;
+            let signature = transaction.signatures[0];
 
             let mut status = banks_client.get_signature_status(&signature).await?;
             assert_eq!(status, None, "process_transaction() called synchronously");
@@ -236,7 +236,7 @@ mod tests {
         let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let bob_pubkey = Pubkey::new_rand();
-        let status = runtime.block_on(banks_client.transfer_and_confirm(
+        let (_transaction, status) = runtime.block_on(banks_client.transfer_and_confirm(
             &genesis.mint_keypair,
             &bob_pubkey,
             1,

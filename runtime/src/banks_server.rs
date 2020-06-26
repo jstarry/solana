@@ -4,7 +4,7 @@ use futures::{
     prelude::stream,
 };
 use solana_sdk::{
-    banks_client::{BanksClient, BanksRpc, BanksRpcClient},
+    banks_client::{Banks, BanksClient},
     clock::Slot,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -90,13 +90,13 @@ async fn poll_transaction_status(
     status
 }
 
-impl BanksRpc for BanksServer {
-    type GetRecentBlockhashFut = Ready<(Hash, FeeCalculator, Slot)>;
-    fn get_recent_blockhash(self, _: Context) -> Self::GetRecentBlockhashFut {
+impl Banks for BanksServer {
+    type GetFeesFut = Ready<(FeeCalculator, Hash, Slot)>;
+    fn get_fees(self, _: Context) -> Self::GetFeesFut {
         let bank = self.bank_forks.root_bank();
         let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
         let last_valid_slot = bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
-        future::ready((blockhash, fee_calculator, last_valid_slot))
+        future::ready((fee_calculator, blockhash, last_valid_slot))
     }
 
     type SendTransactionFut = Ready<()>;
@@ -150,9 +150,8 @@ pub fn start_local_server(
         .respond_with(banks_server.serve());
     runtime.spawn(server);
 
-    let banks_rpc_client = BanksRpcClient::new(client::Config::default(), client_transport);
-    let rpc_client = runtime.enter(|| banks_rpc_client.spawn())?;
-    Ok(BanksClient::new(rpc_client))
+    let banks_client = BanksClient::new(client::Config::default(), client_transport);
+    runtime.enter(|| banks_client.spawn())
 }
 
 #[cfg(test)]
@@ -160,6 +159,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use solana_sdk::{message::Message, pubkey::Pubkey, signature::Signer, system_instruction};
+    use tarpc::context;
 
     #[test]
     fn test_banks_server_transfer_via_server() -> io::Result<()> {
@@ -173,13 +173,23 @@ mod tests {
         let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let bob_pubkey = Pubkey::new_rand();
+        let mint_pubkey = genesis.mint_keypair.pubkey();
+        let instruction = system_instruction::transfer(&mint_pubkey, &bob_pubkey, 1);
+        let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
-            let (_transaction, status) = banks_client
-                .transfer_and_confirm(&genesis.mint_keypair, &bob_pubkey, 1)
+            let recent_blockhash = banks_client.get_fees(context::current()).await?.1;
+            let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
+            let status = banks_client
+                .send_and_confirm_transaction(context::current(), transaction)
                 .await?;
             assert_eq!(status, Some(Ok(())));
-            assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
+            assert_eq!(
+                banks_client
+                    .get_balance(context::current(), bob_pubkey)
+                    .await?,
+                1
+            );
             Ok(())
         })
     }
@@ -201,51 +211,37 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
-            let (transaction, last_valid_slot, send_transaction) = banks_client
-                .send_message(&[&genesis.mint_keypair], message)
-                .await?;
+            let (_, recent_blockhash, last_valid_slot) =
+                banks_client.get_fees(context::current()).await?;
+            let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
             let signature = transaction.signatures[0];
+            banks_client
+                .send_transaction(context::current(), transaction)
+                .await?;
 
-            // Now that we've recorded the signature, go ahead and send the transaction.
-            send_transaction.await?;
-
-            let mut status = banks_client.get_signature_status(&signature).await?;
+            let mut status = banks_client
+                .get_signature_status(context::current(), signature)
+                .await?;
             assert_eq!(status, None, "process_transaction() called synchronously");
 
             while status.is_none() {
-                let root_slot = banks_client.get_root_slot().await?;
+                let root_slot = banks_client.get_root_slot(context::current()).await?;
                 if root_slot > last_valid_slot {
                     break;
                 }
                 delay_for(Duration::from_millis(100)).await;
-                status = banks_client.get_signature_status(&signature).await?;
+                status = banks_client
+                    .get_signature_status(context::current(), signature)
+                    .await?;
             }
             assert_eq!(status, Some(Ok(())));
-            assert_eq!(banks_client.get_balance(&bob_pubkey).await?, 1);
+            assert_eq!(
+                banks_client
+                    .get_balance(context::current(), bob_pubkey)
+                    .await?,
+                1
+            );
             Ok(())
         })
-    }
-
-    #[test]
-    fn test_banks_server_transfer_via_blocking_call() -> io::Result<()> {
-        // This test shows how `runtime.block_on()` could be used to implement
-        // a fully synchronous interface. Ideally, you'd only use this as a shim
-        // to replace some existing synchronous interface.
-
-        let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
-
-        let mut runtime = Runtime::new()?;
-        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
-
-        let bob_pubkey = Pubkey::new_rand();
-        let (_transaction, status) = runtime.block_on(banks_client.transfer_and_confirm(
-            &genesis.mint_keypair,
-            &bob_pubkey,
-            1,
-        ))?;
-        assert_eq!(status, Some(Ok(())));
-        assert_eq!(runtime.block_on(banks_client.get_balance(&bob_pubkey))?, 1);
-        Ok(())
     }
 }

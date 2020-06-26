@@ -9,9 +9,9 @@ use crate::{
     system_instruction,
     transaction::{self, Transaction},
 };
+use futures::Future;
 use std::io;
 use tarpc::context;
-use futures::Future;
 
 #[tarpc::service]
 pub trait BanksRpc {
@@ -34,19 +34,36 @@ impl BanksClient {
         Self { rpc_client }
     }
 
+    pub async fn get_recent_blockhash(&mut self) -> io::Result<(Hash, FeeCalculator, Slot)> {
+        self.rpc_client
+            .get_recent_blockhash(context::current())
+            .await
+    }
+
+    pub async fn create_transaction<S: Signers>(
+        &mut self,
+        signers: &S,
+        message: Message,
+    ) -> io::Result<(Transaction, Slot)> {
+        let (recent_blockhash, _fee_calculator, last_valid_slot) =
+            self.get_recent_blockhash().await?;
+        let transaction = Transaction::new(signers, message, recent_blockhash);
+        Ok((transaction, last_valid_slot))
+    }
+
+    pub async fn send_transaction(&mut self, transaction: Transaction) -> io::Result<()> {
+        self.rpc_client
+            .send_transaction(context::current(), transaction)
+            .await
+    }
+
     pub async fn send_message<'a, S: Signers>(
         &'a mut self,
         signers: &S,
         message: Message,
     ) -> io::Result<(Transaction, u64, impl Future<Output = io::Result<()>> + 'a)> {
-        let (recent_blockhash, _fee_calculator, last_valid_slot) = self
-            .rpc_client
-            .get_recent_blockhash(context::current())
-            .await?;
-        let transaction = Transaction::new(signers, message, recent_blockhash);
-        let send_transaction = self
-            .rpc_client
-            .send_transaction(context::current(), transaction.clone());
+        let (transaction, last_valid_slot) = self.create_transaction(signers, message).await?;
+        let send_transaction = self.send_transaction(transaction.clone());
         Ok((transaction, last_valid_slot, send_transaction))
     }
 
@@ -55,12 +72,9 @@ impl BanksClient {
         signers: &S,
         message: Message,
     ) -> io::Result<(Transaction, Option<transaction::Result<()>>)> {
-        let (recent_blockhash, _fee_calculator, _last_valid_slot) = self
+        let (transaction, _last_valid_slot) = self.create_transaction(signers, message).await?;
+        let result = self
             .rpc_client
-            .get_recent_blockhash(context::current())
-            .await?;
-        let transaction = Transaction::new(signers, message, recent_blockhash);
-        let result = self.rpc_client
             .send_and_confirm_transaction(context::current(), transaction.clone())
             .await?;
         Ok((transaction, result))

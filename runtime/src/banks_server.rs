@@ -201,10 +201,13 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
-            let (transaction, last_valid_slot) = banks_client
+            let (transaction, last_valid_slot, send_transaction) = banks_client
                 .send_message(&[&genesis.mint_keypair], message)
                 .await?;
             let signature = transaction.signatures[0];
+
+            // Now that we've recorded the signature, go ahead and send the transaction.
+            send_transaction.await?;
 
             let mut status = banks_client.get_signature_status(&signature).await?;
             assert_eq!(status, None, "process_transaction() called synchronously");

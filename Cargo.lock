@@ -4664,6 +4664,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "ed25519-dalek",
+ "futures 0.3.5",
  "generic-array 0.14.1",
  "hex 0.4.2",
  "hmac",

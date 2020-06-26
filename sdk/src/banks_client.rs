@@ -11,6 +11,7 @@ use crate::{
 };
 use std::io;
 use tarpc::context;
+use futures::Future;
 
 #[tarpc::service]
 pub trait BanksRpc {
@@ -33,21 +34,20 @@ impl BanksClient {
         Self { rpc_client }
     }
 
-    pub async fn send_message<S: Signers>(
-        &mut self,
+    pub async fn send_message<'a, S: Signers>(
+        &'a mut self,
         signers: &S,
         message: Message,
-    ) -> io::Result<(Transaction, u64)> {
+    ) -> io::Result<(Transaction, u64, impl Future<Output = io::Result<()>> + 'a)> {
         let (recent_blockhash, _fee_calculator, last_valid_slot) = self
             .rpc_client
             .get_recent_blockhash(context::current())
             .await?;
         let transaction = Transaction::new(signers, message, recent_blockhash);
-        self
+        let send_transaction = self
             .rpc_client
-            .send_transaction(context::current(), transaction.clone())
-            .await?;
-        Ok((transaction, last_valid_slot))
+            .send_transaction(context::current(), transaction.clone());
+        Ok((transaction, last_valid_slot, send_transaction))
     }
 
     pub async fn send_and_confirm_message<S: Signers>(

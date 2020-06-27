@@ -1,4 +1,5 @@
 use crate::{
+    account::Account,
     clock::Slot,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -6,6 +7,8 @@ use crate::{
     signature::Signature,
     transaction::{self, Transaction},
 };
+use std::io;
+use tarpc::context;
 
 #[tarpc::service]
 pub trait Banks {
@@ -16,7 +19,12 @@ pub trait Banks {
     async fn send_and_confirm_transaction(
         transaction: Transaction,
     ) -> Option<transaction::Result<()>>;
-    async fn get_balance(pubkey: Pubkey) -> u64;
+    async fn get_account(pubkey: Pubkey) -> Option<Account>;
+}
+
+pub async fn get_balance(banks_client: &mut BanksClient, pubkey: Pubkey) -> io::Result<u64> {
+    let account = banks_client.get_account(context::current(), pubkey).await?;
+    Ok(account.map(|x| x.lamports).unwrap_or(0))
 }
 
 #[cfg(test)]

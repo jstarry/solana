@@ -6,8 +6,9 @@ use crate::{
     pubkey::Pubkey,
     signature::Signature,
     transaction::{self, Transaction},
+    transport,
 };
-use std::io;
+use std::io::{self, Error, ErrorKind};
 use tarpc::context;
 
 #[tarpc::service]
@@ -20,6 +21,23 @@ pub trait Banks {
         transaction: Transaction,
     ) -> Option<transaction::Result<()>>;
     async fn get_account(pubkey: Pubkey) -> Option<Account>;
+}
+
+pub async fn get_recent_blockhash(banks_client: &mut BanksClient) -> io::Result<Hash> {
+    Ok(banks_client.get_fees(context::current()).await?.1)
+}
+
+pub async fn process_transaction(
+    banks_client: &mut BanksClient,
+    transaction: Transaction,
+) -> transport::Result<()> {
+    let result = banks_client
+        .send_and_confirm_transaction(context::current(), transaction)
+        .await?;
+    match result {
+        None => Err(Error::new(ErrorKind::TimedOut, "invalid blockhash or fee-payer").into()),
+        Some(transaction_result) => Ok(transaction_result?),
+    }
 }
 
 pub async fn get_balance(banks_client: &mut BanksClient, pubkey: Pubkey) -> io::Result<u64> {

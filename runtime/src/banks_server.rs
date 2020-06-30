@@ -160,7 +160,10 @@ mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use solana_sdk::{
-        banks_client::get_balance, message::Message, pubkey::Pubkey, signature::Signer,
+        banks_client::{get_balance, get_recent_blockhash, process_transaction},
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signer,
         system_instruction,
     };
     use tarpc::context;
@@ -182,12 +185,11 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
-            let recent_blockhash = banks_client.get_fees(context::current()).await?.1;
+            let recent_blockhash = get_recent_blockhash(&mut banks_client).await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
-            let status = banks_client
-                .send_and_confirm_transaction(context::current(), transaction)
-                .await?;
-            assert_eq!(status, Some(Ok(())));
+            process_transaction(&mut banks_client, transaction)
+                .await
+                .unwrap();
             assert_eq!(get_balance(&mut banks_client, bob_pubkey).await?, 1);
             Ok(())
         })

@@ -2,6 +2,7 @@ use solana_client::{rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig}
 use solana_runtime::bank_client::BankClient;
 use solana_sdk::{
     account::Account,
+    banks_client::{get_balance, BanksClient},
     client::{AsyncClient, SyncClient},
     clock::Slot,
     commitment_config::CommitmentConfig,
@@ -16,21 +17,23 @@ use solana_sdk::{
     transport::{Result, TransportError},
 };
 use solana_transaction_status::TransactionStatus;
+use tarpc::context;
+use tokio::runtime::Runtime;
 
 pub trait Client {
-    fn send_transaction1(&self, transaction: Transaction) -> Result<Signature>;
+    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature>;
     fn get_signature_statuses1(
-        &self,
+        &mut self,
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>>;
-    fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64>;
-    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)>;
-    fn get_slot1(&self) -> Result<Slot>;
-    fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>>;
+    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64>;
+    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)>;
+    fn get_slot1(&mut self) -> Result<Slot>;
+    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>>;
 }
 
 impl Client for RpcClient {
-    fn send_transaction1(&self, transaction: Transaction) -> Result<Signature> {
+    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature> {
         self.send_transaction_with_config(
             &transaction,
             RpcSendTransactionConfig {
@@ -41,7 +44,7 @@ impl Client for RpcClient {
     }
 
     fn get_signature_statuses1(
-        &self,
+        &mut self,
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>> {
         self.get_signature_statuses(signatures)
@@ -49,24 +52,24 @@ impl Client for RpcClient {
             .map_err(|e| TransportError::Custom(e.to_string()))
     }
 
-    fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64> {
+    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64> {
         self.get_balance(pubkey)
             .map_err(|e| TransportError::Custom(e.to_string()))
     }
 
-    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)> {
+    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
         let result = self
             .get_recent_blockhash_with_commitment(CommitmentConfig::default())
             .map_err(|e| TransportError::Custom(e.to_string()))?;
         Ok(result.value)
     }
 
-    fn get_slot1(&self) -> Result<Slot> {
+    fn get_slot1(&mut self) -> Result<Slot> {
         self.get_slot()
             .map_err(|e| TransportError::Custom(e.to_string()))
     }
 
-    fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
         self.get_account(pubkey)
             .map(Some)
             .map_err(|e| TransportError::Custom(e.to_string()))
@@ -74,12 +77,12 @@ impl Client for RpcClient {
 }
 
 impl Client for BankClient {
-    fn send_transaction1(&self, transaction: Transaction) -> Result<Signature> {
+    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature> {
         self.async_send_transaction(transaction)
     }
 
     fn get_signature_statuses1(
-        &self,
+        &mut self,
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>> {
         signatures
@@ -97,20 +100,101 @@ impl Client for BankClient {
             .collect()
     }
 
-    fn get_balance1(&self, pubkey: &Pubkey) -> Result<u64> {
+    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64> {
         self.get_balance(pubkey)
     }
 
-    fn get_fees1(&self) -> Result<(Hash, FeeCalculator, Slot)> {
+    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
         self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
     }
 
-    fn get_slot1(&self) -> Result<Slot> {
+    fn get_slot1(&mut self) -> Result<Slot> {
         self.get_slot()
     }
 
-    fn get_account1(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
         self.get_account(pubkey)
+    }
+}
+
+async fn get_signature_statuses(
+    banks_client: &mut BanksClient,
+    signatures: Vec<Signature>,
+) -> std::io::Result<Vec<Option<TransactionStatus>>> {
+    // TODO: Do parallel RPC calls via `join_all`. It's not done that way now because each RPC call returns
+    // a future that references the &mut bank_client.
+    let mut statuses = vec![];
+    for signature in signatures {
+        statuses.push(
+            banks_client
+                .get_signature_status(context::current(), signature)
+                .await,
+        );
+    }
+
+    let transaction_statuses = statuses
+        .into_iter()
+        .map(|result| {
+            let opt = result.unwrap();
+            opt.map(|status| TransactionStatus {
+                slot: 0,
+                confirmations: None,
+                status,
+                err: None,
+            })
+        })
+        .collect();
+
+    Ok(transaction_statuses)
+}
+
+impl Client for (Runtime, BanksClient) {
+    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature> {
+        let signature = transaction.signatures[0];
+        let banks_client = &mut self.1;
+        self.0.block_on(async move {
+            banks_client
+                .send_transaction(context::current(), transaction)
+                .await
+        })?;
+        Ok(signature)
+    }
+
+    fn get_signature_statuses1(
+        &mut self,
+        signatures: &[Signature],
+    ) -> Result<Vec<Option<TransactionStatus>>> {
+        Ok(self
+            .0
+            .block_on(get_signature_statuses(&mut self.1, signatures.to_vec()))?)
+    }
+
+    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64> {
+        Ok(self.0.block_on(get_balance(&mut self.1, *pubkey))?)
+    }
+
+    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
+        let banks_client = &mut self.1;
+        let (fee_calculator, recent_blockhash, last_valid_slot) = self
+            .0
+            .block_on(async move { banks_client.get_fees(context::current()).await })?;
+        Ok((recent_blockhash, fee_calculator, last_valid_slot))
+    }
+
+    fn get_slot1(&mut self) -> Result<Slot> {
+        let banks_client = &mut self.1;
+        let root_slot = self
+            .0
+            .block_on(async move { banks_client.get_root_slot(context::current()).await })?;
+        Ok(root_slot)
+    }
+
+    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
+        let banks_client = &mut self.1;
+        let account = self
+            .0
+            .block_on(async move { banks_client.get_account(context::current(), *pubkey).await })?;
+        Ok(account)
     }
 }
 
@@ -127,14 +211,14 @@ impl<'a> ThinClient<'a> {
         }
     }
 
-    pub fn send_transaction(&self, transaction: Transaction) -> Result<Signature> {
+    pub fn send_transaction(&mut self, transaction: Transaction) -> Result<Signature> {
         if self.dry_run {
             return Ok(Signature::default());
         }
         self.client.send_transaction1(transaction)
     }
 
-    pub fn poll_for_confirmation(&self, signature: &Signature) -> Result<()> {
+    pub fn poll_for_confirmation(&mut self, signature: &Signature) -> Result<()> {
         while self.get_signature_statuses(&[*signature])?[0].is_none() {
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
@@ -142,14 +226,14 @@ impl<'a> ThinClient<'a> {
     }
 
     pub fn get_signature_statuses(
-        &self,
+        &mut self,
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>> {
         self.client.get_signature_statuses1(signatures)
     }
 
     pub fn send_and_confirm_message<S: Signers>(
-        &self,
+        &mut self,
         message: Message,
         signers: &S,
     ) -> Result<(Transaction, Slot)> {
@@ -164,7 +248,7 @@ impl<'a> ThinClient<'a> {
     }
 
     pub fn transfer<S: Signer>(
-        &self,
+        &mut self,
         lamports: u64,
         sender_keypair: &S,
         to_pubkey: &Pubkey,
@@ -175,19 +259,19 @@ impl<'a> ThinClient<'a> {
         self.send_and_confirm_message(message, &[sender_keypair])
     }
 
-    pub fn get_fees(&self) -> Result<(Hash, FeeCalculator, Slot)> {
+    pub fn get_fees(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
         self.client.get_fees1()
     }
 
-    pub fn get_slot(&self) -> Result<Slot> {
+    pub fn get_slot(&mut self) -> Result<Slot> {
         self.client.get_slot1()
     }
 
-    pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
+    pub fn get_balance(&mut self, pubkey: &Pubkey) -> Result<u64> {
         self.client.get_balance1(pubkey)
     }
 
-    pub fn get_account(&self, pubkey: &Pubkey) -> Result<Option<Account>> {
+    pub fn get_account(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
         self.client.get_account1(pubkey)
     }
 }

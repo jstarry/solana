@@ -24,12 +24,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match command_args.command {
         Command::DistributeTokens(args) => {
-            let thin_client = ThinClient::new(client, args.dry_run);
-            commands::process_distribute_tokens(&thin_client, &args)?;
+            let mut thin_client = ThinClient::new(client, args.dry_run);
+            commands::process_distribute_tokens(&mut thin_client, &args)?;
         }
         Command::Balances(args) => {
-            let thin_client = ThinClient::new(client, false);
-            commands::process_balances(&thin_client, &args)?;
+            let mut thin_client = ThinClient::new(client, false);
+            commands::process_balances(&mut thin_client, &args)?;
         }
         Command::TransactionLog(args) => {
             commands::process_transaction_log(&args)?;

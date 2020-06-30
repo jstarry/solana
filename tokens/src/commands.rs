@@ -93,7 +93,7 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
 }
 
 fn distribute_tokens(
-    client: &ThinClient,
+    client: &mut ThinClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
     args: &DistributeTokensArgs,
@@ -207,7 +207,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
 }
 
 pub fn process_distribute_tokens(
-    client: &ThinClient,
+    client: &mut ThinClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
     let mut allocations: Vec<Allocation> =
@@ -291,7 +291,7 @@ pub fn process_distribute_tokens(
 }
 
 fn finalize_transactions(
-    client: &ThinClient,
+    client: &mut ThinClient,
     db: &mut PickleDb,
     dry_run: bool,
 ) -> Result<Option<usize>, Error> {
@@ -323,7 +323,7 @@ fn finalize_transactions(
 // Update the finalized bit on any transactions that are now rooted
 // Return the lowest number of confirmations on the unfinalized transactions or None if all are finalized.
 fn update_finalized_transactions(
-    client: &ThinClient,
+    client: &mut ThinClient,
     db: &mut PickleDb,
 ) -> Result<Option<usize>, Error> {
     let transaction_infos = db::read_transaction_infos(db);
@@ -368,7 +368,7 @@ fn update_finalized_transactions(
     Ok(confirmations)
 }
 
-pub fn process_balances(client: &ThinClient, args: &BalancesArgs) -> Result<(), csv::Error> {
+pub fn process_balances(client: &mut ThinClient, args: &BalancesArgs) -> Result<(), csv::Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
     let allocations = merge_allocations(&allocations);
@@ -407,7 +407,7 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
 pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient::new(client, false);
+    let mut thin_client = ThinClient::new(client, false);
     let fee_payer = Keypair::new();
     let (transaction, _last_valid_slot) = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
@@ -445,7 +445,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
         dollars_per_sol: None,
         stake_args: None,
     };
-    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
+    let confirmations = process_distribute_tokens(&mut thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -464,7 +464,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(&thin_client, &args).unwrap();
+    process_distribute_tokens(&mut thin_client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -482,7 +482,7 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
 }
 
 pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let thin_client = ThinClient::new(client, false);
+    let mut thin_client = ThinClient::new(client, false);
     let fee_payer = Keypair::new();
     let (transaction, _last_valid_slot) = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
@@ -549,7 +549,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
         sender_keypair: Box::new(sender_keypair),
         dollars_per_sol: None,
     };
-    let confirmations = process_distribute_tokens(&thin_client, &args).unwrap();
+    let confirmations = process_distribute_tokens(&mut thin_client, &args).unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -573,7 +573,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(&thin_client, &args).unwrap();
+    process_distribute_tokens(&mut thin_client, &args).unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -597,15 +597,21 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_runtime::{bank::Bank, bank_client::BankClient};
+    use solana_runtime::{
+        bank::Bank, bank_client::BankClient, bank_forks::BankForks,
+        banks_server::start_local_server,
+    };
     use solana_sdk::genesis_config::create_genesis_config;
+    use std::sync::Arc;
+    use tokio::runtime::Runtime;
 
     #[test]
     fn test_process_distribute_tokens() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank = Bank::new(&genesis_config);
-        let bank_client = BankClient::new(bank);
-        test_process_distribute_tokens_with_client(bank_client, sender_keypair);
+        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
+        let mut runtime = Runtime::new().unwrap();
+        let banks_client = start_local_server(&mut runtime, &bank_forks).unwrap();
+        test_process_distribute_tokens_with_client((runtime, banks_client), sender_keypair);
     }
 
     #[test]

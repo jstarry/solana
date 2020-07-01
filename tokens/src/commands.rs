@@ -92,7 +92,7 @@ fn create_allocation(bid: &Bid, dollars_per_sol: f64) -> Allocation {
     }
 }
 
-fn distribute_tokens(
+async fn distribute_tokens(
     client: &mut ThinClient,
     db: &mut PickleDb,
     allocations: &[Allocation],
@@ -159,7 +159,7 @@ fn distribute_tokens(
 
         let fee_payer_pubkey = args.fee_payer.pubkey();
         let message = Message::new(&instructions, Some(&fee_payer_pubkey));
-        match client.send_and_confirm_message(message, &signers) {
+        match client.send_and_confirm_message(message, &signers).await {
             Ok((transaction, last_valid_slot)) => {
                 db::set_transaction_info(
                     db,
@@ -206,7 +206,7 @@ fn new_spinner_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub fn process_distribute_tokens(
+pub async fn process_distribute_tokens(
     client: &mut ThinClient,
     args: &DistributeTokensArgs,
 ) -> Result<Option<usize>, Error> {
@@ -230,7 +230,7 @@ pub fn process_distribute_tokens(
     let mut db = db::open_db(&args.transaction_db, args.dry_run)?;
 
     // Start by finalizing any transactions from the previous run.
-    let confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
+    let confirmations = finalize_transactions(client, &mut db, args.dry_run).await?;
 
     let transaction_infos = db::read_transaction_infos(&db);
     apply_previous_transactions(&mut allocations, &transaction_infos);
@@ -284,13 +284,13 @@ pub fn process_distribute_tokens(
         );
     }
 
-    distribute_tokens(client, &mut db, &allocations, args)?;
+    distribute_tokens(client, &mut db, &allocations, args).await?;
 
-    let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run)?;
+    let opt_confirmations = finalize_transactions(client, &mut db, args.dry_run).await?;
     Ok(opt_confirmations)
 }
 
-fn finalize_transactions(
+async fn finalize_transactions(
     client: &mut ThinClient,
     db: &mut PickleDb,
     dry_run: bool,
@@ -299,7 +299,7 @@ fn finalize_transactions(
         return Ok(None);
     }
 
-    let mut opt_confirmations = update_finalized_transactions(client, db)?;
+    let mut opt_confirmations = update_finalized_transactions(client, db).await?;
 
     let progress_bar = new_spinner_progress_bar();
 
@@ -313,7 +313,7 @@ fn finalize_transactions(
 
         // Sleep for about 1 slot
         sleep(Duration::from_millis(500));
-        let opt_conf = update_finalized_transactions(client, db)?;
+        let opt_conf = update_finalized_transactions(client, db).await?;
         opt_confirmations = opt_conf;
     }
 
@@ -322,7 +322,7 @@ fn finalize_transactions(
 
 // Update the finalized bit on any transactions that are now rooted
 // Return the lowest number of confirmations on the unfinalized transactions or None if all are finalized.
-fn update_finalized_transactions(
+async fn update_finalized_transactions(
     client: &mut ThinClient,
     db: &mut PickleDb,
 ) -> Result<Option<usize>, Error> {
@@ -342,8 +342,10 @@ fn update_finalized_transactions(
         .map(|(tx, _slot)| tx.signatures[0])
         .filter(|sig| *sig != Signature::default()) // Filter out dry-run signatures
         .collect();
-    let transaction_statuses = client.get_signature_statuses(&unconfirmed_signatures)?;
-    let root_slot = client.get_slot()?;
+    let transaction_statuses = client
+        .get_signature_statuses(&unconfirmed_signatures)
+        .await?;
+    let root_slot = client.get_slot().await?;
 
     let mut confirmations = None;
     for ((transaction, last_valid_slot), opt_transaction_status) in unconfirmed_transactions
@@ -368,7 +370,10 @@ fn update_finalized_transactions(
     Ok(confirmations)
 }
 
-pub fn process_balances(client: &mut ThinClient, args: &BalancesArgs) -> Result<(), csv::Error> {
+pub async fn process_balances(
+    client: &mut ThinClient,
+    args: &BalancesArgs,
+) -> Result<(), csv::Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, args.from_bids, args.dollars_per_sol);
     let allocations = merge_allocations(&allocations);
@@ -385,7 +390,7 @@ pub fn process_balances(client: &mut ThinClient, args: &BalancesArgs) -> Result<
     for allocation in &allocations {
         let address = allocation.recipient.parse().unwrap();
         let expected = lamports_to_sol(sol_to_lamports(allocation.amount));
-        let actual = lamports_to_sol(client.get_balance(&address).unwrap());
+        let actual = lamports_to_sol(client.get_balance(&address).await.unwrap());
         println!(
             "{:<44}  {:>24.9}  {:>24.9}  {:>24.9}",
             allocation.recipient,
@@ -406,16 +411,18 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
-pub fn test_process_distribute_tokens_with_client(
+pub async fn test_process_distribute_tokens_with_client(
     mut thin_client: ThinClient,
     sender_keypair: Keypair,
 ) {
     let fee_payer = Keypair::new();
     let (transaction, _last_valid_slot) = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
+        .await
         .unwrap();
     thin_client
         .poll_for_confirmation(&transaction.signatures[0])
+        .await
         .unwrap();
 
     let alice_pubkey = Pubkey::new_rand();
@@ -447,7 +454,9 @@ pub fn test_process_distribute_tokens_with_client(
         dollars_per_sol: None,
         stake_args: None,
     };
-    let confirmations = process_distribute_tokens(&mut thin_client, &args).unwrap();
+    let confirmations = process_distribute_tokens(&mut thin_client, &args)
+        .await
+        .unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -461,12 +470,14 @@ pub fn test_process_distribute_tokens_with_client(
     );
 
     assert_eq!(
-        thin_client.get_balance(&alice_pubkey).unwrap(),
+        thin_client.get_balance(&alice_pubkey).await.unwrap(),
         expected_amount,
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(&mut thin_client, &args).unwrap();
+    process_distribute_tokens(&mut thin_client, &args)
+        .await
+        .unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -478,21 +489,23 @@ pub fn test_process_distribute_tokens_with_client(
     );
 
     assert_eq!(
-        thin_client.get_balance(&alice_pubkey).unwrap(),
+        thin_client.get_balance(&alice_pubkey).await.unwrap(),
         expected_amount,
     );
 }
 
-pub fn test_process_distribute_stake_with_client(
+pub async fn test_process_distribute_stake_with_client(
     mut thin_client: ThinClient,
     sender_keypair: Keypair,
 ) {
     let fee_payer = Keypair::new();
     let (transaction, _last_valid_slot) = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
+        .await
         .unwrap();
     thin_client
         .poll_for_confirmation(&transaction.signatures[0])
+        .await
         .unwrap();
 
     let stake_account_keypair = Keypair::new();
@@ -516,6 +529,7 @@ pub fn test_process_distribute_stake_with_client(
     let signers = [&sender_keypair, &stake_account_keypair];
     thin_client
         .send_and_confirm_message(message, &signers)
+        .await
         .unwrap();
 
     let alice_pubkey = Pubkey::new_rand();
@@ -553,7 +567,9 @@ pub fn test_process_distribute_stake_with_client(
         sender_keypair: Box::new(sender_keypair),
         dollars_per_sol: None,
     };
-    let confirmations = process_distribute_tokens(&mut thin_client, &args).unwrap();
+    let confirmations = process_distribute_tokens(&mut thin_client, &args)
+        .await
+        .unwrap();
     assert_eq!(confirmations, None);
 
     let transaction_infos =
@@ -567,17 +583,22 @@ pub fn test_process_distribute_stake_with_client(
     );
 
     assert_eq!(
-        thin_client.get_balance(&alice_pubkey).unwrap(),
+        thin_client.get_balance(&alice_pubkey).await.unwrap(),
         sol_to_lamports(1.0),
     );
     let new_stake_account_address = transaction_infos[0].new_stake_account_address.unwrap();
     assert_eq!(
-        thin_client.get_balance(&new_stake_account_address).unwrap(),
+        thin_client
+            .get_balance(&new_stake_account_address)
+            .await
+            .unwrap(),
         expected_amount - sol_to_lamports(1.0),
     );
 
     // Now, run it again, and check there's no double-spend.
-    process_distribute_tokens(&mut thin_client, &args).unwrap();
+    process_distribute_tokens(&mut thin_client, &args)
+        .await
+        .unwrap();
     let transaction_infos =
         db::read_transaction_infos(&db::open_db(&transaction_db, true).unwrap());
     assert_eq!(transaction_infos.len(), 1);
@@ -589,11 +610,14 @@ pub fn test_process_distribute_stake_with_client(
     );
 
     assert_eq!(
-        thin_client.get_balance(&alice_pubkey).unwrap(),
+        thin_client.get_balance(&alice_pubkey).await.unwrap(),
         sol_to_lamports(1.0),
     );
     assert_eq!(
-        thin_client.get_balance(&new_stake_account_address).unwrap(),
+        thin_client
+            .get_balance(&new_stake_account_address)
+            .await
+            .unwrap(),
         expected_amount - sol_to_lamports(1.0),
     );
 }
@@ -612,8 +636,11 @@ mod tests {
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
         let mut runtime = Runtime::new().unwrap();
         let banks_client = start_local_server(&mut runtime, &bank_forks).unwrap();
-        let thin_client = ThinClient::new(runtime, banks_client, false);
-        test_process_distribute_tokens_with_client(thin_client, sender_keypair);
+        let thin_client = ThinClient::new(banks_client, false);
+        runtime.block_on(test_process_distribute_tokens_with_client(
+            thin_client,
+            sender_keypair,
+        ));
     }
 
     #[test]
@@ -622,8 +649,11 @@ mod tests {
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
         let mut runtime = Runtime::new().unwrap();
         let banks_client = start_local_server(&mut runtime, &bank_forks).unwrap();
-        let thin_client = ThinClient::new(runtime, banks_client, false);
-        test_process_distribute_stake_with_client(thin_client, sender_keypair);
+        let thin_client = ThinClient::new(banks_client, false);
+        runtime.block_on(test_process_distribute_stake_with_client(
+            thin_client,
+            sender_keypair,
+        ));
     }
 
     #[test]

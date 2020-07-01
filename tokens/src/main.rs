@@ -34,12 +34,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match command_args.command {
         Command::DistributeTokens(args) => {
-            let mut thin_client = ThinClient::new(runtime, banks_client, args.dry_run);
-            commands::process_distribute_tokens(&mut thin_client, &args)?;
+            let mut thin_client = ThinClient::new(banks_client, args.dry_run);
+            runtime.block_on(commands::process_distribute_tokens(&mut thin_client, &args))?;
         }
         Command::Balances(args) => {
-            let mut thin_client = ThinClient::new(runtime, banks_client, false);
-            commands::process_balances(&mut thin_client, &args)?;
+            let mut thin_client = ThinClient::new(banks_client, false);
+            runtime.block_on(commands::process_balances(&mut thin_client, &args))?;
         }
         Command::TransactionLog(args) => {
             commands::process_transaction_log(&args)?;

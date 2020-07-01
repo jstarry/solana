@@ -55,6 +55,9 @@ fn test_process_distribute_with_rpc_client() {
     runtime.spawn(start_server(json_rpc_url, bank_forks));
     let banks_client = runtime.block_on(start_client(&json_rpc_url)).unwrap();
 
-    let thin_client = ThinClient::new(runtime, banks_client, false);
-    test_process_distribute_tokens_with_client(thin_client, genesis.mint_keypair);
+    let thin_client = ThinClient::new(banks_client, false);
+    runtime.block_on(test_process_distribute_tokens_with_client(
+        thin_client,
+        genesis.mint_keypair,
+    ));
 }

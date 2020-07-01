@@ -1,6 +1,6 @@
 use crate::args::{BalancesArgs, DistributeTokensArgs, StakeArgs, TransactionLogArgs};
 use crate::db::{self, TransactionInfo};
-use crate::thin_client::{Client, ThinClient};
+use crate::thin_client::ThinClient;
 use console::style;
 use csv::{ReaderBuilder, Trim};
 use indexmap::IndexMap;
@@ -406,8 +406,10 @@ pub fn process_transaction_log(args: &TransactionLogArgs) -> Result<(), Error> {
 
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use tempfile::{tempdir, NamedTempFile};
-pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let mut thin_client = ThinClient::new(client, false);
+pub fn test_process_distribute_tokens_with_client(
+    mut thin_client: ThinClient,
+    sender_keypair: Keypair,
+) {
     let fee_payer = Keypair::new();
     let (transaction, _last_valid_slot) = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
@@ -481,8 +483,10 @@ pub fn test_process_distribute_tokens_with_client<C: Client>(client: C, sender_k
     );
 }
 
-pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_keypair: Keypair) {
-    let mut thin_client = ThinClient::new(client, false);
+pub fn test_process_distribute_stake_with_client(
+    mut thin_client: ThinClient,
+    sender_keypair: Keypair,
+) {
     let fee_payer = Keypair::new();
     let (transaction, _last_valid_slot) = thin_client
         .transfer(sol_to_lamports(1.0), &sender_keypair, &fee_payer.pubkey())
@@ -608,7 +612,8 @@ mod tests {
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
         let mut runtime = Runtime::new().unwrap();
         let banks_client = start_local_server(&mut runtime, &bank_forks).unwrap();
-        test_process_distribute_tokens_with_client((runtime, banks_client), sender_keypair);
+        let thin_client = ThinClient::new(runtime, banks_client, false);
+        test_process_distribute_tokens_with_client(thin_client, sender_keypair);
     }
 
     #[test]
@@ -617,7 +622,8 @@ mod tests {
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
         let mut runtime = Runtime::new().unwrap();
         let banks_client = start_local_server(&mut runtime, &bank_forks).unwrap();
-        test_process_distribute_stake_with_client((runtime, banks_client), sender_keypair);
+        let thin_client = ThinClient::new(runtime, banks_client, false);
+        test_process_distribute_stake_with_client(thin_client, sender_keypair);
     }
 
     #[test]

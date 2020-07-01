@@ -31,15 +31,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut runtime = Runtime::new().unwrap();
     let banks_client = runtime.block_on(start_client(&json_rpc_url))?;
-    let client = (runtime, banks_client);
 
     match command_args.command {
         Command::DistributeTokens(args) => {
-            let mut thin_client = ThinClient::new(client, args.dry_run);
+            let mut thin_client = ThinClient::new(runtime, banks_client, args.dry_run);
             commands::process_distribute_tokens(&mut thin_client, &args)?;
         }
         Command::Balances(args) => {
-            let mut thin_client = ThinClient::new(client, false);
+            let mut thin_client = ThinClient::new(runtime, banks_client, false);
             commands::process_balances(&mut thin_client, &args)?;
         }
         Command::TransactionLog(args) => {

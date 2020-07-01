@@ -16,23 +16,29 @@ use solana_transaction_status::TransactionStatus;
 use tarpc::context;
 use tokio::runtime::Runtime;
 
-pub trait Client {
-    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature>;
-    fn get_signature_statuses1(
-        &mut self,
-        signatures: &[Signature],
-    ) -> Result<Vec<Option<TransactionStatus>>>;
-    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64>;
-    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)>;
-    fn get_slot1(&mut self) -> Result<Slot>;
-    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>>;
+pub struct ThinClient {
+    runtime: Runtime,
+    client: BanksClient,
+    dry_run: bool,
 }
 
-impl Client for (Runtime, BanksClient) {
-    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature> {
+impl ThinClient {
+    pub fn new(runtime: Runtime, client: BanksClient, dry_run: bool) -> Self {
+        Self {
+            runtime,
+            client,
+            dry_run,
+        }
+    }
+
+    pub fn send_transaction(&mut self, transaction: Transaction) -> Result<Signature> {
+        if self.dry_run {
+            return Ok(Signature::default());
+        }
+
         let signature = transaction.signatures[0];
-        let banks_client = &mut self.1;
-        self.0.block_on(async move {
+        let banks_client = &mut self.client;
+        self.runtime.block_on(async move {
             banks_client
                 .send_transaction(context::current(), transaction)
                 .await
@@ -40,12 +46,19 @@ impl Client for (Runtime, BanksClient) {
         Ok(signature)
     }
 
-    fn get_signature_statuses1(
+    pub fn poll_for_confirmation(&mut self, signature: &Signature) -> Result<()> {
+        while self.get_signature_statuses(&[*signature])?[0].is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        Ok(())
+    }
+
+    pub fn get_signature_statuses(
         &mut self,
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>> {
-        let banks_client = &mut self.1;
-        let statuses = self.0.block_on(async move {
+        let banks_client = &mut self.client;
+        let statuses = self.runtime.block_on(async move {
             banks_client
                 .get_signature_statuses(context::current(), signatures.to_vec())
                 .await
@@ -62,69 +75,6 @@ impl Client for (Runtime, BanksClient) {
             })
             .collect();
         Ok(transaction_statuses)
-    }
-
-    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64> {
-        Ok(self.0.block_on(get_balance(&mut self.1, *pubkey))?)
-    }
-
-    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
-        let banks_client = &mut self.1;
-        let (fee_calculator, recent_blockhash, last_valid_slot) = self
-            .0
-            .block_on(async move { banks_client.get_fees(context::current()).await })?;
-        Ok((recent_blockhash, fee_calculator, last_valid_slot))
-    }
-
-    fn get_slot1(&mut self) -> Result<Slot> {
-        let banks_client = &mut self.1;
-        let root_slot = self
-            .0
-            .block_on(async move { banks_client.get_root_slot(context::current()).await })?;
-        Ok(root_slot)
-    }
-
-    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
-        let banks_client = &mut self.1;
-        let account = self
-            .0
-            .block_on(async move { banks_client.get_account(context::current(), *pubkey).await })?;
-        Ok(account)
-    }
-}
-
-pub struct ThinClient<'a> {
-    client: Box<dyn Client + 'a>,
-    dry_run: bool,
-}
-
-impl<'a> ThinClient<'a> {
-    pub fn new<C: Client + 'a>(client: C, dry_run: bool) -> Self {
-        Self {
-            client: Box::new(client),
-            dry_run,
-        }
-    }
-
-    pub fn send_transaction(&mut self, transaction: Transaction) -> Result<Signature> {
-        if self.dry_run {
-            return Ok(Signature::default());
-        }
-        self.client.send_transaction1(transaction)
-    }
-
-    pub fn poll_for_confirmation(&mut self, signature: &Signature) -> Result<()> {
-        while self.get_signature_statuses(&[*signature])?[0].is_none() {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-        }
-        Ok(())
-    }
-
-    pub fn get_signature_statuses(
-        &mut self,
-        signatures: &[Signature],
-    ) -> Result<Vec<Option<TransactionStatus>>> {
-        self.client.get_signature_statuses1(signatures)
     }
 
     pub fn send_and_confirm_message<S: Signers>(
@@ -155,18 +105,32 @@ impl<'a> ThinClient<'a> {
     }
 
     pub fn get_fees(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
-        self.client.get_fees1()
+        let banks_client = &mut self.client;
+        let (fee_calculator, recent_blockhash, last_valid_slot) = self
+            .runtime
+            .block_on(async move { banks_client.get_fees(context::current()).await })?;
+        Ok((recent_blockhash, fee_calculator, last_valid_slot))
     }
 
     pub fn get_slot(&mut self) -> Result<Slot> {
-        self.client.get_slot1()
+        let banks_client = &mut self.client;
+        let root_slot = self
+            .runtime
+            .block_on(async move { banks_client.get_root_slot(context::current()).await })?;
+        Ok(root_slot)
     }
 
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> Result<u64> {
-        self.client.get_balance1(pubkey)
+        Ok(self
+            .runtime
+            .block_on(get_balance(&mut self.client, *pubkey))?)
     }
 
     pub fn get_account(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
-        self.client.get_account1(pubkey)
+        let banks_client = &mut self.client;
+        let account = self
+            .runtime
+            .block_on(async move { banks_client.get_account(context::current(), *pubkey).await })?;
+        Ok(account)
     }
 }

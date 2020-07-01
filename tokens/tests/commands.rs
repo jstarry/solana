@@ -7,7 +7,9 @@ use solana_sdk::{
     banks_client::{Banks, BanksClient},
     native_token::sol_to_lamports,
 };
-use solana_tokens::commands::test_process_distribute_tokens_with_client;
+use solana_tokens::{
+    commands::test_process_distribute_tokens_with_client, thin_client::ThinClient,
+};
 use std::sync::Arc;
 use tarpc::{
     client,
@@ -53,6 +55,6 @@ fn test_process_distribute_with_rpc_client() {
     runtime.spawn(start_server(json_rpc_url, bank_forks));
     let banks_client = runtime.block_on(start_client(&json_rpc_url)).unwrap();
 
-    let client = (runtime, banks_client);
-    test_process_distribute_tokens_with_client(client, genesis.mint_keypair);
+    let thin_client = ThinClient::new(runtime, banks_client, false);
+    test_process_distribute_tokens_with_client(thin_client, genesis.mint_keypair);
 }

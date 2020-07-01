@@ -14,6 +14,7 @@ use solana_sdk::{
 };
 use solana_transaction_status::TransactionStatus;
 use tarpc::context;
+use tokio::time::delay_for;
 
 pub struct ThinClient {
     client: BanksClient,
@@ -39,7 +40,7 @@ impl ThinClient {
 
     pub async fn poll_for_confirmation(&mut self, signature: &Signature) -> Result<()> {
         while self.get_signature_statuses(&[*signature]).await?[0].is_none() {
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            delay_for(std::time::Duration::from_millis(500)).await;
         }
         Ok(())
     }

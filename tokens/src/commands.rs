@@ -597,10 +597,7 @@ pub fn test_process_distribute_stake_with_client<C: Client>(client: C, sender_ke
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_runtime::{
-        bank::Bank, bank_client::BankClient, bank_forks::BankForks,
-        banks_server::start_local_server,
-    };
+    use solana_runtime::{bank::Bank, bank_forks::BankForks, banks_server::start_local_server};
     use solana_sdk::genesis_config::create_genesis_config;
     use std::sync::Arc;
     use tokio::runtime::Runtime;
@@ -617,9 +614,10 @@ mod tests {
     #[test]
     fn test_process_distribute_stake() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank = Bank::new(&genesis_config);
-        let bank_client = BankClient::new(bank);
-        test_process_distribute_stake_with_client(bank_client, sender_keypair);
+        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
+        let mut runtime = Runtime::new().unwrap();
+        let banks_client = start_local_server(&mut runtime, &bank_forks).unwrap();
+        test_process_distribute_stake_with_client((runtime, banks_client), sender_keypair);
     }
 
     #[test]

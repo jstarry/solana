@@ -1,11 +1,7 @@
-use solana_client::{rpc_client::RpcClient, rpc_config::RpcSendTransactionConfig};
-use solana_runtime::bank_client::BankClient;
 use solana_sdk::{
     account::Account,
     banks_client::{get_balance, BanksClient},
-    client::{AsyncClient, SyncClient},
     clock::Slot,
-    commitment_config::CommitmentConfig,
     fee_calculator::FeeCalculator,
     hash::Hash,
     message::Message,
@@ -14,7 +10,7 @@ use solana_sdk::{
     signers::Signers,
     system_instruction,
     transaction::Transaction,
-    transport::{Result, TransportError},
+    transport::Result,
 };
 use solana_transaction_status::TransactionStatus;
 use tarpc::context;
@@ -30,91 +26,6 @@ pub trait Client {
     fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)>;
     fn get_slot1(&mut self) -> Result<Slot>;
     fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>>;
-}
-
-impl Client for RpcClient {
-    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature> {
-        self.send_transaction_with_config(
-            &transaction,
-            RpcSendTransactionConfig {
-                skip_preflight: true,
-            },
-        )
-        .map_err(|e| TransportError::Custom(e.to_string()))
-    }
-
-    fn get_signature_statuses1(
-        &mut self,
-        signatures: &[Signature],
-    ) -> Result<Vec<Option<TransactionStatus>>> {
-        self.get_signature_statuses(signatures)
-            .map(|response| response.value)
-            .map_err(|e| TransportError::Custom(e.to_string()))
-    }
-
-    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64> {
-        self.get_balance(pubkey)
-            .map_err(|e| TransportError::Custom(e.to_string()))
-    }
-
-    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
-        let result = self
-            .get_recent_blockhash_with_commitment(CommitmentConfig::default())
-            .map_err(|e| TransportError::Custom(e.to_string()))?;
-        Ok(result.value)
-    }
-
-    fn get_slot1(&mut self) -> Result<Slot> {
-        self.get_slot()
-            .map_err(|e| TransportError::Custom(e.to_string()))
-    }
-
-    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
-        self.get_account(pubkey)
-            .map(Some)
-            .map_err(|e| TransportError::Custom(e.to_string()))
-    }
-}
-
-impl Client for BankClient {
-    fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature> {
-        self.async_send_transaction(transaction)
-    }
-
-    fn get_signature_statuses1(
-        &mut self,
-        signatures: &[Signature],
-    ) -> Result<Vec<Option<TransactionStatus>>> {
-        signatures
-            .iter()
-            .map(|signature| {
-                self.get_signature_status(signature).map(|opt| {
-                    opt.map(|status| TransactionStatus {
-                        slot: 0,
-                        confirmations: None,
-                        status,
-                        err: None,
-                    })
-                })
-            })
-            .collect()
-    }
-
-    fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64> {
-        self.get_balance(pubkey)
-    }
-
-    fn get_fees1(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
-        self.get_recent_blockhash_with_commitment(CommitmentConfig::default())
-    }
-
-    fn get_slot1(&mut self) -> Result<Slot> {
-        self.get_slot()
-    }
-
-    fn get_account1(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
-        self.get_account(pubkey)
-    }
 }
 
 impl Client for (Runtime, BanksClient) {

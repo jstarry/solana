@@ -4847,14 +4847,13 @@ dependencies = [
  "console",
  "csv",
  "dirs 2.0.2",
+ "futures 0.3.5",
  "indexmap",
  "indicatif",
  "pickledb",
  "serde",
  "solana-clap-utils",
  "solana-cli-config",
- "solana-client",
- "solana-core",
  "solana-remote-wallet",
  "solana-runtime",
  "solana-sdk 1.3.0",
@@ -4864,6 +4863,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio 0.2.21",
+ "tokio-serde",
 ]
 
 [[package]]
@@ -5934,8 +5934,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebdd897b01021779294eb09bb3b52b6e11b0747f9f7e333a84bef532b656de99"
 dependencies = [
  "bytes 0.5.4",
+ "derivative",
  "futures 0.3.5",
  "pin-project",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

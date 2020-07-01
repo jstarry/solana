@@ -16,6 +16,7 @@ pub trait Banks {
     async fn get_fees() -> (FeeCalculator, Hash, Slot);
     async fn send_transaction(transaction: Transaction);
     async fn get_signature_status(signature: Signature) -> Option<transaction::Result<()>>;
+    async fn get_signature_statuses(signatures: Vec<Signature>) -> Vec<Option<transaction::Result<()>>>;
     async fn get_root_slot() -> Slot;
     async fn send_and_confirm_transaction(
         transaction: Transaction,

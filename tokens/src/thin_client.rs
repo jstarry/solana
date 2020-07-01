@@ -117,37 +117,6 @@ impl Client for BankClient {
     }
 }
 
-async fn get_signature_statuses(
-    banks_client: &mut BanksClient,
-    signatures: Vec<Signature>,
-) -> std::io::Result<Vec<Option<TransactionStatus>>> {
-    // TODO: Do parallel RPC calls via `join_all`. It's not done that way now because each RPC call returns
-    // a future that references the &mut bank_client.
-    let mut statuses = vec![];
-    for signature in signatures {
-        statuses.push(
-            banks_client
-                .get_signature_status(context::current(), signature)
-                .await,
-        );
-    }
-
-    let transaction_statuses = statuses
-        .into_iter()
-        .map(|result| {
-            let opt = result.unwrap();
-            opt.map(|status| TransactionStatus {
-                slot: 0,
-                confirmations: None,
-                status,
-                err: None,
-            })
-        })
-        .collect();
-
-    Ok(transaction_statuses)
-}
-
 impl Client for (Runtime, BanksClient) {
     fn send_transaction1(&mut self, transaction: Transaction) -> Result<Signature> {
         let signature = transaction.signatures[0];
@@ -164,9 +133,24 @@ impl Client for (Runtime, BanksClient) {
         &mut self,
         signatures: &[Signature],
     ) -> Result<Vec<Option<TransactionStatus>>> {
-        Ok(self
-            .0
-            .block_on(get_signature_statuses(&mut self.1, signatures.to_vec()))?)
+        let banks_client = &mut self.1;
+        let statuses = self.0.block_on(async move {
+            banks_client
+                .get_signature_statuses(context::current(), signatures.to_vec())
+                .await
+        })?;
+        let transaction_statuses = statuses
+            .into_iter()
+            .map(|opt| {
+                opt.map(|status| TransactionStatus {
+                    slot: 0,
+                    confirmations: None,
+                    status,
+                    err: None,
+                })
+            })
+            .collect();
+        Ok(transaction_statuses)
     }
 
     fn get_balance1(&mut self, pubkey: &Pubkey) -> Result<u64> {

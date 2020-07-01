@@ -112,6 +112,20 @@ impl Banks for BanksServer {
         future::ready(bank.get_signature_status(&signature))
     }
 
+    type GetSignatureStatusesFut = Ready<Vec<Option<transaction::Result<()>>>>;
+    fn get_signature_statuses(
+        self,
+        _: Context,
+        signatures: Vec<Signature>,
+    ) -> Self::GetSignatureStatusesFut {
+        let bank = self.bank_forks.root_bank();
+        let statuses = signatures
+            .iter()
+            .map(|x| bank.get_signature_status(x))
+            .collect();
+        future::ready(statuses)
+    }
+
     type GetRootSlotFut = Ready<Slot>;
     fn get_root_slot(self, _: Context) -> Self::GetRootSlotFut {
         future::ready(self.bank_forks.root())

@@ -345,7 +345,7 @@ async fn update_finalized_transactions(
     let transaction_statuses = client
         .get_signature_statuses(&unconfirmed_signatures)
         .await?;
-    let root_slot = client.get_slot().await?;
+    let root_slot = client.get_root_slot().await?;
 
     let mut confirmations = None;
     for ((transaction, last_valid_slot), opt_transaction_status) in unconfirmed_transactions

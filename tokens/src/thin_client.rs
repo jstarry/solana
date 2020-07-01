@@ -13,6 +13,7 @@ use solana_sdk::{
     transport::Result,
 };
 use solana_transaction_status::TransactionStatus;
+use std::io;
 use tarpc::context;
 use tokio::time::delay_for;
 
@@ -38,7 +39,7 @@ impl ThinClient {
         Ok(signature)
     }
 
-    pub async fn poll_for_confirmation(&mut self, signature: &Signature) -> Result<()> {
+    pub async fn poll_for_confirmation(&mut self, signature: &Signature) -> io::Result<()> {
         while self.get_signature_statuses(&[*signature]).await?[0].is_none() {
             delay_for(std::time::Duration::from_millis(500)).await;
         }
@@ -48,7 +49,7 @@ impl ThinClient {
     pub async fn get_signature_statuses(
         &mut self,
         signatures: &[Signature],
-    ) -> Result<Vec<Option<TransactionStatus>>> {
+    ) -> io::Result<Vec<Option<TransactionStatus>>> {
         let statuses = self
             .client
             .get_signature_statuses(context::current(), signatures.to_vec())
@@ -75,7 +76,7 @@ impl ThinClient {
         if self.dry_run {
             return Ok((Transaction::new_unsigned(message), std::u64::MAX));
         }
-        let (blockhash, _fee_caluclator, last_valid_slot) = self.get_fees().await?;
+        let (_fee_calculator, blockhash, last_valid_slot) = self.get_fees().await?;
 
         let transaction = Transaction::new(signers, message, blockhash);
         self.send_transaction(transaction.clone()).await?;
@@ -95,21 +96,19 @@ impl ThinClient {
             .await
     }
 
-    pub async fn get_fees(&mut self) -> Result<(Hash, FeeCalculator, Slot)> {
-        let (fee_calculator, recent_blockhash, last_valid_slot) =
-            self.client.get_fees(context::current()).await?;
-        Ok((recent_blockhash, fee_calculator, last_valid_slot))
+    pub async fn get_fees(&mut self) -> io::Result<(FeeCalculator, Hash, Slot)> {
+        self.client.get_fees(context::current()).await
     }
 
-    pub async fn get_slot(&mut self) -> Result<Slot> {
-        Ok(self.client.get_root_slot(context::current()).await?)
+    pub async fn get_root_slot(&mut self) -> io::Result<Slot> {
+        self.client.get_root_slot(context::current()).await
     }
 
-    pub async fn get_balance(&mut self, pubkey: &Pubkey) -> Result<u64> {
-        Ok(get_balance(&mut self.client, *pubkey).await?)
+    pub async fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
+        get_balance(&mut self.client, *pubkey).await
     }
 
-    pub async fn get_account(&mut self, pubkey: &Pubkey) -> Result<Option<Account>> {
-        Ok(self.client.get_account(context::current(), *pubkey).await?)
+    pub async fn get_account(&mut self, pubkey: &Pubkey) -> io::Result<Option<Account>> {
+        self.client.get_account(context::current(), *pubkey).await
     }
 }

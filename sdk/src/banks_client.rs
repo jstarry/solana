@@ -11,7 +11,7 @@ use crate::{
 use std::io::{self, Error, ErrorKind};
 use tarpc::{client, context, serde_transport::tcp};
 use tokio::net::ToSocketAddrs;
-use tokio_serde::formats::Json;
+use tokio_serde::formats::Bincode;
 
 #[tarpc::service]
 pub trait Banks {
@@ -28,8 +28,8 @@ pub trait Banks {
     async fn get_account(pubkey: Pubkey) -> Option<Account>;
 }
 
-pub async fn start_tcp_client<T: ToSocketAddrs>(json_rpc_url: T) -> io::Result<BanksClient> {
-    let transport = tcp::connect(json_rpc_url, Json::default()).await?;
+pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClient> {
+    let transport = tcp::connect(addr, Bincode::default()).await?;
     BanksClient::new(client::Config::default(), transport).spawn()
 }
 

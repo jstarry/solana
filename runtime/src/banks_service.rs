@@ -30,7 +30,7 @@ use tarpc::{
     transport,
 };
 use tokio::time::delay_for;
-use tokio_serde::formats::Json;
+use tokio_serde::formats::Bincode;
 
 #[derive(Clone)]
 struct BanksService {
@@ -162,7 +162,7 @@ pub async fn start_local_service(bank_forks: &Arc<BankForks>) -> io::Result<Bank
 }
 
 pub async fn start_local_tcp_service(bank_forks: Arc<BankForks>) -> io::Result<BanksClient> {
-    let incoming = tcp::listen(&"localhost:0", Json::default)
+    let incoming = tcp::listen(&"localhost:0", Bincode::default)
         .await?
         // Ignore accept errors.
         .filter_map(|r| future::ready(r.ok()));

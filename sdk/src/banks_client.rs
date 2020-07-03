@@ -9,7 +9,7 @@ use crate::{
     transport,
 };
 use std::io::{self, Error, ErrorKind};
-use tarpc::{context, serde_transport::tcp, client};
+use tarpc::{client, context, serde_transport::tcp};
 use tokio::net::ToSocketAddrs;
 use tokio_serde::formats::Json;
 

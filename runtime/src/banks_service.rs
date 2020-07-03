@@ -1,11 +1,11 @@
 use crate::{bank::Bank, bank_forks::BankForks};
 use futures::{
-    future::{self, Future, Ready},
+    future,
     prelude::stream::{self, StreamExt},
 };
 use solana_sdk::{
     account::Account,
-    banks_client::{Banks, BanksClient, start_tcp_client},
+    banks_client::{start_tcp_client, Banks, BanksClient},
     clock::Slot,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -15,7 +15,6 @@ use solana_sdk::{
 };
 use std::{
     io,
-    pin::Pin,
     sync::{
         mpsc::{channel, Receiver, Sender},
         Arc,
@@ -93,66 +92,60 @@ async fn poll_transaction_status(
     status
 }
 
+#[tarpc::server]
 impl Banks for BanksService {
-    type GetFeesFut = Ready<(FeeCalculator, Hash, Slot)>;
-    fn get_fees(self, _: Context) -> Self::GetFeesFut {
+    async fn get_fees(self, _: Context) -> (FeeCalculator, Hash, Slot) {
         let bank = self.bank_forks.root_bank();
         let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
         let last_valid_slot = bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
-        future::ready((fee_calculator, blockhash, last_valid_slot))
+        (fee_calculator, blockhash, last_valid_slot)
     }
 
-    type SendTransactionFut = Ready<()>;
-    fn send_transaction(self, _: Context, transaction: Transaction) -> Self::SendTransactionFut {
+    async fn send_transaction(self, _: Context, transaction: Transaction) {
         self.transaction_sender.send(transaction).unwrap();
-        future::ready(())
     }
 
-    type GetSignatureStatusFut = Ready<Option<transaction::Result<()>>>;
-    fn get_signature_status(self, _: Context, signature: Signature) -> Self::GetSignatureStatusFut {
+    async fn get_signature_status(
+        self,
+        _: Context,
+        signature: Signature,
+    ) -> Option<transaction::Result<()>> {
         let bank = self.bank_forks.root_bank();
-        future::ready(bank.get_signature_status(&signature))
+        bank.get_signature_status(&signature)
     }
 
-    type GetSignatureStatusesFut = Ready<Vec<Option<transaction::Result<()>>>>;
-    fn get_signature_statuses(
+    async fn get_signature_statuses(
         self,
         _: Context,
         signatures: Vec<Signature>,
-    ) -> Self::GetSignatureStatusesFut {
+    ) -> Vec<Option<transaction::Result<()>>> {
         let bank = self.bank_forks.root_bank();
-        let statuses = signatures
+        signatures
             .iter()
             .map(|x| bank.get_signature_status(x))
-            .collect();
-        future::ready(statuses)
+            .collect()
     }
 
-    type GetRootSlotFut = Ready<Slot>;
-    fn get_root_slot(self, _: Context) -> Self::GetRootSlotFut {
-        future::ready(self.bank_forks.root())
+    async fn get_root_slot(self, _: Context) -> Slot {
+        self.bank_forks.root()
     }
 
-    type SendAndConfirmTransactionFut =
-        Pin<Box<dyn Future<Output = Option<transaction::Result<()>>> + Send>>;
-    fn send_and_confirm_transaction(
+    async fn send_and_confirm_transaction(
         self,
         _: Context,
         transaction: Transaction,
-    ) -> Self::SendAndConfirmTransactionFut {
+    ) -> Option<transaction::Result<()>> {
         let blockhash = &transaction.message.recent_blockhash;
         let root_bank = self.bank_forks.root_bank();
         let last_valid_slot = root_bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         self.transaction_sender.send(transaction).unwrap();
-        let status = poll_transaction_status(root_bank.clone(), signature, last_valid_slot);
-        Box::pin(status)
+        poll_transaction_status(root_bank.clone(), signature, last_valid_slot).await
     }
 
-    type GetAccountFut = Ready<Option<Account>>;
-    fn get_account(self, _: Context, pubkey: Pubkey) -> Self::GetAccountFut {
+    async fn get_account(self, _: Context, pubkey: Pubkey) -> Option<Account> {
         let bank = self.bank_forks.root_bank();
-        future::ready(bank.get_account(&pubkey))
+        bank.get_account(&pubkey)
     }
 }
 
@@ -195,7 +188,6 @@ pub async fn start_local_tcp_service(bank_forks: Arc<BankForks>) -> io::Result<B
 
     start_tcp_client(addr).await
 }
-
 
 #[cfg(test)]
 mod tests {

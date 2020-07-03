@@ -32,13 +32,13 @@ use tarpc::{
 use tokio::{runtime::Runtime, time::delay_for};
 
 #[derive(Clone)]
-pub struct BanksServer {
+pub struct BanksService {
     bank_forks: Arc<BankForks>,
     transaction_sender: Sender<Transaction>,
 }
 
-impl BanksServer {
-    /// Return a BanksServer that forwards transactions to the
+impl BanksService {
+    /// Return a BanksService that forwards transactions to the
     /// given sender. If unit-testing, those transactions can go to
     /// a bank in the given BankForks. Otherwise, the receiver should
     /// forward them to a validator in the leader schedule.
@@ -91,7 +91,7 @@ async fn poll_transaction_status(
     status
 }
 
-impl Banks for BanksServer {
+impl Banks for BanksService {
     type GetFeesFut = Ready<(FeeCalculator, Hash, Slot)>;
     fn get_fees(self, _: Context) -> Self::GetFeesFut {
         let bank = self.bank_forks.root_bank();
@@ -154,15 +154,15 @@ impl Banks for BanksServer {
     }
 }
 
-pub fn start_local_server(
+pub fn start_local_service(
     runtime: &mut Runtime,
     bank_forks: &Arc<BankForks>,
 ) -> io::Result<BanksClient> {
-    let banks_server = BanksServer::new(bank_forks.clone());
+    let banks_service = BanksService::new(bank_forks.clone());
     let (client_transport, server_transport) = transport::channel::unbounded();
     let server = server::new(server::Config::default())
         .incoming(stream::once(future::ready(server_transport)))
-        .respond_with(banks_server.serve());
+        .respond_with(banks_service.serve());
     runtime.spawn(server);
 
     let banks_client = BanksClient::new(client::Config::default(), client_transport);
@@ -183,8 +183,8 @@ mod tests {
     use tarpc::context;
 
     #[test]
-    fn test_banks_server_transfer_via_server() -> io::Result<()> {
-        // This test shows the preferred way to interact with BanksServer.
+    fn test_banks_service_transfer_via_service() -> io::Result<()> {
+        // This test shows the preferred way to interact with BanksService.
         // It creates a runtime explicitly (no globals via tokio macros) and calls
         // `runtime.block_on()` just once, to run all the async code.
 
@@ -210,7 +210,7 @@ mod tests {
     }
 
     #[test]
-    fn test_banks_server_transfer_via_client() -> io::Result<()> {
+    fn test_banks_service_transfer_via_client() -> io::Result<()> {
         // The caller may not want to hold the connection open until the transaction
         // is processed (or blockhash expires). In this test, we verify the
         // server-side functionality is available to the client.

@@ -9,7 +9,9 @@ use crate::{
     transport,
 };
 use std::io::{self, Error, ErrorKind};
-use tarpc::context;
+use tarpc::{context, serde_transport::tcp, client};
+use tokio::net::ToSocketAddrs;
+use tokio_serde::formats::Json;
 
 #[tarpc::service]
 pub trait Banks {
@@ -24,6 +26,11 @@ pub trait Banks {
         transaction: Transaction,
     ) -> Option<transaction::Result<()>>;
     async fn get_account(pubkey: Pubkey) -> Option<Account>;
+}
+
+pub async fn start_tcp_client<T: ToSocketAddrs>(json_rpc_url: T) -> io::Result<BanksClient> {
+    let transport = tcp::connect(json_rpc_url, Json::default()).await?;
+    BanksClient::new(client::Config::default(), transport).spawn()
 }
 
 pub async fn get_recent_blockhash(banks_client: &mut BanksClient) -> io::Result<Hash> {

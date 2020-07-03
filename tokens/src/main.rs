@@ -1,19 +1,8 @@
-use solana_cli_config::Config;
-use solana_cli_config::CONFIG_FILE;
-use solana_sdk::banks_client::BanksClient;
+use solana_cli_config::{Config, CONFIG_FILE};
+use solana_sdk::banks_client::start_tcp_client;
 use solana_tokens::{arg_parser::parse_args, args::Command, commands, thin_client::ThinClient};
-use std::env;
-use std::error::Error;
-use std::path::Path;
-use std::process;
-use tarpc::client;
+use std::{env, error::Error, path::Path, process};
 use tokio::runtime::Runtime;
-use tokio_serde::formats::Json;
-
-async fn start_client(json_rpc_url: &str) -> std::io::Result<BanksClient> {
-    let transport = tarpc::serde_transport::tcp::connect(json_rpc_url, Json::default()).await?;
-    BanksClient::new(client::Config::default(), transport).spawn()
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let command_args = parse_args(env::args_os())?;
@@ -30,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let json_rpc_url = command_args.url.unwrap_or(config.json_rpc_url);
 
     let mut runtime = Runtime::new().unwrap();
-    let banks_client = runtime.block_on(start_client(&json_rpc_url))?;
+    let banks_client = runtime.block_on(start_tcp_client(&json_rpc_url))?;
 
     match command_args.command {
         Command::DistributeTokens(args) => {

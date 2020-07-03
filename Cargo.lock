@@ -4618,6 +4618,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio 0.2.21",
+ "tokio-serde",
  "zstd",
 ]
 
@@ -4688,6 +4689,8 @@ dependencies = [
  "tarpc",
  "thiserror",
  "tiny-bip39",
+ "tokio 0.2.21",
+ "tokio-serde",
 ]
 
 [[package]]
@@ -4847,7 +4850,6 @@ dependencies = [
  "console",
  "csv",
  "dirs 2.0.2",
- "futures 0.3.5",
  "indexmap",
  "indicatif",
  "pickledb",
@@ -4863,7 +4865,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio 0.2.21",
- "tokio-serde",
 ]
 
 [[package]]

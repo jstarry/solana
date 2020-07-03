@@ -634,26 +634,22 @@ mod tests {
     fn test_process_distribute_tokens() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
-        let mut runtime = Runtime::new().unwrap();
-        let banks_client = start_local_service(&mut runtime, &bank_forks).unwrap();
-        let thin_client = ThinClient::new(banks_client, false);
-        runtime.block_on(test_process_distribute_tokens_with_client(
-            thin_client,
-            sender_keypair,
-        ));
+        Runtime::new().unwrap().block_on(async {
+            let banks_client = start_local_service(&bank_forks).await.unwrap();
+            let thin_client = ThinClient::new(banks_client, false);
+            test_process_distribute_tokens_with_client(thin_client, sender_keypair).await;
+        });
     }
 
     #[test]
     fn test_process_distribute_stake() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
-        let mut runtime = Runtime::new().unwrap();
-        let banks_client = start_local_service(&mut runtime, &bank_forks).unwrap();
-        let thin_client = ThinClient::new(banks_client, false);
-        runtime.block_on(test_process_distribute_stake_with_client(
-            thin_client,
-            sender_keypair,
-        ));
+        Runtime::new().unwrap().block_on(async {
+            let banks_client = start_local_service(&bank_forks).await.unwrap();
+            let thin_client = ThinClient::new(banks_client, false);
+            test_process_distribute_stake_with_client(thin_client, sender_keypair).await;
+        });
     }
 
     #[test]

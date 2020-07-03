@@ -29,7 +29,7 @@ use tarpc::{
     server::{self, Handler},
     transport,
 };
-use tokio::{runtime::Runtime, time::delay_for};
+use tokio::time::delay_for;
 
 #[derive(Clone)]
 pub struct BanksService {
@@ -154,19 +154,16 @@ impl Banks for BanksService {
     }
 }
 
-pub fn start_local_service(
-    runtime: &mut Runtime,
-    bank_forks: &Arc<BankForks>,
-) -> io::Result<BanksClient> {
+pub async fn start_local_service(bank_forks: &Arc<BankForks>) -> io::Result<BanksClient> {
     let banks_service = BanksService::new(bank_forks.clone());
     let (client_transport, server_transport) = transport::channel::unbounded();
     let server = server::new(server::Config::default())
         .incoming(stream::once(future::ready(server_transport)))
         .respond_with(banks_service.serve());
-    runtime.spawn(server);
+    tokio::spawn(server);
 
     let banks_client = BanksClient::new(client::Config::default(), client_transport);
-    runtime.enter(|| banks_client.spawn())
+    banks_client.spawn()
 }
 
 #[cfg(test)]
@@ -191,7 +188,6 @@ mod tests {
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
         let mut runtime = Runtime::new()?;
-        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let bob_pubkey = Pubkey::new_rand();
         let mint_pubkey = genesis.mint_keypair.pubkey();
@@ -199,6 +195,7 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
+            let mut banks_client = start_local_service(&bank_forks).await?;
             let recent_blockhash = get_recent_blockhash(&mut banks_client).await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
             process_transaction(&mut banks_client, transaction)
@@ -218,7 +215,6 @@ mod tests {
         let genesis = create_genesis_config(10);
         let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
         let mut runtime = Runtime::new()?;
-        let mut banks_client = start_local_server(&mut runtime, &bank_forks)?;
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();
@@ -226,6 +222,7 @@ mod tests {
         let message = Message::new(&[instruction], Some(&mint_pubkey));
 
         runtime.block_on(async {
+            let mut banks_client = start_local_service(&bank_forks).await?;
             let (_, recent_blockhash, last_valid_slot) =
                 banks_client.get_fees(context::current()).await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);

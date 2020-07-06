@@ -8,8 +8,9 @@ use crate::{
     transaction::{self, Transaction},
     transport,
 };
+use async_trait::async_trait;
 use std::io::{self, Error, ErrorKind};
-use tarpc::{client, context, serde_transport::tcp};
+use tarpc::{client, context::Context, serde_transport::tcp};
 use tokio::net::ToSocketAddrs;
 use tokio_serde::formats::Bincode;
 
@@ -28,31 +29,46 @@ pub trait Banks {
     async fn get_account(pubkey: Pubkey) -> Option<Account>;
 }
 
-pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClient> {
-    let transport = tcp::connect(addr, Bincode::default()).await?;
-    BanksClient::new(client::Config::default(), transport).spawn()
+#[async_trait]
+pub trait BanksClientExt {
+    async fn get_recent_blockhash(&mut self, _: Context) -> io::Result<Hash>;
+    async fn process_transaction(
+        &mut self,
+        _: Context,
+        transaction: Transaction,
+    ) -> transport::Result<()>;
+    async fn get_balance(&mut self, _: Context, pubkey: Pubkey) -> io::Result<u64>;
 }
 
-pub async fn get_recent_blockhash(banks_client: &mut BanksClient) -> io::Result<Hash> {
-    Ok(banks_client.get_fees(context::current()).await?.1)
-}
+#[async_trait]
+impl BanksClientExt for BanksClient {
+    async fn get_recent_blockhash(&mut self, context: Context) -> io::Result<Hash> {
+        Ok(self.get_fees(context).await?.1)
+    }
 
-pub async fn process_transaction(
-    banks_client: &mut BanksClient,
-    transaction: Transaction,
-) -> transport::Result<()> {
-    let result = banks_client
-        .send_and_confirm_transaction(context::current(), transaction)
-        .await?;
-    match result {
-        None => Err(Error::new(ErrorKind::TimedOut, "invalid blockhash or fee-payer").into()),
-        Some(transaction_result) => Ok(transaction_result?),
+    async fn process_transaction(
+        &mut self,
+        context: Context,
+        transaction: Transaction,
+    ) -> transport::Result<()> {
+        let result = self
+            .send_and_confirm_transaction(context, transaction)
+            .await?;
+        match result {
+            None => Err(Error::new(ErrorKind::TimedOut, "invalid blockhash or fee-payer").into()),
+            Some(transaction_result) => Ok(transaction_result?),
+        }
+    }
+
+    async fn get_balance(&mut self, context: Context, pubkey: Pubkey) -> io::Result<u64> {
+        let account = self.get_account(context, pubkey).await?;
+        Ok(account.map(|x| x.lamports).unwrap_or(0))
     }
 }
 
-pub async fn get_balance(banks_client: &mut BanksClient, pubkey: Pubkey) -> io::Result<u64> {
-    let account = banks_client.get_account(context::current(), pubkey).await?;
-    Ok(account.map(|x| x.lamports).unwrap_or(0))
+pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClient> {
+    let transport = tcp::connect(addr, Bincode::default()).await?;
+    BanksClient::new(client::Config::default(), transport).spawn()
 }
 
 #[cfg(test)]

@@ -194,10 +194,7 @@ mod tests {
     use super::*;
     use crate::genesis_utils::create_genesis_config;
     use solana_sdk::{
-        banks_client::{get_balance, get_recent_blockhash, process_transaction},
-        message::Message,
-        pubkey::Pubkey,
-        signature::Signer,
+        banks_client::BanksClientExt, message::Message, pubkey::Pubkey, signature::Signer,
         system_instruction,
     };
     use tarpc::context;
@@ -219,12 +216,20 @@ mod tests {
 
         Runtime::new()?.block_on(async {
             let mut banks_client = start_local_service(&bank_forks).await?;
-            let recent_blockhash = get_recent_blockhash(&mut banks_client).await?;
+            let recent_blockhash = banks_client
+                .get_recent_blockhash(context::current())
+                .await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
-            process_transaction(&mut banks_client, transaction)
+            banks_client
+                .process_transaction(context::current(), transaction)
                 .await
                 .unwrap();
-            assert_eq!(get_balance(&mut banks_client, bob_pubkey).await?, 1);
+            assert_eq!(
+                banks_client
+                    .get_balance(context::current(), bob_pubkey)
+                    .await?,
+                1
+            );
             Ok(())
         })
     }
@@ -269,7 +274,12 @@ mod tests {
                     .await?;
             }
             assert_eq!(status, Some(Ok(())));
-            assert_eq!(get_balance(&mut banks_client, bob_pubkey).await?, 1);
+            assert_eq!(
+                banks_client
+                    .get_balance(context::current(), bob_pubkey)
+                    .await?,
+                1
+            );
             Ok(())
         })
     }

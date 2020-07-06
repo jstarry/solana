@@ -1,6 +1,6 @@
 use solana_sdk::{
     account::Account,
-    banks_client::{get_balance, BanksClient},
+    banks_client::{BanksClient, BanksClientExt},
     clock::Slot,
     fee_calculator::FeeCalculator,
     hash::Hash,
@@ -105,7 +105,7 @@ impl ThinClient {
     }
 
     pub async fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
-        get_balance(&mut self.client, *pubkey).await
+        self.client.get_balance(context::current(), *pubkey).await
     }
 
     pub async fn get_account(&mut self, pubkey: &Pubkey) -> io::Result<Option<Account>> {

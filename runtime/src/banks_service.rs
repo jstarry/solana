@@ -7,6 +7,7 @@ use solana_sdk::{
     account::Account,
     banks_client::{start_tcp_client, Banks, BanksClient},
     clock::Slot,
+    commitment_config::CommitmentLevel,
     fee_calculator::FeeCalculator,
     hash::Hash,
     pubkey::Pubkey,
@@ -73,29 +74,51 @@ impl BanksService {
             .unwrap();
         Self::new_with_sender(bank_forks, transaction_sender)
     }
+
+    fn slot(&self, commitment: CommitmentLevel) -> Slot {
+        match commitment {
+            CommitmentLevel::Recent => self.bank_forks.highest_slot(),
+            CommitmentLevel::Root => self.bank_forks.root(),
+            CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
+                //TODO: self.block_commitment_cache.highest_confirmed_slot()
+                todo!();
+            }
+            CommitmentLevel::Max => {
+                //TODO: self.block_commitment_cache.largest_confirmed_root()
+                self.bank_forks.root()
+            }
+        }
+    }
+
+    fn bank(&self, commitment: CommitmentLevel) -> &Arc<Bank> {
+        &self.bank_forks[self.slot(commitment)]
+    }
 }
 
 async fn poll_transaction_status(
-    root_bank: Arc<Bank>,
+    bank: Arc<Bank>,
     signature: Signature,
     last_valid_slot: Slot,
 ) -> Option<transaction::Result<()>> {
-    let mut status = root_bank.get_signature_status(&signature);
+    let mut status = bank.get_signature_status(&signature);
     while status.is_none() {
-        let root_slot = root_bank.slot();
-        if root_slot > last_valid_slot {
+        if bank.slot() > last_valid_slot {
             break;
         }
         delay_for(Duration::from_millis(100)).await;
-        status = root_bank.get_signature_status(&signature);
+        status = bank.get_signature_status(&signature);
     }
     status
 }
 
 #[tarpc::server]
 impl Banks for BanksService {
-    async fn get_fees(self, _: Context) -> (FeeCalculator, Hash, Slot) {
-        let bank = self.bank_forks.root_bank();
+    async fn get_fees_with_commitment(
+        self,
+        _: Context,
+        commitment: CommitmentLevel,
+    ) -> (FeeCalculator, Hash, Slot) {
+        let bank = self.bank(commitment);
         let (blockhash, fee_calculator) = bank.last_blockhash_with_fee_calculator();
         let last_valid_slot = bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
         (fee_calculator, blockhash, last_valid_slot)
@@ -105,45 +128,54 @@ impl Banks for BanksService {
         self.transaction_sender.send(transaction).unwrap();
     }
 
-    async fn get_signature_status(
+    async fn get_signature_status_with_commitment(
         self,
         _: Context,
         signature: Signature,
+        commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
-        let bank = self.bank_forks.root_bank();
+        let bank = self.bank(commitment);
         bank.get_signature_status(&signature)
     }
 
-    async fn get_signature_statuses(
+    async fn get_signature_statuses_with_commitment(
         self,
         _: Context,
         signatures: Vec<Signature>,
+        commitment: CommitmentLevel,
     ) -> Vec<Option<transaction::Result<()>>> {
-        let bank = self.bank_forks.root_bank();
+        let bank = self.bank(commitment);
         signatures
             .iter()
             .map(|x| bank.get_signature_status(x))
             .collect()
     }
 
-    async fn get_root_slot(self, _: Context) -> Slot {
-        self.bank_forks.root()
+    async fn get_slot(self, _: Context, commitment: CommitmentLevel) -> Slot {
+        self.slot(commitment)
     }
 
     async fn send_and_confirm_transaction(
         self,
         _: Context,
         transaction: Transaction,
+        commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
         let blockhash = &transaction.message.recent_blockhash;
         let root_bank = self.bank_forks.root_bank();
         let last_valid_slot = root_bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         self.transaction_sender.send(transaction).unwrap();
-        poll_transaction_status(root_bank.clone(), signature, last_valid_slot).await
+        let bank = self.bank(commitment).clone();
+        poll_transaction_status(bank, signature, last_valid_slot).await
     }
 
-    async fn get_account(self, _: Context, pubkey: Pubkey) -> Option<Account> {
+    async fn get_account_with_commitment(
+        self,
+        _: Context,
+        pubkey: Pubkey,
+        _commitment: CommitmentLevel,
+    ) -> Option<Account> {
         let bank = self.bank_forks.root_bank();
         bank.get_account(&pubkey)
     }

@@ -22,6 +22,7 @@ pub mod message_processor;
 mod native_loader;
 pub mod nonce_utils;
 pub mod rent_collector;
+pub mod rpc_banks_service;
 pub mod send_transaction_service;
 pub mod serde_snapshot;
 pub mod snapshot_package;

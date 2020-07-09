@@ -4862,6 +4862,7 @@ dependencies = [
  "serde",
  "solana-clap-utils",
  "solana-cli-config",
+ "solana-core",
  "solana-remote-wallet",
  "solana-runtime",
  "solana-sdk 1.3.0",

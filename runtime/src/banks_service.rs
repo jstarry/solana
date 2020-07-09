@@ -1,11 +1,16 @@
-use crate::{bank::Bank, bank_forks::BankForks};
+use crate::{
+    bank::Bank,
+    bank_forks::BankForks,
+    send_transaction_service::{SendTransactionService, TransactionInfo},
+};
+use bincode::{deserialize, serialize};
 use futures::{
     future,
     prelude::stream::{self, StreamExt},
 };
 use solana_sdk::{
     account::Account,
-    banks_client::{start_tcp_client, Banks, BanksClient},
+    banks_client::{Banks, BanksClient},
     clock::Slot,
     commitment_config::CommitmentLevel,
     fee_calculator::FeeCalculator,
@@ -16,9 +21,11 @@ use solana_sdk::{
 };
 use std::{
     io,
+    net::SocketAddr,
     sync::{
+        atomic::AtomicBool,
         mpsc::{channel, Receiver, Sender},
-        Arc,
+        Arc, RwLock,
     },
     thread::Builder,
     time::Duration,
@@ -35,8 +42,8 @@ use tokio_serde::formats::Bincode;
 
 #[derive(Clone)]
 struct BanksService {
-    bank_forks: Arc<BankForks>,
-    transaction_sender: Sender<Transaction>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    transaction_sender: Sender<TransactionInfo>,
 }
 
 impl BanksService {
@@ -45,8 +52,8 @@ impl BanksService {
     /// a bank in the given BankForks. Otherwise, the receiver should
     /// forward them to a validator in the leader schedule.
     fn new_with_sender(
-        bank_forks: Arc<BankForks>,
-        transaction_sender: Sender<Transaction>,
+        bank_forks: Arc<RwLock<BankForks>>,
+        transaction_sender: Sender<TransactionInfo>,
     ) -> Self {
         Self {
             bank_forks,
@@ -54,20 +61,24 @@ impl BanksService {
         }
     }
 
-    fn run(bank: &Bank, transaction_receiver: Receiver<Transaction>) {
-        while let Ok(tx) = transaction_receiver.recv() {
-            let mut transactions = vec![tx];
-            while let Ok(tx) = transaction_receiver.try_recv() {
-                transactions.push(tx);
+    fn run(bank: &Bank, transaction_receiver: Receiver<TransactionInfo>) {
+        while let Ok(info) = transaction_receiver.recv() {
+            let mut transaction_infos = vec![info];
+            while let Ok(info) = transaction_receiver.try_recv() {
+                transaction_infos.push(info);
             }
+            let transactions: Vec<_> = transaction_infos
+                .into_iter()
+                .map(|info| deserialize(&info.wire_transaction).unwrap())
+                .collect();
             let _ = bank.process_transactions(&transactions);
         }
     }
 
     /// Useful for unit-testing
-    fn new(bank_forks: Arc<BankForks>) -> Self {
+    fn new(bank_forks: Arc<RwLock<BankForks>>) -> Self {
         let (transaction_sender, transaction_receiver) = channel();
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.read().unwrap().working_bank();
         Builder::new()
             .name("solana-bank-forks-client".to_string())
             .spawn(move || Self::run(&bank, transaction_receiver))
@@ -77,21 +88,21 @@ impl BanksService {
 
     fn slot(&self, commitment: CommitmentLevel) -> Slot {
         match commitment {
-            CommitmentLevel::Recent => self.bank_forks.highest_slot(),
-            CommitmentLevel::Root => self.bank_forks.root(),
+            CommitmentLevel::Recent => self.bank_forks.read().unwrap().highest_slot(),
+            CommitmentLevel::Root => self.bank_forks.read().unwrap().root(),
             CommitmentLevel::Single | CommitmentLevel::SingleGossip => {
                 //TODO: self.block_commitment_cache.highest_confirmed_slot()
                 todo!();
             }
             CommitmentLevel::Max => {
                 //TODO: self.block_commitment_cache.largest_confirmed_root()
-                self.bank_forks.root()
+                self.bank_forks.read().unwrap().root()
             }
         }
     }
 
-    fn bank(&self, commitment: CommitmentLevel) -> &Arc<Bank> {
-        &self.bank_forks[self.slot(commitment)]
+    fn bank(&self, commitment: CommitmentLevel) -> Arc<Bank> {
+        self.bank_forks.read().unwrap()[self.slot(commitment)].clone()
     }
 }
 
@@ -125,7 +136,18 @@ impl Banks for BanksService {
     }
 
     async fn send_transaction(self, _: Context, transaction: Transaction) {
-        self.transaction_sender.send(transaction).unwrap();
+        let blockhash = &transaction.message.recent_blockhash;
+        let last_valid_slot = self
+            .bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .get_blockhash_last_valid_slot(&blockhash)
+            .unwrap();
+        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let info =
+            TransactionInfo::new(signature, serialize(&transaction).unwrap(), last_valid_slot);
+        self.transaction_sender.send(info).unwrap();
     }
 
     async fn get_signature_status_with_commitment(
@@ -162,11 +184,18 @@ impl Banks for BanksService {
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
         let blockhash = &transaction.message.recent_blockhash;
-        let root_bank = self.bank_forks.root_bank();
-        let last_valid_slot = root_bank.get_blockhash_last_valid_slot(&blockhash).unwrap();
+        let last_valid_slot = self
+            .bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .get_blockhash_last_valid_slot(&blockhash)
+            .unwrap();
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
-        self.transaction_sender.send(transaction).unwrap();
-        let bank = self.bank(commitment).clone();
+        let info =
+            TransactionInfo::new(signature, serialize(&transaction).unwrap(), last_valid_slot);
+        self.transaction_sender.send(info).unwrap();
+        let bank = self.bank(commitment);
         poll_transaction_status(bank, signature, last_valid_slot).await
     }
 
@@ -176,12 +205,15 @@ impl Banks for BanksService {
         pubkey: Pubkey,
         _commitment: CommitmentLevel,
     ) -> Option<Account> {
-        let bank = self.bank_forks.root_bank();
-        bank.get_account(&pubkey)
+        self.bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .get_account(&pubkey)
     }
 }
 
-pub async fn start_local_service(bank_forks: &Arc<BankForks>) -> io::Result<BanksClient> {
+pub async fn start_local_service(bank_forks: &Arc<RwLock<BankForks>>) -> io::Result<BanksClient> {
     let banks_service = BanksService::new(bank_forks.clone());
     let (client_transport, server_transport) = transport::channel::unbounded();
     let server = server::new(server::Config::default())
@@ -193,32 +225,41 @@ pub async fn start_local_service(bank_forks: &Arc<BankForks>) -> io::Result<Bank
     banks_client.spawn()
 }
 
-pub async fn start_local_tcp_service(bank_forks: Arc<BankForks>) -> io::Result<BanksClient> {
-    let incoming = tcp::listen(&"localhost:0", Bincode::default)
+pub async fn start_tcp_service(
+    listen_addr: SocketAddr,
+    tpu_addr: SocketAddr,
+    bank_forks: Arc<RwLock<BankForks>>,
+) -> io::Result<()> {
+    // Note: These settings are copied straight from the tarpc example.
+    let service = tcp::listen(listen_addr, Bincode::default)
         .await?
         // Ignore accept errors.
-        .filter_map(|r| future::ready(r.ok()));
-
-    let addr = incoming.get_ref().local_addr();
-
-    // Note: These settings are copied straight from the tarpc example.
-    let service = incoming
+        .filter_map(|r| future::ready(r.ok()))
         .map(server::BaseChannel::with_defaults)
         // Limit channels to 1 per IP.
         .max_channels_per_key(1, |t| t.as_ref().peer_addr().unwrap().ip())
         // serve is generated by the service attribute. It takes as input any type implementing
         // the generated Banks trait.
-        .map(move |channel| {
-            let service = BanksService::new(bank_forks.clone());
-            channel.respond_with(service.serve()).execute()
+        .map(move |chan| {
+            let (sender, receiver) = channel();
+            let exit_send_transaction_service = Arc::new(AtomicBool::new(false));
+
+            SendTransactionService::new(
+                tpu_addr,
+                &bank_forks,
+                &exit_send_transaction_service,
+                receiver,
+            );
+
+            let service = BanksService::new_with_sender(bank_forks.clone(), sender);
+            chan.respond_with(service.serve()).execute()
         })
         // Max 10 channels.
         .buffer_unordered(10)
         .for_each(|_| async {});
 
-    tokio::spawn(service);
-
-    start_tcp_client(addr).await
+    service.await;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -239,7 +280,9 @@ mod tests {
         // `runtime.block_on()` just once, to run all the async code.
 
         let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(
+            &genesis.genesis_config,
+        ))));
 
         let bob_pubkey = Pubkey::new_rand();
         let mint_pubkey = genesis.mint_keypair.pubkey();
@@ -273,7 +316,9 @@ mod tests {
         // server-side functionality is available to the client.
 
         let genesis = create_genesis_config(10);
-        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis.genesis_config)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(
+            &genesis.genesis_config,
+        ))));
 
         let mint_pubkey = &genesis.mint_keypair.pubkey();
         let bob_pubkey = Pubkey::new_rand();

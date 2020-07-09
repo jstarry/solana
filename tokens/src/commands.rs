@@ -627,13 +627,13 @@ mod tests {
     use super::*;
     use solana_runtime::{bank::Bank, bank_forks::BankForks, banks_service::start_local_service};
     use solana_sdk::genesis_config::create_genesis_config;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
     use tokio::runtime::Runtime;
 
     #[test]
     fn test_process_distribute_tokens() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
             let banks_client = start_local_service(&bank_forks).await.unwrap();
             let thin_client = ThinClient::new(banks_client, false);
@@ -644,7 +644,7 @@ mod tests {
     #[test]
     fn test_process_distribute_stake() {
         let (genesis_config, sender_keypair) = create_genesis_config(sol_to_lamports(9_000_000.0));
-        let bank_forks = Arc::new(BankForks::new(Bank::new(&genesis_config)));
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::new(&genesis_config))));
         Runtime::new().unwrap().block_on(async {
             let banks_client = start_local_service(&bank_forks).await.unwrap();
             let thin_client = ThinClient::new(banks_client, false);

@@ -70,7 +70,7 @@ pub struct ValidatorConfig {
     pub voting_disabled: bool,
     pub account_paths: Vec<PathBuf>,
     pub rpc_config: JsonRpcConfig,
-    pub rpc_ports: Option<(u16, u16)>, // (API, PubSub)
+    pub rpc_ports: Option<(u16, u16, u16)>, // (JsonRpc, JsonRpcPubSub, Banks)
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
@@ -260,11 +260,12 @@ impl Validator {
         ));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
-        let rpc_service = config.rpc_ports.map(|(rpc_port, rpc_pubsub_port)| {
+        let rpc_service = config.rpc_ports.map(|(rpc_port, rpc_pubsub_port, rpc_banks_port)| {
             if ContactInfo::is_valid_address(&node.info.rpc) {
                 assert!(ContactInfo::is_valid_address(&node.info.rpc_pubsub));
                 assert_eq!(rpc_port, node.info.rpc.port());
                 assert_eq!(rpc_pubsub_port, node.info.rpc_pubsub.port());
+                assert_eq!(rpc_banks_port, node.info.rpc_banks.port());
             } else {
                 assert!(!ContactInfo::is_valid_address(&node.info.rpc_pubsub));
             }
@@ -832,7 +833,7 @@ impl TestValidator {
 
         let leader_voting_keypair = Arc::new(voting_keypair);
         let config = ValidatorConfig {
-            rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port())),
+            rpc_ports: Some((node.info.rpc.port(), node.info.rpc_pubsub.port(), node.info.rpc_banks.port())),
             ..ValidatorConfig::default()
         };
         let node = Validator::new(
@@ -1017,6 +1018,7 @@ mod tests {
             rpc_ports: Some((
                 validator_node.info.rpc.port(),
                 validator_node.info.rpc_pubsub.port(),
+                validator_node.info.rpc_banks.port(),
             )),
             ..ValidatorConfig::default()
         };
@@ -1091,6 +1093,7 @@ mod tests {
                     rpc_ports: Some((
                         validator_node.info.rpc.port(),
                         validator_node.info.rpc_pubsub.port(),
+                        validator_node.info.rpc_banks.port(),
                     )),
                     ..ValidatorConfig::default()
                 };

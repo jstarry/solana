@@ -31,6 +31,8 @@ pub struct ContactInfo {
     pub rpc: SocketAddr,
     /// websocket for JSON-RPC push notifications
     pub rpc_pubsub: SocketAddr,
+    /// address to which to send bank state requests
+    pub rpc_banks: SocketAddr,
     /// address to send repair requests to
     pub serve_repair: SocketAddr,
     /// latest wallclock picked
@@ -98,6 +100,7 @@ impl Default for ContactInfo {
             unused: socketaddr_any!(),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
+            rpc_banks: socketaddr_any!(),
             serve_repair: socketaddr_any!(),
             wallclock: 0,
             shred_version: 0,
@@ -119,6 +122,7 @@ impl ContactInfo {
             rpc: socketaddr!("127.0.0.1:1241"),
             rpc_pubsub: socketaddr!("127.0.0.1:1242"),
             serve_repair: socketaddr!("127.0.0.1:1243"),
+            rpc_banks: socketaddr!("127.0.0.1:1244"),
             wallclock: now,
             shred_version: 0,
         }
@@ -140,6 +144,7 @@ impl ContactInfo {
             unused: addr,
             rpc: addr,
             rpc_pubsub: addr,
+            rpc_banks: addr,
             serve_repair: addr,
             wallclock: 0,
             shred_version: 0,
@@ -162,6 +167,7 @@ impl ContactInfo {
         let repair = next_port(&bind_addr, 5);
         let rpc = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PORT);
         let rpc_pubsub = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
+        let rpc_banks = SocketAddr::new(bind_addr.ip(), rpc_port::DEFAULT_RPC_BANKS_PORT);
         let serve_repair = next_port(&bind_addr, 6);
         Self {
             id: *pubkey,
@@ -174,6 +180,7 @@ impl ContactInfo {
             unused: "0.0.0.0:0".parse().unwrap(),
             rpc,
             rpc_pubsub,
+            rpc_banks,
             serve_repair,
             wallclock: timestamp(),
             shred_version: 0,
@@ -247,6 +254,7 @@ mod tests {
         assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
+        assert!(ci.rpc_banks.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
         assert!(ci.unused.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
@@ -272,6 +280,7 @@ mod tests {
         assert!(ci.tpu_forwards.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
+        assert!(ci.rpc_banks.ip().is_unspecified());
         assert!(ci.tpu.ip().is_unspecified());
         assert!(ci.unused.ip().is_unspecified());
         assert!(ci.serve_repair.ip().is_unspecified());
@@ -286,6 +295,7 @@ mod tests {
         assert_eq!(ci.tpu_forwards.port(), 13);
         assert_eq!(ci.rpc.port(), rpc_port::DEFAULT_RPC_PORT);
         assert_eq!(ci.rpc_pubsub.port(), rpc_port::DEFAULT_RPC_PUBSUB_PORT);
+        assert_eq!(ci.rpc_banks.port(), rpc_port::DEFAULT_RPC_BANKS_PORT);
         assert!(ci.unused.ip().is_unspecified());
         assert_eq!(ci.serve_repair.port(), 16);
     }
@@ -309,6 +319,10 @@ mod tests {
         assert_eq!(
             d1.rpc_pubsub,
             socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PUBSUB_PORT))
+        );
+        assert_eq!(
+            d1.rpc_banks,
+            socketaddr!(format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_BANKS_PORT))
         );
         assert_eq!(d1.tvu_forwards, socketaddr!("127.0.0.1:1238"));
         assert_eq!(d1.repair, socketaddr!("127.0.0.1:1239"));

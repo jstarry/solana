@@ -666,6 +666,7 @@ mod tests {
                 rpc: socketaddr!("127.0.0.1:1241"),
                 rpc_pubsub: socketaddr!("127.0.0.1:1242"),
                 serve_repair: socketaddr!("127.0.0.1:1243"),
+                rpc_banks: socketaddr!("127.0.0.1:1244"),
                 wallclock: 0,
                 shred_version: 0,
             };
@@ -749,6 +750,7 @@ mod tests {
             rpc: socketaddr!([127, 0, 0, 1], 1241),
             rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
             serve_repair: serve_repair_addr,
+            rpc_banks: socketaddr!([127, 0, 0, 1], 1244),
             wallclock: 0,
             shred_version: 0,
         };
@@ -777,6 +779,7 @@ mod tests {
             rpc: socketaddr!([127, 0, 0, 1], 1241),
             rpc_pubsub: socketaddr!([127, 0, 0, 1], 1242),
             serve_repair: serve_repair_addr2,
+            rpc_banks: socketaddr!([127, 0, 0, 1], 1244),
             wallclock: 0,
             shred_version: 0,
         };

@@ -87,7 +87,7 @@ pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
 /// The maximum size of a protocol payload
 const MAX_PROTOCOL_PAYLOAD_SIZE: u64 = PACKET_DATA_SIZE as u64 - MAX_PROTOCOL_HEADER_SIZE;
 /// The largest protocol header size
-const MAX_PROTOCOL_HEADER_SIZE: u64 = 214;
+const MAX_PROTOCOL_HEADER_SIZE: u64 = 224;
 /// A hard limit on incoming gossip messages
 /// Chosen to be able to handle 1Gbps of pure gossip traffic
 /// 128MB/PACKET_DATA_SIZE
@@ -542,7 +542,7 @@ impl ClusterInfo {
                     }
                     let ip_addr = node.gossip.ip();
                     Some(format!(
-                        "{:15} {:2}| {:5} | {:44} |{:^15}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
+                        "{:15} {:2}| {:5} | {:44} |{:^15}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {:5}| {}\n",
                         if ContactInfo::is_valid_address(&node.gossip) {
                             ip_addr.to_string()
                         } else {
@@ -565,6 +565,7 @@ impl ClusterInfo {
                         addr_to_string(&ip_addr, &node.serve_repair),
                         addr_to_string(&ip_addr, &node.rpc),
                         addr_to_string(&ip_addr, &node.rpc_pubsub),
+                        addr_to_string(&ip_addr, &node.rpc_banks),
                         node.shred_version,
                     ))
                 }
@@ -2419,6 +2420,8 @@ impl Node {
         let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
         let rpc_pubsub_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
+        let rpc_banks_port = find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+        let rpc_banks_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_banks_port);
 
         let broadcast = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
         let retransmit_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -2435,6 +2438,7 @@ impl Node {
             unused: unused.local_addr().unwrap(),
             rpc: rpc_addr,
             rpc_pubsub: rpc_pubsub_addr,
+            rpc_banks: rpc_banks_addr,
             serve_repair: serve_repair.local_addr().unwrap(),
             wallclock: timestamp(),
             shred_version: 0,
@@ -2516,6 +2520,7 @@ impl Node {
             unused: socketaddr_any!(),
             rpc: socketaddr_any!(),
             rpc_pubsub: socketaddr_any!(),
+            rpc_banks: socketaddr_any!(),
             serve_repair: SocketAddr::new(gossip_addr.ip(), serve_repair_port),
             wallclock: 0,
             shred_version: 0,

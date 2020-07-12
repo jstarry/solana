@@ -1,6 +1,6 @@
 //! The `rpc_banks_service` module implements the Solana Banks RPC API.
 
-use crate::{bank_forks::BankForks, banks_service::start_tcp_service};
+use crate::{bank_forks::BankForks, banks_service::start_ws_service};
 use futures::{future::FutureExt, pin_mut, prelude::stream::StreamExt, select};
 use std::{
     net::SocketAddr,
@@ -26,7 +26,7 @@ async fn start_abortable_tcp_service(
     bank_forks: Arc<RwLock<BankForks>>,
     exit: Arc<AtomicBool>,
 ) {
-    let service = start_tcp_service(listen_addr, tpu_addr, bank_forks.clone()).fuse();
+    let service = start_ws_service(listen_addr, tpu_addr, bank_forks.clone()).fuse();
     let interval = time::interval(Duration::from_millis(100)).fuse();
     pin_mut!(service, interval);
     loop {

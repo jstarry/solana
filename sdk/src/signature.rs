@@ -16,7 +16,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Keypair(ed25519_dalek::Keypair);
 
 impl Keypair {

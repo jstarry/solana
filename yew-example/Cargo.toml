@@ -1,0 +1,39 @@
+[package]
+name = "yew-example"
+version = "0.1.0"
+authors = ["Justin Starry <justin@solana.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+log = "0.4"
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
+tokio = { version = "0.2", optional = true, default-features = false }
+wasm-bindgen = "0.2"
+wasm-logger = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = {version = "0.3.41", features = ["Performance"] }
+yew = "0.17"
+yewtil = "0.3"
+
+[dependencies.solana-sdk]
+path = "../sdk"
+default-features = false
+features = [
+    "ed25519-dalek",
+    "generic-array",
+    "rand",
+    "serde_json",
+    "tarpc",
+    "tokio",
+    "tokio-serde",
+    "wasm-bindgen",
+]
+
+[patch.crates-io]
+ed25519-dalek = { git = "https://github.com/dalek-cryptography/ed25519-dalek", rev = "8ebbbe5" }
+tarpc = { git = "https://github.com/jstarry/tarpc", rev="3c7b106" }
+
+[workspace]

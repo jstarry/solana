@@ -11,7 +11,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use std::io::{self, Error, ErrorKind};
-use tarpc::{client, context::Context, serde_transport::tcp};
+pub use tarpc::context;
+#[cfg(not(feature = "wasm-bindgen"))]
+use tarpc::serde_transport::tcp;
+use tarpc::{client, context::Context};
+#[cfg(not(feature = "wasm-bindgen"))]
 use tokio::net::ToSocketAddrs;
 use tokio_serde::formats::Bincode;
 
@@ -158,9 +162,73 @@ impl BanksClientExt for BanksClient {
     }
 }
 
+#[cfg(not(feature = "wasm-bindgen"))]
 pub async fn start_tcp_client<T: ToSocketAddrs>(addr: T) -> io::Result<BanksClient> {
     let transport = tcp::connect(addr, Bincode::default()).await?;
     BanksClient::new(client::Config::default(), transport).spawn()
+}
+
+#[cfg(feature = "wasm-bindgen")]
+pub mod ws {
+    use super::*;
+    use async_io_stream::IoStream;
+    use serde::{Deserialize, Serialize};
+    use std::future::Future;
+    use std::pin::Pin;
+    use tarpc::serde_transport::Transport;
+    use thiserror::Error;
+    use tokio_serde::{Deserializer, Serializer};
+    use ws_stream_wasm::{WsErr, WsMeta, WsStreamIo};
+
+    #[derive(Error, Debug)]
+    pub enum StartError {
+        #[error("IO error")]
+        IoError(#[from] io::Error),
+
+        #[error("WS Error")]
+        WsError(#[from] ws_stream_wasm::WsErr),
+    }
+
+    pub async fn start_client(
+        addr: &str,
+    ) -> Result<(BanksClient, Pin<Box<dyn Future<Output = ()> + 'static>>), StartError> {
+        let transport = connect(addr, Bincode::default()).await?;
+        let tarpc::rpc::client::NewClient { client, dispatch } =
+            BanksClient::new(client::Config::default(), transport);
+        Ok((
+            client,
+            Box::pin(async {
+                dispatch.await.unwrap();
+            }),
+        ))
+    }
+
+    /// Returns a new JSON transport that reads from and writes to `io`.
+    pub fn new<Item, SinkItem, Codec>(
+        io: IoStream<WsStreamIo, Vec<u8>>,
+        codec: Codec,
+    ) -> Transport<IoStream<WsStreamIo, Vec<u8>>, Item, SinkItem, Codec>
+    where
+        Item: for<'de> Deserialize<'de>,
+        SinkItem: Serialize,
+        Codec: Serializer<SinkItem> + Deserializer<Item>,
+    {
+        Transport::from((io, codec))
+    }
+
+    /// Connects to `addr`, wrapping the connection in a JSON transport.
+    pub async fn connect<Item, SinkItem, Codec>(
+        addr: &str,
+        codec: Codec,
+    ) -> Result<Transport<IoStream<WsStreamIo, Vec<u8>>, Item, SinkItem, Codec>, WsErr>
+    where
+        Item: for<'de> Deserialize<'de>,
+        SinkItem: Serialize,
+        Codec: Serializer<SinkItem> + Deserializer<Item>,
+    {
+        let (_ws, wsio) = WsMeta::connect(addr, None).await?;
+        Ok(new(wsio.into_io(), codec))
+    }
 }
 
 #[cfg(test)]

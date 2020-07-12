@@ -81,11 +81,11 @@ pub mod program_stubs;
 pub mod banks_client;
 #[cfg(not(feature = "program"))]
 pub mod client;
-#[cfg(not(feature = "program"))]
+#[cfg(all(not(feature = "program"), not(feature = "wasm-bindgen")))]
 pub mod genesis_config;
-#[cfg(not(feature = "program"))]
+#[cfg(all(not(feature = "program"), not(feature = "wasm-bindgen")))]
 pub mod hard_forks;
-#[cfg(not(feature = "program"))]
+#[cfg(all(not(feature = "program"), not(feature = "wasm-bindgen")))]
 pub mod shred_version;
 #[cfg(not(feature = "program"))]
 pub mod signature;

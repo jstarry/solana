@@ -22,7 +22,6 @@ jobs:
           - ~/.npm
 
       before_install:
-        - .travis/affects.sh explorer/ .travis || travis_terminate 0
         - cd explorer
 
       script:

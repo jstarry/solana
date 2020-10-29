@@ -1,8 +1,3 @@
-branches:
-  only:
-    - master
-    - /^v\d+\.\d+/
-
 os: linux
 dist: bionic
 language: minimal

@@ -218,10 +218,6 @@ A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requireme
 
 The period of time for which a [leader](terminology.md#leader) ingests transactions and produces a [block](terminology.md#block).
 
-## smart contract
-
-A set of constraints that once satisfied, signal to a program that some predefined account updates are permitted.
-
 ## sol
 
 The [native token](terminology.md#native-token) tracked by a [cluster](terminology.md#cluster) recognized by the company Solana.

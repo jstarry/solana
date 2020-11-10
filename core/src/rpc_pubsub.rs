@@ -51,6 +51,34 @@ pub trait RpcSolPubSub {
     fn account_unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId)
         -> Result<bool>;
 
+    // Get a batch notification every time an account in the list of
+    // subscribed accounts has changed
+    // Accepts a list of pubkeys as base-58 encoded strings
+    #[pubsub(
+        subscription = "multipleAccountNotification",
+        subscribe,
+        name = "multipleAccountSubscribe"
+    )]
+    fn multi_account_subscribe(
+        &self,
+        meta: Self::Metadata,
+        subscriber: Subscriber<RpcResponse<Vec<RpcKeyedAccount>>>,
+        pubkey_strs: Vec<String>,
+        config: Option<RpcAccountInfoConfig>,
+    );
+
+    // Unsubscribe from a multiple account subscription.
+    #[pubsub(
+        subscription = "multipleAccountNotification",
+        unsubscribe,
+        name = "multipleAccountUnsubscribe"
+    )]
+    fn multi_account_unsubscribe(
+        &self,
+        meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool>;
+
     // Get notification every time account data owned by a particular program is changed
     // Accepts pubkey parameter as base-58 encoded string
     #[pubsub(
@@ -187,6 +215,30 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             Err(e) => subscriber.reject(e).unwrap(),
         }
     }
+
+    fn multi_account_subscribe(
+        &self,
+        _meta: Self::Metadata,
+        subscriber: Subscriber<RpcResponse<Vec<RpcKeyedAccount>>>,
+        pubkey_strs: Vec<String>,
+        config: Option<RpcAccountInfoConfig>,
+    ) {
+        match param::<Vec<Pubkey>>(&pubkey_strs, "pubkeys") {
+            Ok(pubkeys) => {
+                if pubkeys.is_empty() {
+                    subscriber.reject(jsonrpc_core::Error::invalid_params("pubkeys cannot be empty"));
+                } else {
+                    let id = self.uid.fetch_add(1, atomic::Ordering::Relaxed);
+                    let sub_id = SubscriptionId::Number(id as u64);
+                    info!("multi_account_subscribe: accounts={:?} id={:?}", pubkeys, sub_id);
+                    self.subscriptions
+                        .add_multi_account_subscription(pubkeys, config, sub_id, subscriber)
+                }
+            }
+            Err(e) => subscriber.reject(e).unwrap(),
+        }
+    }
+
 
     fn account_unsubscribe(
         &self,

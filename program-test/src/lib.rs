@@ -557,7 +557,7 @@ impl ProgramTest {
     ///
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
     /// with SOL for sending transactions
-    pub async fn start(self) -> (BanksClient, Keypair, Hash) {
+    pub async fn start(self) -> (BanksClient, Keypair, Hash, Arc<RwLock<BankForks>>) {
         {
             use std::sync::Once;
             static ONCE: Once = Once::new();
@@ -652,18 +652,21 @@ impl ProgramTest {
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
         // test
-        tokio::spawn(async move {
-            loop {
-                bank_forks
-                    .read()
-                    .unwrap()
-                    .working_bank()
-                    .register_tick(&Hash::new_unique());
-                tokio::time::sleep(target_tick_duration).await;
-            }
-        });
+        {
+            let bank_forks = bank_forks.clone();
+            tokio::spawn(async move {
+                loop {
+                    bank_forks
+                        .read()
+                        .unwrap()
+                        .working_bank()
+                        .register_tick(&Hash::new_unique());
+                    tokio::time::sleep(target_tick_duration).await;
+                }
+            });
+        }
 
-        (banks_client, payer, last_blockhash)
+        (banks_client, payer, last_blockhash, bank_forks)
     }
 }
 

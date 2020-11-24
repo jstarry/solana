@@ -571,7 +571,7 @@ impl ProgramTest {
         let bootstrap_validator_stake_lamports = 42;
 
         let gci = create_genesis_config_with_leader(
-            sol_to_lamports(1_000_000.0),
+            sol_to_lamports(1_000_000_000.0),
             &bootstrap_validator_pubkey,
             bootstrap_validator_stake_lamports,
         );

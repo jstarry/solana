@@ -6,21 +6,27 @@ use solana_sdk::{
 };
 
 /// Records and compiles cross-program invoked instructions
-#[derive(Clone, Default)]
-pub struct InstructionRecorder {
-    inner: Rc<RefCell<Vec<Instruction>>>,
+#[derive(Clone)]
+pub struct InstructionRecorder<'a> {
+    message: &'a Message,
+    inner: Rc<RefCell<Vec<CompiledInstruction>>>,
 }
 
-impl InstructionRecorder {
-    pub fn compile_instructions(&self, message: &Message) -> Vec<CompiledInstruction> {
-        self.inner
-            .borrow()
-            .iter()
-            .map(|ix| message.compile_instruction(ix))
-            .collect()
+impl<'a> InstructionRecorder<'a> {
+    pub fn new(message: &'a Message) -> InstructionRecorder<'a> {
+        Self {
+            message,
+            inner: Rc::default(),
+        }
     }
 
-    pub fn record_instruction(&self, instruction: Instruction) {
-        self.inner.borrow_mut().push(instruction);
+    pub(crate) fn into_inner(self) -> Vec<CompiledInstruction> {
+        std::mem::take(&mut self.inner.borrow_mut())
+    }
+
+    pub(crate) fn record_instruction(&self, instruction: &Instruction) {
+        if let Ok(instruction) = self.message.try_compile_instruction(instruction) {
+            self.inner.borrow_mut().push(instruction);
+        }
     }
 }

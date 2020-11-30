@@ -208,7 +208,7 @@ pub struct ThisInvokeContext<'a> {
     bpf_compute_budget: BpfComputeBudget,
     compute_meter: Rc<RefCell<dyn ComputeMeter>>,
     executors: Rc<RefCell<Executors>>,
-    instruction_recorder: Option<InstructionRecorder>,
+    instruction_recorder: Option<InstructionRecorder<'a>>,
     feature_set: Arc<FeatureSet>,
 }
 impl<'a> ThisInvokeContext<'a> {
@@ -220,7 +220,7 @@ impl<'a> ThisInvokeContext<'a> {
         log_collector: Option<Rc<LogCollector>>,
         bpf_compute_budget: BpfComputeBudget,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<InstructionRecorder>,
+        instruction_recorder: Option<InstructionRecorder<'a>>,
         feature_set: Arc<FeatureSet>,
     ) -> Self {
         let mut program_ids = Vec::with_capacity(bpf_compute_budget.max_invoke_depth);
@@ -302,7 +302,7 @@ impl<'a> InvokeContext for ThisInvokeContext<'a> {
     }
     fn record_instruction(&self, instruction: &Instruction) {
         if let Some(recorder) = &self.instruction_recorder {
-            recorder.record_instruction(instruction.clone());
+            recorder.record_instruction(instruction);
         }
     }
     fn is_feature_active(&self, feature_id: &Pubkey) -> bool {
@@ -650,16 +650,16 @@ impl MessageProcessor {
     /// the call does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if this function returns Ok(_).
     #[allow(clippy::too_many_arguments)]
-    fn execute_instruction(
+    fn execute_instruction<'a>(
         &self,
-        message: &Message,
+        message: &'a Message,
         instruction: &CompiledInstruction,
         executable_accounts: &[(Pubkey, RefCell<Account>)],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorder: Option<InstructionRecorder>,
+        instruction_recorder: Option<InstructionRecorder<'a>>,
         instruction_index: usize,
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
@@ -709,15 +709,15 @@ impl MessageProcessor {
     /// This method calls each instruction in the message over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
     #[allow(clippy::too_many_arguments)]
-    pub fn process_message(
+    pub fn process_message<'a>(
         &self,
-        message: &Message,
+        message: &'a Message,
         loaders: &[Vec<(Pubkey, RefCell<Account>)>],
         accounts: &[Rc<RefCell<Account>>],
         rent_collector: &RentCollector,
         log_collector: Option<Rc<LogCollector>>,
         executors: Rc<RefCell<Executors>>,
-        instruction_recorders: Option<&[InstructionRecorder]>,
+        instruction_recorders: Option<&[InstructionRecorder<'a>]>,
         feature_set: Arc<FeatureSet>,
         bpf_compute_budget: BpfComputeBudget,
     ) -> Result<(), TransactionError> {

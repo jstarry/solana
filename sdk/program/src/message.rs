@@ -12,27 +12,47 @@ use crate::{
 };
 use itertools::Itertools;
 use std::convert::TryFrom;
+use thiserror::Error;
 
-fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
-    keys.iter().position(|k| k == key).unwrap() as u8
+#[derive(Error, Debug)]
+pub enum CompileError {
+    #[error("Unknown key")]
+    UnknownKey,
+    #[error("Key limit exceeded")]
+    KeyLimitExceeded,
 }
 
-fn compile_instruction(ix: &Instruction, keys: &[Pubkey]) -> CompiledInstruction {
-    let accounts: Vec<_> = ix
+fn try_position(keys: &[Pubkey], key: &Pubkey) -> Result<u8, CompileError> {
+    keys.iter()
+        .position(|k| k == key)
+        .ok_or(CompileError::UnknownKey)
+        .and_then(|p| u8::try_from(p).map_err(|_| CompileError::KeyLimitExceeded))
+}
+
+fn try_compile_instruction(
+    ix: &Instruction,
+    keys: &[Pubkey],
+) -> Result<CompiledInstruction, CompileError> {
+    let accounts = ix
         .accounts
         .iter()
-        .map(|account_meta| position(keys, &account_meta.pubkey))
-        .collect();
+        .map(|account_meta| try_position(keys, &account_meta.pubkey))
+        .collect::<Result<Vec<_>, CompileError>>()?;
 
-    CompiledInstruction {
-        program_id_index: position(keys, &ix.program_id),
+    Ok(CompiledInstruction {
+        program_id_index: try_position(keys, &ix.program_id)?,
         data: ix.data.clone(),
         accounts,
-    }
+    })
 }
 
-fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<CompiledInstruction> {
-    ixs.iter().map(|ix| compile_instruction(ix, keys)).collect()
+fn try_compile_instructions(
+    ixs: &[Instruction],
+    keys: &[Pubkey],
+) -> Result<Vec<CompiledInstruction>, CompileError> {
+    ixs.iter()
+        .map(|ix| try_compile_instruction(ix, keys))
+        .collect()
 }
 
 /// A helper struct to collect pubkeys referenced by a set of instructions and read-only counts
@@ -247,7 +267,8 @@ impl Message {
         } = get_keys(instructions, payer);
         let num_required_signatures = signed_keys.len() as u8;
         signed_keys.extend(&unsigned_keys);
-        let instructions = compile_instructions(instructions, &signed_keys);
+        let instructions = try_compile_instructions(instructions, &signed_keys)
+            .expect("instructions should compile");
         Self::new_with_compiled_instructions(
             num_required_signatures,
             num_readonly_signed_accounts,
@@ -272,8 +293,11 @@ impl Message {
         Self::new(&instructions, payer)
     }
 
-    pub fn compile_instruction(&self, ix: &Instruction) -> CompiledInstruction {
-        compile_instruction(ix, &self.account_keys)
+    pub fn try_compile_instruction(
+        &self,
+        ix: &Instruction,
+    ) -> Result<CompiledInstruction, CompileError> {
+        try_compile_instruction(ix, &self.account_keys)
     }
 
     pub fn serialize(&self) -> Vec<u8> {
@@ -296,17 +320,6 @@ impl Message {
             }
         }
         false
-    }
-
-    pub fn is_non_loader_key(&self, key: &Pubkey, key_index: usize) -> bool {
-        !self.program_ids().contains(&key) || self.is_key_passed_to_program(key_index)
-    }
-
-    pub fn program_position(&self, index: usize) -> Option<usize> {
-        let program_ids = self.program_ids();
-        program_ids
-            .iter()
-            .position(|&&pubkey| pubkey == self.account_keys[index])
     }
 
     pub fn is_writable(&self, i: usize) -> bool {
@@ -705,23 +718,6 @@ mod tests {
             keys,
             InstructionKeys::new(vec![id1], vec![id0, program_id], 1, 2)
         );
-    }
-
-    #[test]
-    fn test_program_position() {
-        let program_id0 = Pubkey::default();
-        let program_id1 = Pubkey::new_unique();
-        let id = Pubkey::new_unique();
-        let message = Message::new(
-            &[
-                Instruction::new(program_id0, &0, vec![AccountMeta::new(id, false)]),
-                Instruction::new(program_id1, &0, vec![AccountMeta::new(id, true)]),
-            ],
-            Some(&id),
-        );
-        assert_eq!(message.program_position(0), None);
-        assert_eq!(message.program_position(1), Some(0));
-        assert_eq!(message.program_position(2), Some(1));
     }
 
     #[test]

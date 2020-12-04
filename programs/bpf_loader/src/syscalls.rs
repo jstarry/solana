@@ -1316,7 +1316,9 @@ fn call<'a>(
         memory_mapping,
     )?;
     verify_instruction(syscall, &instruction, &signers)?;
-    let message = Message::new(&[instruction.clone()], None);
+    let message = Message::try_new(&[instruction.clone()], None).map_err(|_| {
+        SyscallError::InstructionError(InstructionError::TooManyAccountKeys)
+    })?;
     let callee_program_id_index = message.instructions[0].program_id_index as usize;
     let callee_program_id = message.account_keys[callee_program_id_index];
     let (accounts, account_refs) = syscall.translate_accounts(

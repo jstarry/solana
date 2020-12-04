@@ -167,6 +167,10 @@ pub enum InstructionError {
     /// Computational budget exceeded
     #[error("Computational budget exceeded")]
     ComputationalBudgetExceeded,
+
+    /// The instruction expected fewer account keys
+    #[error("Too many account keys for instruction")]
+    TooManyAccountKeys,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

@@ -14,12 +14,14 @@ use itertools::Itertools;
 use std::convert::TryFrom;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum CompileError {
     #[error("Unknown key")]
     UnknownKey,
     #[error("Key limit exceeded")]
     KeyLimitExceeded,
+    #[error("Instruction limit exceeded")]
+    InstructionLimitExceeded
 }
 
 fn try_position(keys: &[Pubkey], key: &Pubkey) -> Result<u8, CompileError> {
@@ -84,7 +86,7 @@ impl InstructionKeys {
 /// payer key is provided, it is always placed first in the list of signed keys. Read-only signed
 /// accounts are placed last in the set of signed accounts. Read-only unsigned accounts,
 /// including program ids, are placed last in the set. No duplicates and order is preserved.
-fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> InstructionKeys {
+fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Option<InstructionKeys> {
     let programs: Vec<_> = get_program_ids(instructions)
         .iter()
         .map(|program_id| AccountMeta {
@@ -129,27 +131,27 @@ fn get_keys(instructions: &[Instruction], payer: Option<&Pubkey>) -> Instruction
 
     let mut signed_keys = vec![];
     let mut unsigned_keys = vec![];
-    let mut num_readonly_signed_accounts = 0;
-    let mut num_readonly_unsigned_accounts = 0;
+    let mut num_readonly_signed_accounts: u8 = 0;
+    let mut num_readonly_unsigned_accounts: u8 = 0;
     for account_meta in unique_metas {
         if account_meta.is_signer {
             signed_keys.push(account_meta.pubkey);
             if !account_meta.is_writable {
-                num_readonly_signed_accounts += 1;
+                num_readonly_signed_accounts = num_readonly_signed_accounts.checked_add(1)?;
             }
         } else {
             unsigned_keys.push(account_meta.pubkey);
             if !account_meta.is_writable {
-                num_readonly_unsigned_accounts += 1;
+                num_readonly_unsigned_accounts = num_readonly_unsigned_accounts.checked_add(1)?;
             }
         }
     }
-    InstructionKeys::new(
+    Some(InstructionKeys::new(
         signed_keys,
         unsigned_keys,
         num_readonly_signed_accounts,
         num_readonly_unsigned_accounts,
-    )
+    ))
 }
 
 /// Return program ids referenced by all instructions.  No duplicates and order is preserved.
@@ -258,25 +260,33 @@ impl Message {
         }
     }
 
+    // Panics if instructions contain more than 255 unique pubkeys
     pub fn new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Self {
+        Self::try_new(instructions, payer).unwrap()
+    }
+
+    pub fn try_new(instructions: &[Instruction], payer: Option<&Pubkey>) -> Result<Self, CompileError> {
         let InstructionKeys {
             mut signed_keys,
             unsigned_keys,
             num_readonly_signed_accounts,
             num_readonly_unsigned_accounts,
-        } = get_keys(instructions, payer);
-        let num_required_signatures = signed_keys.len() as u8;
+        } = get_keys(instructions, payer)
+            .ok_or(CompileError::KeyLimitExceeded)?;
+        let num_required_signatures = u8::try_from(signed_keys.len()).or(CompileError::KeyLimitExceeded)?;
         signed_keys.extend(&unsigned_keys);
-        let instructions = try_compile_instructions(instructions, &signed_keys)
-            .expect("instructions should compile");
-        Self::new_with_compiled_instructions(
+        if instructions.len() > u8::MAX as usize {
+            return Err(CompileError::InstructionLimitExceeded);
+        }
+        let instructions = try_compile_instructions(instructions, &signed_keys)?;
+        Ok(Self::new_with_compiled_instructions(
             num_required_signatures,
             num_readonly_signed_accounts,
             num_readonly_unsigned_accounts,
             signed_keys,
             Hash::default(),
             instructions,
-        )
+        ))
     }
 
     pub fn new_with_nonce(
@@ -489,7 +499,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
             ],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
@@ -504,7 +515,8 @@ mod tests {
                 vec![AccountMeta::new(id0, true)],
             )],
             Some(&id0),
-        );
+        )
+        .unwrap();
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
@@ -519,7 +531,8 @@ mod tests {
                 vec![AccountMeta::new(id0, false)],
             )],
             Some(&id0),
-        );
+        )
+        .unwrap();
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
@@ -533,7 +546,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
             ],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
     }
 
@@ -547,7 +561,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
             ],
             None,
-        );
+        )
+        .unwrap();
 
         // Ensure the key is no longer readonly
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![], 0, 0));
@@ -563,7 +578,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, false)]),
             ],
             None,
-        );
+        )
+        .unwrap();
 
         // Ensure the key is no longer readonly
         assert_eq!(keys, InstructionKeys::new(vec![], vec![id0], 0, 0));
@@ -580,7 +596,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id1, false)]),
             ],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(keys, InstructionKeys::new(vec![], vec![id0, id1], 0, 0));
     }
 
@@ -596,7 +613,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id0, true)]),
             ],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(keys, InstructionKeys::new(vec![id0], vec![id1], 0, 0));
     }
 
@@ -611,7 +629,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id1, true)]),
             ],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(keys, InstructionKeys::new(vec![id1], vec![id0], 0, 0));
     }
 
@@ -644,7 +663,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new(id3, true)]),
             ],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(
             keys,
             InstructionKeys::new(vec![id3, id1], vec![id2, id0], 1, 1)
@@ -713,7 +733,8 @@ mod tests {
                 Instruction::new(program_id, &0, vec![AccountMeta::new_readonly(id1, true)]),
             ],
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(
             keys,
             InstructionKeys::new(vec![id1], vec![id0, program_id], 1, 2)
@@ -833,22 +854,38 @@ mod tests {
     }
 
     #[test]
-    fn test_is_non_loader_key() {
-        let key0 = Pubkey::new_unique();
-        let key1 = Pubkey::new_unique();
-        let loader2 = Pubkey::new_unique();
-        let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
-        let message = Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            vec![key0, key1, loader2],
-            Hash::default(),
-            instructions,
+    fn test_try_compile_instruction() {
+        let program_id = Pubkey::new_unique();
+        let message = Message::new(&[], None);
+        assert_eq!(
+            message.try_compile_instruction(&Instruction::new(program_id, &0, vec![])),
+            Err(CompileError::UnknownKey)
         );
+    }
 
-        assert!(message.is_non_loader_key(&key0, 0));
-        assert!(message.is_non_loader_key(&key1, 1));
-        assert!(!message.is_non_loader_key(&loader2, 2));
+    #[test]
+    fn test_new_message_key_limit_exceeded() {
+        let program_id = Pubkey::new_unique();
+        let max_accounts: Vec<AccountMeta> = (0..255)
+            .map(|_| AccountMeta::new(Pubkey::new_unique(), false))
+            .collect();
+        let mut message = Message::new(&[Instruction::new(program_id, &0, max_accounts)], None);
+        let last_account = AccountMeta::new(Pubkey::new_unique(), false);
+        message.account_keys.push(last_account.pubkey);
+
+        assert_eq!(
+            message.try_compile_instruction(&Instruction::new(program_id, &0, vec![last_account])),
+            Err(CompileError::KeyLimitExceeded)
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_new_message_with_many_keys() {
+        let program_id = Pubkey::new_unique();
+        let too_many_accounts = (0..255)
+            .map(|_| AccountMeta::new_readonly(Pubkey::new_unique(), false))
+            .collect();
+        Message::new(&[Instruction::new(program_id, &0, too_many_accounts)], None);
     }
 }

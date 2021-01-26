@@ -1321,6 +1321,14 @@ export const GetConfirmedBlockRpcResult = jsonRpcResult(
   ]),
 );
 
+
+/**
+ * Expected JSON RPC response for the "getConfirmedBlocks" message
+ */
+export const GetConfirmedBlocksRpcResult = jsonRpcResult(
+  struct.array(['number'])
+);
+
 /**
  * Expected JSON RPC response for the "getConfirmedTransaction" message
  */
@@ -2625,6 +2633,21 @@ export class Connection {
       }),
       rewards: result.rewards || [],
     };
+  }
+
+  /**
+   * Fetch a list of Transactions and transaction statuses from the cluster
+   * for a confirmed block
+   */
+  async getConfirmedBlocks(slot: number): Promise<ConfirmedBlock> {
+    const unsafeRes = await this._rpcRequest('getConfirmedBlocks', [slot]);
+    const res = GetConfirmedBlocksRpcResult(unsafeRes);
+    if (res.error) {
+      throw new Error('failed to get confirmed blocks: ' + res.error.message);
+    }
+    const result = res.result;
+    assert(typeof result !== 'undefined');
+    return result;
   }
 
   /**

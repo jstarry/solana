@@ -418,6 +418,7 @@ declare module '@solana/web3.js' {
     ): Promise<RpcResponseAndContext<Array<TokenAccountBalancePair>>>;
     getClusterNodes(): Promise<Array<ContactInfo>>;
     getConfirmedBlock(slot: number): Promise<ConfirmedBlock>;
+    getConfirmedBlocks(slot: number): Promise<Array<number>>;
     getConfirmedTransaction(
       signature: TransactionSignature,
     ): Promise<ConfirmedTransaction | null>;

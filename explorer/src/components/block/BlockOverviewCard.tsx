@@ -7,11 +7,13 @@ import { Slot } from "components/common/Slot";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { BlockHistoryCard } from "./BlockHistoryCard";
 import { BlockRewardsCard } from "./BlockRewardsCard";
+import { displayTimestamp } from "utils/date";
+import { Epoch } from "components/common/Epoch";
 
 export function BlockOverviewCard({ slot }: { slot: number }) {
   const confirmedBlock = useBlock(slot);
   const fetchBlock = useFetchBlock();
-  const { status } = useCluster();
+  const { epochSchedule, status } = useCluster();
   const refresh = () => fetchBlock(slot);
 
   // Fetch block on load
@@ -31,6 +33,9 @@ export function BlockOverviewCard({ slot }: { slot: number }) {
   }
 
   const block = confirmedBlock.data.block;
+  const timestamp = confirmedBlock.data.timestamp;
+  const epoch = epochSchedule && ((slot - epochSchedule.firstNormalSlot) / epochSchedule.slotsPerEpoch + epochSchedule.firstNormalEpoch);
+
   return (
     <>
       <div className="card">
@@ -50,6 +55,20 @@ export function BlockOverviewCard({ slot }: { slot: number }) {
             <td className="w-100">Parent Slot</td>
             <td className="text-lg-right text-monospace">
               <Slot slot={block.parentSlot} link />
+            </td>
+          </tr>
+          {epoch !== undefined && (<tr>
+            <td className="w-100">Epoch</td>
+            <td className="text-lg-right text-monospace">
+              <Epoch epoch={epoch} link />
+            </td>
+          </tr>)}
+          <tr>
+            <td className="w-100">Timestamp</td>
+            <td className="text-lg-right">
+              {typeof timestamp === "number" ? (
+                displayTimestamp(timestamp * 1000)
+              ) : "Unavailable"}
             </td>
           </tr>
           <tr>

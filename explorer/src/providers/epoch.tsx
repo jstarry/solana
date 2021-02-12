@@ -3,7 +3,6 @@ import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
 import { Connection, ConfirmedBlock } from "@solana/web3.js";
 import { useCluster, Cluster } from "./cluster";
-import { Timestamp } from "./transactions";
 
 export enum FetchStatus {
   Fetching,
@@ -18,7 +17,6 @@ export enum ActionType {
 
 type Block = {
   block?: ConfirmedBlock;
-  timestamp?: Timestamp;
 };
 
 type State = Cache.State<Block>;
@@ -74,12 +72,7 @@ export async function fetchBlock(
 
   try {
     const connection = new Connection(url, "max");
-    let blockTime = null;
-    try {
-      blockTime = await connection.getBlockTime(key);
-    } catch (error) {}
-    let timestamp: Timestamp = blockTime !== null ? blockTime : "unavailable";
-    data = { block: await connection.getConfirmedBlock(key), timestamp };
+    data = { block: await connection.getConfirmedBlock(Number(key)) };
     status = FetchStatus.Fetched;
   } catch (err) {
     const error = err as Error;

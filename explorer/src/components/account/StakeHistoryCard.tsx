@@ -1,3 +1,4 @@
+import { Epoch } from "components/common/Epoch";
 import React from "react";
 import { lamportsToSolString } from "utils";
 import {
@@ -55,7 +56,9 @@ export function StakeHistoryCard({
 const renderAccountRow = (entry: StakeHistoryEntry, index: number) => {
   return (
     <tr key={index}>
-      <td className="w-1 text-monospace">{entry.epoch}</td>
+      <td className="w-1 text-monospace">
+        <Epoch epoch={entry.epoch} link />
+      </td>
       <td className="text-monospace">
         {lamportsToSolString(entry.stakeHistory.effective)}
       </td>

@@ -195,6 +195,20 @@ function buildOptions(rawSearch: string, cluster: Cluster) {
         },
       ],
     });
+
+    // TODO
+    if (Number(search) < 1000) {
+      options.push({
+        label: "Epoch",
+        options: [
+          {
+            label: `Epoch #${search}`,
+            value: [search],
+            pathname: `/epoch/${search}`,
+          },
+        ],
+      });
+    }
   }
 
   // Prefer nice suggestions over raw suggestions

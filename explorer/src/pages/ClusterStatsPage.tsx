@@ -11,6 +11,7 @@ import { slotsToHumanString } from "utils";
 import { useCluster } from "providers/cluster";
 import { TpsCard } from "components/TpsCard";
 import { displayTimestampUtc } from "utils/date";
+import { Epoch } from "components/common/Epoch";
 
 const CLUSTER_STATS_TIMEOUT = 10000;
 
@@ -62,7 +63,6 @@ function StatsCardBody() {
   const hourlySlotTime = Math.round(1000 * avgSlotTime_1h);
   const averageSlotTime = Math.round(1000 * avgSlotTime_1min);
   const { slotIndex, slotsInEpoch } = epochInfo;
-  const currentEpoch = epochInfo.epoch.toString();
   const epochProgress = ((100 * slotIndex) / slotsInEpoch).toFixed(1) + "%";
   const epochTimeRemaining = slotsToHumanString(
     slotsInEpoch - slotIndex,
@@ -104,7 +104,9 @@ function StatsCardBody() {
       </tr>
       <tr>
         <td className="w-100">Epoch</td>
-        <td className="text-lg-right text-monospace">{currentEpoch}</td>
+        <td className="text-lg-right text-monospace">
+          <Epoch epoch={epochInfo.epoch} link />
+        </td>
       </tr>
       <tr>
         <td className="w-100">Epoch progress</td>

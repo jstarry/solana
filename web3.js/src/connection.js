@@ -750,12 +750,12 @@ const GetSupplyRpcResult = jsonRpcResultAndContext(
  * @typedef {Object} TokenAmount
  * @property {string} amount Raw amount of tokens as string ignoring decimals
  * @property {number} decimals Number of decimals configured for token's mint
- * @property {number} uiAmount Token account as float, accounts for decimals
+ * @property {string} uiAmount Token account as float, accounts for decimals
  */
 type TokenAmount = {
   amount: string,
   decimals: number,
-  uiAmount: number,
+  uiAmount: string,
 };
 
 /**
@@ -763,7 +763,7 @@ type TokenAmount = {
  */
 const TokenAmountResult = pick({
   amount: string(),
-  uiAmount: number(),
+  uiAmount: coerce(string(), number(), value => value.toString()),
   decimals: number(),
 });
 
@@ -774,13 +774,13 @@ const TokenAmountResult = pick({
  * @property {PublicKey} address Address of the token account
  * @property {string} amount Raw amount of tokens as string ignoring decimals
  * @property {number} decimals Number of decimals configured for token's mint
- * @property {number} uiAmount Token account as float, accounts for decimals
+ * @property {string} uiAmount Token account as float, accounts for decimals
  */
 type TokenAccountBalancePair = {
   address: PublicKey,
   amount: string,
   decimals: number,
-  uiAmount: number,
+  uiAmount: string,
 };
 
 /**
@@ -791,7 +791,7 @@ const GetTokenLargestAccountsResult = jsonRpcResultAndContext(
     pick({
       address: PublicKeyFromString,
       amount: string(),
-      uiAmount: number(),
+      uiAmount: coerce(string(), number(), value => value.toString()),
       decimals: number(),
     }),
   ),

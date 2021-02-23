@@ -298,7 +298,7 @@ declare module '@solana/web3.js' {
   };
 
   declare export type TokenAmount = {
-    uiAmount: number,
+    uiAmount: string,
     decimals: number,
     amount: string,
   };
@@ -307,7 +307,7 @@ declare module '@solana/web3.js' {
     address: PublicKey,
     amount: string,
     decimals: number,
-    uiAmount: number,
+    uiAmount: string,
   };
 
   declare type AccountChangeCallback = (

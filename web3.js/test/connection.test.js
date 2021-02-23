@@ -1209,7 +1209,7 @@ describe('Connection', () => {
       it('get token supply', async () => {
         const supply = (await connection.getTokenSupply(testToken.publicKey))
           .value;
-        expect(supply.uiAmount).to.eq(111.11);
+        expect(supply.uiAmount).to.eq('111.11');
         expect(supply.decimals).to.eq(2);
         expect(supply.amount).to.eq('11111');
 
@@ -1226,7 +1226,7 @@ describe('Connection', () => {
         expect(largestAccount.address).to.eql(testTokenAccount);
         expect(largestAccount.amount).to.eq('11110');
         expect(largestAccount.decimals).to.eq(2);
-        expect(largestAccount.uiAmount).to.eq(111.1);
+        expect(largestAccount.uiAmount).to.eq('111.1');
 
         await expect(connection.getTokenLargestAccounts(newAccount)).to.be
           .rejected;
@@ -1265,7 +1265,7 @@ describe('Connection', () => {
         ).value;
         expect(balance.amount).to.eq('11110');
         expect(balance.decimals).to.eq(2);
-        expect(balance.uiAmount).to.eq(111.1);
+        expect(balance.uiAmount).to.eq('111.1');
 
         await expect(connection.getTokenAccountBalance(newAccount)).to.be
           .rejected;

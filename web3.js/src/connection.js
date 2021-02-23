@@ -409,6 +409,11 @@ const SignatureStatusResult = pick({
 });
 
 /**
+ * Signature status for a transaction
+ */
+const SignatureReceivedResult = literal("receivedSignature");
+
+/**
  * Version info for a node
  *
  * @typedef {Object} Version
@@ -1003,7 +1008,10 @@ const SlotNotificationResult = pick({
  */
 const SignatureNotificationResult = pick({
   subscription: number(),
-  result: notificationResultAndContext(SignatureStatusResult),
+  result: notificationResultAndContext(union([
+    SignatureStatusResult,
+    SignatureReceivedResult
+  ])),
 });
 
 /**
@@ -1450,13 +1458,38 @@ export type SignatureResultCallback = (
   context: Context,
 ) => void;
 
+type SignatureStatusNotification = {
+  type: 'status',
+  result: SignatureResult,
+};
+
+type SignatureReceivedNotification = {
+  type: 'received',
+};
+
+/**
+ * Callback function for signature notifications
+ */
+export type SignatureSubscriptionCallback = (
+  notification: SignatureStatusNotification | SignatureReceivedNotification,
+  context: Context,
+) => void;
+
+/**
+ * Callback function for signature notifications
+ */
+export type SignatureSubscriptionOptions = {
+  commitment: ?Commitment,
+  enableReceivedNotification?: boolean,
+};
+
 /**
  * @private
  */
 type SignatureSubscriptionInfo = {
   signature: TransactionSignature, // TransactionSignature as a base 58 string
-  callback: SignatureResultCallback,
-  commitment: ?Commitment,
+  callback: SignatureSubscriptionCallback,
+  options: ?SignatureSubscriptionOptions,
   subscriptionId: ?SubscriptionId, // null when there's no current server subscription id
 };
 
@@ -2914,11 +2947,9 @@ export class Connection {
 
     for (let id of signatureKeys) {
       const sub = this._signatureSubscriptions[id];
-      this._subscribe(
-        sub,
-        'signatureSubscribe',
-        this._buildArgs([sub.signature], sub.commitment),
-      );
+      const args = [sub.signature];
+      if (sub.options) args.push(sub.options);
+      this._subscribe(sub, 'signatureSubscribe', args);
     }
 
     for (let id of rootKeys) {
@@ -3140,6 +3171,7 @@ export class Connection {
     for (let id of keys) {
       const sub = this._signatureSubscriptions[id];
       if (sub.subscriptionId === res.subscription) {
+        if (res.result.value === "receivedSignature")
         // Signatures subscriptions are auto-removed by the RPC service so
         // no need to explicitly send an unsubscribe message
         delete this._signatureSubscriptions[id];
@@ -3152,6 +3184,7 @@ export class Connection {
 
   /**
    * Register a callback to be invoked upon signature updates
+   * @deprecated Deprecated since v0.93.0, please use `onTransaction`
    *
    * @param signature Transaction signature string in base 58
    * @param callback Function to invoke on signature notifications
@@ -3166,8 +3199,38 @@ export class Connection {
     const id = ++this._signatureSubscriptionCounter;
     this._signatureSubscriptions[id] = {
       signature,
+      callback: (notification, context) => {
+        if (notification.type === "status") {
+          callback(notification.result, context)
+        }
+      },
+      options: {commitment},
+      subscriptionId: null,
+    };
+    this._updateSubscriptions();
+    return id;
+  }
+
+  /**
+   * Register a callback to be invoked when a transaction is
+   * received and/or processed.
+   *
+   * @param signature Transaction signature string in base 58
+   * @param callback Function to invoke on signature notifications
+   * @param options Enable received notifications and set the commitment
+   *   level that signature must reach before notification
+   * @return subscription id
+   */
+  onTransaction(
+    signature: TransactionSignature,
+    callback: SignatureSubscriptionCallback,
+    options: ?SignatureSubscriptionOptions,
+  ): number {
+    const id = ++this._signatureSubscriptionCounter;
+    this._signatureSubscriptions[id] = {
+      signature,
       callback,
-      commitment,
+      options,
       subscriptionId: null,
     };
     this._updateSubscriptions();

@@ -551,7 +551,6 @@ mod tests {
     use jsonrpc_pubsub::{PubSubHandler, Session};
     use serial_test_derive::serial;
     use solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding};
-    use solana_client::rpc_response::{ProcessedSignatureResult, ReceivedSignatureResult};
     use solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
@@ -647,8 +646,7 @@ mod tests {
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
-        let expected_res =
-            RpcSignatureResult::ProcessedSignature(ProcessedSignatureResult { err: None });
+        let expected_res = RpcSignatureResult::ProcessedSignature { err: None };
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",
@@ -681,8 +679,7 @@ mod tests {
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
-        let expected_res =
-            RpcSignatureResult::ReceivedSignature(ReceivedSignatureResult::ReceivedSignature);
+        let expected_res = RpcSignatureResult::ReceivedSignature { timestamp: 0 };
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",
@@ -714,8 +711,7 @@ mod tests {
 
         // Test signature confirmation notification
         let (response, _) = robust_poll_or_panic(receiver);
-        let expected_res =
-            RpcSignatureResult::ReceivedSignature(ReceivedSignatureResult::ReceivedSignature);
+        let expected_res = RpcSignatureResult::ReceivedSignature { timestamp: 0 };
         let expected = json!({
            "jsonrpc": "2.0",
            "method": "signatureNotification",

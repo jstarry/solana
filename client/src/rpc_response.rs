@@ -5,6 +5,7 @@ use solana_sdk::{
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     inflation::Inflation,
     transaction::{Result, TransactionError},
+    SlotEntryStats,
 };
 use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
 use std::{collections::HashMap, fmt, net::SocketAddr};
@@ -151,10 +152,18 @@ pub enum SlotUpdate {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase", untagged)]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum RpcSignatureResult {
-    ProcessedSignature(ProcessedSignatureResult),
-    ReceivedSignature(ReceivedSignatureResult),
+    ProcessedSignature {
+        timestamp: u64,
+        err: Option<TransactionError>,
+    },
+    ReceivedSignature {
+        timestamp: u64,
+    },
+    SubscribedSignature {
+        timestamp: u64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -163,18 +172,6 @@ pub struct RpcLogsResponse {
     pub signature: String, // Signature as base58 string
     pub err: Option<TransactionError>,
     pub logs: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct ProcessedSignatureResult {
-    pub err: Option<TransactionError>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub enum ReceivedSignatureResult {
-    ReceivedSignature,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

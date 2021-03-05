@@ -15,8 +15,8 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
     rpc_filter::RpcFilterType,
     rpc_response::{
-        ProcessedSignatureResult, ReceivedSignatureResult, Response, RpcKeyedAccount,
-        RpcLogsResponse, RpcResponseContext, RpcSignatureResult, SlotInfo, SlotUpdate,
+        Response, RpcKeyedAccount, RpcLogsResponse, RpcResponseContext, RpcSignatureResult,
+        SlotInfo, SlotUpdate,
     },
 };
 use solana_measure::measure::Measure;
@@ -312,9 +312,14 @@ fn filter_signature_result(
     _bank: Arc<Bank>,
 ) -> (Box<dyn Iterator<Item = RpcSignatureResult>>, Slot) {
     (
-        Box::new(result.into_iter().map(|result| {
-            RpcSignatureResult::ProcessedSignature(ProcessedSignatureResult { err: result.err() })
-        })),
+        Box::new(
+            result
+                .into_iter()
+                .map(|result| RpcSignatureResult::ProcessedSignature {
+                    timestamp: timestamp(),
+                    err: result.err(),
+                }),
+        ),
         last_notified_slot,
     )
 }
@@ -879,11 +884,26 @@ impl RpcSubscriptions {
             &mut subscriptions,
             signature,
             commitment,
-            sub_id,
+            sub_id.clone(),
             subscriber,
             0, // last_notified_slot is not utilized for signature subscriptions
             enable_received_notification,
         );
+
+        if let Some(entries) = subscriptions.get(&signature) {
+            if let Some(subscription_data) = entries.get(&sub_id) {
+                subscription_data.sink.notify(Ok(
+                    Response {
+                        context: RpcResponseContext {
+                            slot: self.bank_forks.read().unwrap().working_bank().slot(),
+                        },
+                        value: RpcSignatureResult::SubscribedSignature {
+                            timestamp: timestamp(),
+                        },
+                    },
+                ));
+            }
+        }
     }
 
     pub fn remove_signature_subscription(&self, id: &SubscriptionId) -> bool {
@@ -1298,9 +1318,9 @@ impl RpcSubscriptions {
                                 context: RpcResponseContext {
                                     slot: *received_slot,
                                 },
-                                value: RpcSignatureResult::ReceivedSignature(
-                                    ReceivedSignatureResult::ReceivedSignature,
-                                ),
+                                value: RpcSignatureResult::ReceivedSignature {
+                                    timestamp: timestamp(),
+                                },
                             },
                             &sink,
                         );
@@ -1755,10 +1775,11 @@ pub(crate) mod tests {
         subscriptions
             .notify_signatures_received((received_slot, vec![unprocessed_tx.signatures[0]]));
         subscriptions.notify_subscribers(commitment_slots);
-        let expected_res =
-            RpcSignatureResult::ProcessedSignature(ProcessedSignatureResult { err: None });
-        let received_expected_res =
-            RpcSignatureResult::ReceivedSignature(ReceivedSignatureResult::ReceivedSignature);
+        let expected_res = RpcSignatureResult::ProcessedSignature {
+            timestamp: 0,
+            err: None,
+        };
+        let received_expected_res = RpcSignatureResult::ReceivedSignature { timestamp: 0 };
         struct Notification {
             slot: Slot,
             id: u64,

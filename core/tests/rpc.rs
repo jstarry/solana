@@ -259,8 +259,8 @@ fn test_rpc_subscriptions() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match status_receiver.recv_timeout(timeout) {
             Ok((sig, result)) => {
-                if let RpcSignatureResult::ProcessedSignature(result) = result.value {
-                    assert!(result.err.is_none());
+                if let RpcSignatureResult::ProcessedSignature { err, .. } = result.value {
+                    assert!(err.is_none());
                     assert!(signature_set.remove(&sig));
                 } else {
                     panic!("Unexpected result");

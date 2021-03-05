@@ -199,13 +199,14 @@ fn test_local_cluster_signature_subscribe() {
         let mut should_break = false;
         for response in responses {
             match response.value {
-                RpcSignatureResult::ProcessedSignature(_) => {
+                RpcSignatureResult::ProcessedSignature { .. } => {
                     should_break = true;
                     break;
                 }
-                RpcSignatureResult::ReceivedSignature(_) => {
+                RpcSignatureResult::ReceivedSignature { .. } => {
                     got_received_notification = true;
                 }
+                _ => {}
             }
         }
 

@@ -17,8 +17,14 @@ pub struct RpcResponseContext {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Response<T> {
-    pub context: RpcResponseContext,
+pub struct RpcPubSubContext {
+    pub slot: u64,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Response<C, T> {
+    pub context: C,
     pub value: T,
 }
 
@@ -104,10 +110,10 @@ pub struct SlotInfo {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum SlotUpdate {
-    OptimisticConfirmation { slot: Slot, timestamp: u64 },
-    FirstShredReceived { slot: Slot, timestamp: u64 },
-    Frozen { slot: Slot, timestamp: u64 },
-    Root { slot: Slot, timestamp: u64 },
+    OptimisticConfirmation { slot: Slot },
+    FirstShredReceived { slot: Slot },
+    Frozen { slot: Slot },
+    Root { slot: Slot },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

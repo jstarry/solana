@@ -91,6 +91,11 @@ enum NotificationEntry {
     SignaturesReceived((Slot, Vec<Signature>)),
 }
 
+struct Notification {
+    timestamp: u64,
+    entry: NotificationEntry,
+}
+
 impl std::fmt::Debug for NotificationEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -250,7 +255,7 @@ where
                 for result in filter_results {
                     notifier.notify(
                         Response {
-                            context: RpcResponseContext { slot },
+                            context: RpcPubSubContext { slot, timestamp: timestamp() },
                             value: result,
                         },
                         sink,
@@ -418,7 +423,7 @@ impl Subscriptions {
 
 pub struct RpcSubscriptions {
     subscriptions: Subscriptions,
-    notification_sender: Arc<Mutex<Sender<NotificationEntry>>>,
+    notification_sender: Arc<Mutex<Sender<Notification>>>,
     t_cleanup: Option<JoinHandle<()>>,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
@@ -459,8 +464,8 @@ impl RpcSubscriptions {
         enable_vote_subscription: bool,
     ) -> Self {
         let (notification_sender, notification_receiver): (
-            Sender<NotificationEntry>,
-            Receiver<NotificationEntry>,
+            Sender<Notification>,
+            Receiver<Notification>,
         ) = std::sync::mpsc::channel();
 
         let account_subscriptions = Arc::new(RpcAccountSubscriptions::default());
@@ -995,24 +1000,28 @@ impl RpcSubscriptions {
         rooted_slots.into_iter().for_each(|root| {
             self.enqueue_notification(NotificationEntry::SlotUpdate(SlotUpdate::Root {
                 slot: root,
-                timestamp: timestamp(),
             }));
             self.enqueue_notification(NotificationEntry::Root(root));
         });
     }
 
     fn enqueue_notification(&self, notification_entry: NotificationEntry) {
+        let notification = Notification {
+            entry: notification_entry,
+            timestamp: timestamp(),
+        };
+
         match self
             .notification_sender
             .lock()
             .unwrap()
-            .send(notification_entry)
+            .send(notification)
         {
             Ok(()) => (),
-            Err(SendError(notification)) => {
+            Err(SendError(dropped)) => {
                 warn!(
                     "Dropped RPC Notification - receiver disconnected : {:?}",
-                    notification
+                    dropped
                 );
             }
         }
@@ -1021,7 +1030,7 @@ impl RpcSubscriptions {
     fn process_notifications(
         exit: Arc<AtomicBool>,
         notifier: RpcNotifier,
-        notification_receiver: Receiver<NotificationEntry>,
+        notification_receiver: Receiver<Notification>,
         subscriptions: Subscriptions,
         bank_forks: Arc<RwLock<BankForks>>,
     ) {
@@ -1029,7 +1038,8 @@ impl RpcSubscriptions {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            match notification_receiver.recv_timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS)) {
+            let Notification { timestamp, entry } = notification_receiver.recv_timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS));
+            match entry {
                 Ok(notification_entry) => match notification_entry {
                     NotificationEntry::Slot(slot_info) => {
                         let subscriptions = subscriptions.slot_subscriptions.read().unwrap();

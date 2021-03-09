@@ -890,6 +890,7 @@ impl RpcSubscriptions {
             enable_received_notification,
         );
 
+        // somehow this is getting sent before the result id is sent to the client :(
         if let Some(entries) = subscriptions.get(&signature) {
             if let Some(subscription_data) = entries.get(&sub_id) {
                 subscription_data.sink.notify(Ok(

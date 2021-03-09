@@ -5,6 +5,7 @@ use crate::{
     rpc::{get_parsed_token_account, get_parsed_token_accounts},
 };
 use core::hash::Hash;
+use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
@@ -48,6 +49,9 @@ use std::{
     thread::{Builder, JoinHandle},
     time::Duration,
 };
+
+// Stuck on tokio 0.1 until the jsonrpc-pubsub crate upgrades to tokio 0.2
+use tokio_01::runtime::{Builder as RuntimeBuilder, Runtime, TaskExecutor};
 
 const RECEIVE_DELAY_MILLIS: u64 = 100;
 
@@ -264,14 +268,15 @@ where
     notified_set
 }
 
-struct RpcNotifier;
+struct RpcNotifier(TaskExecutor);
 
 impl RpcNotifier {
     fn notify<T>(&self, value: T, sink: &Sink<T>)
     where
         T: serde::Serialize,
     {
-        let _ = sink.notify(Ok(value));
+        self.0
+            .spawn(sink.notify(Ok(value)).map(|_| ()).map_err(|_| ()));
     }
 }
 
@@ -425,6 +430,7 @@ pub struct RpcSubscriptions {
     subscriptions: Subscriptions,
     notification_sender: Arc<Mutex<Sender<NotificationEntry>>>,
     t_cleanup: Option<JoinHandle<()>>,
+    notifier_runtime: Option<Runtime>,
     bank_forks: Arc<RwLock<BankForks>>,
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
@@ -501,7 +507,13 @@ impl RpcSubscriptions {
         };
         let _subscriptions = subscriptions.clone();
 
-        let notifier = RpcNotifier {};
+        let notifier_runtime = RuntimeBuilder::new()
+            .core_threads(1)
+            .name_prefix("solana-rpc-notifier-")
+            .build()
+            .unwrap();
+
+        let notifier = RpcNotifier(notifier_runtime.executor());
         let t_cleanup = Builder::new()
             .name("solana-rpc-notifications".to_string())
             .spawn(move || {
@@ -518,6 +530,7 @@ impl RpcSubscriptions {
         Self {
             subscriptions,
             notification_sender,
+            notifier_runtime: Some(notifier_runtime),
             t_cleanup: Some(t_cleanup),
             bank_forks,
             block_commitment_cache,
@@ -1339,6 +1352,12 @@ impl RpcSubscriptions {
     }
 
     fn shutdown(&mut self) -> std::thread::Result<()> {
+        if let Some(runtime) = self.notifier_runtime.take() {
+            info!("RPC Notifier runtime - shutting down");
+            let _ = runtime.shutdown_now().wait();
+            info!("RPC Notifier runtime - shut down");
+        }
+
         if self.t_cleanup.is_some() {
             info!("RPC Notification thread - shutting down");
             self.exit.store(true, Ordering::Relaxed);
@@ -1358,7 +1377,7 @@ pub(crate) mod tests {
     use crate::optimistically_confirmed_bank_tracker::{
         BankNotification, OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     };
-    use jsonrpc_core::futures::StreamExt;
+    use jsonrpc_core::futures::{self, stream::Stream};
     use jsonrpc_pubsub::typed::Subscriber;
     use serial_test_derive::serial;
     use solana_runtime::{
@@ -1371,37 +1390,31 @@ pub(crate) mod tests {
         system_instruction, system_program, system_transaction,
         transaction::Transaction,
     };
-    use std::{fmt::Debug, sync::mpsc::channel};
-    use tokio::{
-        runtime::Runtime,
-        time::{delay_for, timeout},
-    };
+    use std::{fmt::Debug, sync::mpsc::channel, time::Instant};
+    use tokio_01::{prelude::FutureExt, runtime::Runtime, timer::Delay};
 
     pub(crate) fn robust_poll_or_panic<T: Debug + Send + 'static>(
-        receiver: jsonrpc_core::futures::channel::mpsc::UnboundedReceiver<T>,
-    ) -> (
-        T,
-        jsonrpc_core::futures::channel::mpsc::UnboundedReceiver<T>,
-    ) {
+        receiver: futures::sync::mpsc::Receiver<T>,
+    ) -> (T, futures::sync::mpsc::Receiver<T>) {
         let (inner_sender, inner_receiver) = channel();
-        let rt = Runtime::new().unwrap();
-        rt.spawn(async move {
-            let result = timeout(
-                Duration::from_millis(RECEIVE_DELAY_MILLIS),
-                receiver.into_future(),
-            )
-            .await
-            .unwrap_or_else(|err| panic!("stream error {:?}", err));
+        let mut rt = Runtime::new().unwrap();
+        rt.spawn(futures::lazy(|| {
+            let recv_timeout = receiver
+                .into_future()
+                .timeout(Duration::from_millis(RECEIVE_DELAY_MILLIS))
+                .map(move |result| match result {
+                    (Some(value), receiver) => {
+                        inner_sender.send((value, receiver)).expect("send error")
+                    }
+                    (None, _) => panic!("unexpected end of stream"),
+                })
+                .map_err(|err| panic!("stream error {:?}", err));
 
-            match result {
-                (Some(value), receiver) => {
-                    inner_sender.send((value, receiver)).expect("send error")
-                }
-                (None, _) => panic!("unexpected end of stream"),
-            }
-
-            delay_for(Duration::from_millis(RECEIVE_DELAY_MILLIS * 2)).await;
-        });
+            const INITIAL_DELAY_MS: u64 = RECEIVE_DELAY_MILLIS * 2;
+            Delay::new(Instant::now() + Duration::from_millis(INITIAL_DELAY_MS))
+                .and_then(|_| recv_timeout)
+                .map_err(|err| panic!("timer error {:?}", err))
+        }));
         inner_receiver.recv().expect("recv error")
     }
 

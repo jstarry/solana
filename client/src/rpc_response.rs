@@ -114,12 +114,7 @@ pub struct SlotTransactionStats {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum SlotUpdate {
-    FirstCodingShredReceived {
-        slot: Slot,
-        timestamp: u64,
-    },
-    FirstDataShredReceived {
-        parent: Slot,
+    FirstShredReceived {
         slot: Slot,
         timestamp: u64,
     },
@@ -127,8 +122,9 @@ pub enum SlotUpdate {
         slot: Slot,
         timestamp: u64,
     },
-    StartReplay {
+    CreatedBank {
         slot: Slot,
+        parent: Slot,
         timestamp: u64,
     },
     Frozen {

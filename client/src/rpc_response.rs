@@ -5,7 +5,6 @@ use solana_sdk::{
     fee_calculator::{FeeCalculator, FeeRateGovernor},
     inflation::Inflation,
     transaction::{Result, TransactionError},
-    SlotEntryStats,
 };
 use solana_transaction_status::ConfirmedTransactionStatusWithSignature;
 use std::{collections::HashMap, fmt, net::SocketAddr};

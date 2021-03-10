@@ -9,9 +9,9 @@ use solana_sdk::{clock::Slot, pubkey::Pubkey, timing::timestamp};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
+        mpsc::RecvTimeoutError,
         {Arc, RwLock},
     },
-    thread::sleep,
     thread::{self, Builder, JoinHandle},
     time::{Duration, Instant},
 };

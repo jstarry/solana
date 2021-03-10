@@ -380,11 +380,7 @@ fn retransmit(
             max_slot = max_slot.max(shred_slot);
 
             if let Some(rpc_subscriptions) = rpc_subscriptions {
-                if check_if_first_shred_received(
-                    shred_slot,
-                    first_shreds_received,
-                    &root_bank,
-                ) {
+                if check_if_first_shred_received(shred_slot, first_shreds_received, &root_bank) {
                     rpc_subscriptions.notify_slot_update(SlotUpdate::FirstShredReceived {
                         slot: shred_slot,
                         timestamp: timestamp(),

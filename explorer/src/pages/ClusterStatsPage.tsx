@@ -98,7 +98,7 @@ function StakingComponent() {
     return <LoadingCard />;
   } else if (typeof supply === "string") {
     return <ErrorCard text={supply} retry={fetchData} />;
-  } else if (stakeInfo.status === FetchStatus.FetchFailed) {
+  } else if (stakeInfo.status === FetchStatus.FetchFailed || stakeHistory.length == 0) {
     return (
       <ErrorCard text={"Failed to fetch active stake"} retry={fetchData} />
     );

@@ -21,7 +21,9 @@ use solana_ledger::blockstore::Blockstore;
 use solana_metrics::inc_new_counter_debug;
 use solana_perf::packet::{self, Packets};
 use solana_rpc::{
-    optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
+    optimistically_confirmed_bank_tracker::{
+        BankNotification, BankNotificationSender, ConfirmationProgress,
+    },
     rpc_subscriptions::RpcSubscriptions,
 };
 use solana_runtime::{
@@ -66,7 +68,6 @@ pub type GossipDuplicateConfirmedSlotsReceiver = CrossbeamReceiver<ThresholdConf
 
 const THRESHOLDS_TO_CHECK: [f64; 2] = [DUPLICATE_THRESHOLD, VOTE_THRESHOLD_SIZE];
 
-#[derive(Default)]
 pub struct SlotVoteTracker {
     // Maps pubkeys that have voted for this slot
     // to whether or not we've seen the vote on gossip.
@@ -75,11 +76,18 @@ pub struct SlotVoteTracker {
     optimistic_votes_tracker: HashMap<Hash, VoteStakeTracker>,
     voted_slot_updates: Option<Vec<Pubkey>>,
     gossip_only_stake: u64,
+    total_epoch_stake: u64,
 }
 
 impl SlotVoteTracker {
     pub fn get_voted_slot_updates(&mut self) -> Option<Vec<Pubkey>> {
         self.voted_slot_updates.take()
+    }
+
+    pub fn get_max_optimistic_votes_tracker(&self) -> Option<&VoteStakeTracker> {
+        self.optimistic_votes_tracker
+            .values()
+            .max_by(|t1, t2| t1.stake().cmp(&t2.stake()))
     }
 
     pub fn get_or_insert_optimistic_votes_tracker(&mut self, hash: Hash) -> &mut VoteStakeTracker {
@@ -119,7 +127,11 @@ impl VoteTracker {
         vote_tracker
     }
 
-    pub fn get_or_insert_slot_tracker(&self, slot: Slot) -> Arc<RwLock<SlotVoteTracker>> {
+    pub fn get_or_insert_slot_tracker(
+        &self,
+        slot: Slot,
+        total_epoch_stake: u64,
+    ) -> Arc<RwLock<SlotVoteTracker>> {
         let mut slot_tracker = self.slot_vote_trackers.read().unwrap().get(&slot).cloned();
 
         if slot_tracker.is_none() {
@@ -128,6 +140,7 @@ impl VoteTracker {
                 optimistic_votes_tracker: HashMap::default(),
                 voted_slot_updates: None,
                 gossip_only_stake: 0,
+                total_epoch_stake,
             }));
             self.slot_vote_trackers
                 .write()
@@ -137,6 +150,10 @@ impl VoteTracker {
         }
 
         slot_tracker.unwrap()
+    }
+
+    pub fn get_all_slot_vote_trackers(&self) -> HashMap<Slot, Arc<RwLock<SlotVoteTracker>>> {
+        self.slot_vote_trackers.read().unwrap().clone()
     }
 
     pub fn get_slot_vote_tracker(&self, slot: Slot) -> Option<Arc<RwLock<SlotVoteTracker>>> {
@@ -456,6 +473,30 @@ impl ClusterInfoVoteListener {
                 );
                 vote_tracker.progress_with_new_root_bank(&root_bank);
                 last_process_root = Instant::now();
+
+                if let Some(sender) = bank_notification_sender.as_ref() {
+                    let slot_vote_trackers = vote_tracker.get_all_slot_vote_trackers();
+                    let progresses = slot_vote_trackers
+                        .into_iter()
+                        .filter_map(|(slot, tracker)| {
+                            let slot_tracker = tracker.read().unwrap();
+                            let votes_tracker = slot_tracker.get_max_optimistic_votes_tracker()?;
+                            let breakdown = votes_tracker.stake_breakdown();
+
+                            Some(ConfirmationProgress {
+                                slot,
+                                stake: breakdown.voted,
+                                gossip_only_stake: breakdown.gossip,
+                                replay_only_stake: breakdown.replay,
+                                total_stake: slot_tracker.total_epoch_stake,
+                            })
+                        })
+                        .collect();
+
+                    sender
+                        .send(BankNotification::ConfirmationProgress(progresses))
+                        .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
+                }
             }
             let confirmed_slots = Self::listen_and_confirm_votes(
                 &gossip_vote_txs_receiver,
@@ -613,8 +654,10 @@ impl ClusterInfoVoteListener {
                     *vote_pubkey,
                     stake,
                     total_stake,
+                    is_gossip_vote,
                 );
 
+                // if we already received the replayed vote, this won't notify
                 if is_gossip_vote && is_new && stake > 0 {
                     let _ = gossip_verified_vote_hash_sender.send((
                         *vote_pubkey,
@@ -643,13 +686,10 @@ impl ClusterInfoVoteListener {
                 if !is_new && !is_gossip_vote {
                     // By now:
                     // 1) The vote must have come from ReplayStage,
-                    // 2) We've seen this vote from replay for this hash before
+                    // 2) We've seen this vote from replay or gossip for this hash before
                     // (`track_optimistic_confirmation_vote()` will not set `is_new == true`
                     // for same slot different hash), so short circuit because this vote
                     // has no new information
-
-                    // Note gossip votes will always be processed because those should be unique
-                    // and we need to update the gossip-only stake in the `VoteTracker`.
                     return;
                 }
 
@@ -748,7 +788,15 @@ impl ClusterInfoVoteListener {
 
         // Process all the slots accumulated from replay and gossip.
         for (slot, mut slot_diff) in diff {
-            let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
+            let epoch = root_bank.epoch_schedule().get_epoch(slot);
+            let epoch_stakes = root_bank.epoch_stakes(epoch);
+            if epoch_stakes.is_none() {
+                continue;
+            }
+            let epoch_stakes = epoch_stakes.unwrap();
+            let total_epoch_stake = epoch_stakes.total_stake();
+
+            let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot, total_epoch_stake);
             {
                 let r_slot_tracker = slot_tracker.read().unwrap();
                 // Only keep the pubkeys we haven't seen voting for this slot
@@ -766,10 +814,8 @@ impl ClusterInfoVoteListener {
             if w_slot_tracker.voted_slot_updates.is_none() {
                 w_slot_tracker.voted_slot_updates = Some(vec![]);
             }
-            let mut gossip_only_stake = 0;
-            let epoch = root_bank.epoch_schedule().get_epoch(slot);
-            let epoch_stakes = root_bank.epoch_stakes(epoch);
 
+            let mut gossip_only_stake = 0;
             for (pubkey, seen_in_gossip_above) in slot_diff {
                 if seen_in_gossip_above {
                     // By this point we know if the vote was seen in gossip above,
@@ -806,21 +852,26 @@ impl ClusterInfoVoteListener {
         pubkey: Pubkey,
         stake: u64,
         total_epoch_stake: u64,
+        is_gossip_vote: bool,
     ) -> (Vec<bool>, bool) {
-        let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
+        let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot, total_epoch_stake);
         // Insert vote and check for optimistic confirmation
         let mut w_slot_tracker = slot_tracker.write().unwrap();
 
         w_slot_tracker
             .get_or_insert_optimistic_votes_tracker(hash)
-            .add_vote_pubkey(pubkey, stake, total_epoch_stake, &THRESHOLDS_TO_CHECK)
+            .add_vote_pubkey(
+                pubkey,
+                stake,
+                total_epoch_stake,
+                is_gossip_vote,
+                &THRESHOLDS_TO_CHECK,
+            )
     }
 
-    fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
-        if let Some(stakes) = epoch_stakes {
-            if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
-                *sum += vote_account.0;
-            }
+    fn sum_stake(sum: &mut u64, stakes: &EpochStakes, pubkey: &Pubkey) {
+        if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
+            *sum += vote_account.0;
         }
     }
 }

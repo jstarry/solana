@@ -1,10 +1,28 @@
 use solana_sdk::pubkey::Pubkey;
-use std::collections::HashSet;
+use std::collections::HashMap;
+
+#[derive(Debug, Default)]
+pub struct VoteStake {
+    gossiped: bool,
+    replayed: bool,
+}
 
 #[derive(Default)]
 pub struct VoteStakeTracker {
-    voted: HashSet<Pubkey>,
+    voted: HashMap<Pubkey, VoteStake>,
+    stake_gossiped: u64,
+    stake_replayed: u64,
     stake: u64,
+}
+
+#[derive(Debug)]
+pub struct StakeBreakdown {
+    /// Stake detected from votes in gossip and replay
+    pub voted: u64,
+    /// Stake that was only detected from gossip
+    pub gossip: u64,
+    /// Stake that was only detected from replayed blocks
+    pub replay: u64,
 }
 
 impl VoteStakeTracker {
@@ -17,11 +35,21 @@ impl VoteStakeTracker {
         vote_pubkey: Pubkey,
         stake: u64,
         total_stake: u64,
+        is_gossip_vote: bool,
         thresholds_to_check: &[f64],
     ) -> (Vec<bool>, bool) {
-        let is_new = !self.voted.contains(&vote_pubkey);
+        let vote_stake = self.voted.entry(vote_pubkey).or_default();
+
+        let is_new = !vote_stake.gossiped && !vote_stake.replayed;
+        if is_gossip_vote && !vote_stake.gossiped {
+            vote_stake.gossiped = true;
+            self.stake_gossiped += stake;
+        } else if !is_gossip_vote && !vote_stake.replayed {
+            vote_stake.replayed = true;
+            self.stake_replayed += stake;
+        }
+
         if is_new {
-            self.voted.insert(vote_pubkey);
             let old_stake = self.stake;
             let new_stake = self.stake + stake;
             self.stake = new_stake;
@@ -38,7 +66,16 @@ impl VoteStakeTracker {
         }
     }
 
-    pub fn voted(&self) -> &HashSet<Pubkey> {
+    /// Breakdown of stake by where it was tracked from
+    pub fn stake_breakdown(&self) -> StakeBreakdown {
+        StakeBreakdown {
+            voted: self.stake,
+            gossip: self.stake_gossiped,
+            replay: self.stake_replayed,
+        }
+    }
+
+    pub fn voted(&self) -> &HashMap<Pubkey, VoteStake> {
         &self.voted
     }
 

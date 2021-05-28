@@ -29,7 +29,17 @@ impl OptimisticallyConfirmedBank {
     }
 }
 
+#[derive(Debug)]
+pub struct ConfirmationProgress {
+    pub slot: Slot,
+    pub stake: u64,
+    pub gossip_only_stake: u64,
+    pub replay_only_stake: u64,
+    pub total_stake: u64,
+}
+
 pub enum BankNotification {
+    ConfirmationProgress(Vec<ConfirmationProgress>),
     OptimisticallyConfirmed(Slot),
     Frozen(Arc<Bank>),
     Root(Arc<Bank>),
@@ -38,6 +48,9 @@ pub enum BankNotification {
 impl std::fmt::Debug for BankNotification {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            BankNotification::ConfirmationProgress(progress) => {
+                write!(f, "ConfirmationProgress({:?})", progress)
+            }
             BankNotification::OptimisticallyConfirmed(slot) => {
                 write!(f, "OptimisticallyConfirmed({:?})", slot)
             }
@@ -112,6 +125,32 @@ impl OptimisticallyConfirmedBankTracker {
     ) {
         debug!("received bank notification: {:?}", notification);
         match notification {
+            BankNotification::ConfirmationProgress(progress) => {
+                // Send slot notification regardless of whether the bank is replayed
+                progress.into_iter().for_each(|progress| {
+                    let slot = progress.slot;
+                    let (total, gossip, replay) = if progress.total_stake > 0 {
+                        let total = 100f64 * progress.stake as f64 / progress.total_stake as f64;
+                        let gossip = 100f64 * progress.gossip_only_stake as f64
+                            / progress.total_stake as f64;
+                        let replay = 100f64 * progress.replay_only_stake as f64
+                            / progress.total_stake as f64;
+                        (total, gossip, replay)
+                    } else {
+                        (0f64, 0f64, 0f64)
+                    };
+
+                    let percent_voted_stake = total.round().max(0.0).min(100.0) as u8;
+                    let percent_gossip_only_votes = gossip.round().max(0.0).min(100.0) as u8;
+                    let percent_replay_only_votes = replay.round().max(0.0).min(100.0) as u8;
+
+                    subscriptions.notify_slot_update(SlotUpdate::ConfirmationProgress {
+                        slot,
+                        timestamp: timestamp(),
+                        progress: (percent_voted_stake, percent_gossip_only_votes, percent_replay_only_votes),
+                    });
+                });
+            }
             BankNotification::OptimisticallyConfirmed(slot) => {
                 if let Some(bank) = bank_forks
                     .read()

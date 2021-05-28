@@ -157,6 +157,11 @@ pub enum SlotUpdate {
         slot: Slot,
         timestamp: u64,
     },
+    ConfirmationProgress {
+        slot: Slot,
+        timestamp: u64,
+        progress: (u8, u8, u8),
+    },
 }
 
 impl SlotUpdate {
@@ -169,6 +174,7 @@ impl SlotUpdate {
             Self::Dead { slot, .. } => *slot,
             Self::OptimisticConfirmation { slot, .. } => *slot,
             Self::Root { slot, .. } => *slot,
+            Self::ConfirmationProgress { slot, .. } => *slot,
         }
     }
 }

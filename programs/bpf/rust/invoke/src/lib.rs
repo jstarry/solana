@@ -296,16 +296,16 @@ fn process_instruction(
                         (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
                         (accounts[INVOKED_PROGRAM_DUP_INDEX].key, false, false),
                     ],
-                    vec![NESTED_INVOKE],
+                    vec![NESTED_INVOKE, 2],
                 );
                 invoke(&instruction, accounts)?;
                 msg!("2nd invoke from first program");
                 invoke(&instruction, accounts)?;
 
-                assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42 - 5 + 1 + 1 + 1 + 1);
+                assert_eq!(accounts[ARGUMENT_INDEX].lamports(), 42 - 5 + 2 * 3);
                 assert_eq!(
                     accounts[INVOKED_ARGUMENT_INDEX].lamports(),
-                    10 + 5 - 1 - 1 - 1 - 1
+                    10 + 5 - 2 * 3
                 );
             }
 

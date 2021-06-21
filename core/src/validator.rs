@@ -47,12 +47,14 @@ use solana_rpc::{
         OptimisticallyConfirmedBank, OptimisticallyConfirmedBankTracker,
     },
     rpc::JsonRpcConfig,
+    rpc_completed_slots_service::RpcCompletedSlotsService,
     rpc_pubsub_service::{PubSubConfig, PubSubService},
     rpc_service::JsonRpcService,
     rpc_subscriptions::RpcSubscriptions,
     transaction_status_service::TransactionStatusService,
 };
 use solana_runtime::{
+    accounts_db::AccountShrinkThreshold,
     accounts_index::AccountSecondaryIndexes,
     bank::Bank,
     bank_forks::{BankForks, SnapshotConfig},
@@ -79,7 +81,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     sync::mpsc::Receiver,
     sync::{Arc, Mutex, RwLock},
-    thread::{sleep, Builder},
+    thread::{sleep, Builder, JoinHandle},
     time::{Duration, Instant},
 };
 
@@ -139,6 +141,7 @@ pub struct ValidatorConfig {
     pub tpu_coalesce_ms: u64,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
+    pub accounts_shrink_ratio: AccountShrinkThreshold,
 }
 
 impl Default for ValidatorConfig {
@@ -195,6 +198,7 @@ impl Default for ValidatorConfig {
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
+            accounts_shrink_ratio: AccountShrinkThreshold::default(),
         }
     }
 }
@@ -240,6 +244,7 @@ pub struct Validator {
     validator_exit: Arc<RwLock<Exit>>,
     json_rpc_service: Option<JsonRpcService>,
     pubsub_service: Option<PubSubService>,
+    rpc_completed_slots_service: JoinHandle<()>,
     optimistically_confirmed_bank_tracker: Option<OptimisticallyConfirmedBankTracker>,
     transaction_status_service: Option<TransactionStatusService>,
     rewards_recorder_service: Option<RewardsRecorderService>,
@@ -382,6 +387,7 @@ impl Validator {
             &exit,
             config.enforce_ulimit_nofile,
             &start_progress,
+            config.no_poh_speed_test,
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
@@ -442,7 +448,7 @@ impl Validator {
         let optimistically_confirmed_bank =
             OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks);
 
-        let subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::new_with_vote_subscription(
             &exit,
             bank_forks.clone(),
             block_commitment_cache.clone(),
@@ -456,7 +462,7 @@ impl Validator {
         let completed_data_sets_service = CompletedDataSetsService::new(
             completed_data_sets_receiver,
             blockstore.clone(),
-            subscriptions.clone(),
+            rpc_subscriptions.clone(),
             &exit,
             max_slots.clone(),
         );
@@ -536,7 +542,7 @@ impl Validator {
                 } else {
                     Some(PubSubService::new(
                         config.pubsub_config.clone(),
-                        &subscriptions,
+                        &rpc_subscriptions,
                         rpc_pubsub_addr,
                         &exit,
                     ))
@@ -546,7 +552,7 @@ impl Validator {
                     &exit,
                     bank_forks.clone(),
                     optimistically_confirmed_bank,
-                    subscriptions.clone(),
+                    rpc_subscriptions.clone(),
                 )),
                 Some(bank_notification_sender),
             )
@@ -613,10 +619,6 @@ impl Validator {
                 (None, None)
             };
 
-        if !config.no_poh_speed_test {
-            check_poh_speed(&genesis_config, None);
-        }
-
         let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
             config,
             &bank,
@@ -660,6 +662,10 @@ impl Validator {
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
         let (cluster_confirmed_slot_sender, cluster_confirmed_slot_receiver) = unbounded();
+
+        let rpc_completed_slots_service =
+            RpcCompletedSlotsService::spawn(completed_slots_receiver, rpc_subscriptions.clone());
+
         let tvu = Tvu::new(
             vote_account,
             authorized_voter_keypairs,
@@ -692,12 +698,11 @@ impl Validator {
             },
             blockstore.clone(),
             ledger_signal_receiver,
-            &subscriptions,
+            &rpc_subscriptions,
             &poh_recorder,
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
             block_commitment_cache,
             config.enable_partition.clone(),
             transaction_status_sender.clone(),
@@ -726,6 +731,7 @@ impl Validator {
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
+                accounts_shrink_ratio: config.accounts_shrink_ratio,
             },
             &max_slots,
             &cost_model,
@@ -739,7 +745,7 @@ impl Validator {
             node.sockets.tpu,
             node.sockets.tpu_forwards,
             node.sockets.broadcast,
-            &subscriptions,
+            &rpc_subscriptions,
             transaction_status_sender,
             &blockstore,
             &config.broadcast_stage_type,
@@ -764,6 +770,7 @@ impl Validator {
             serve_repair_service,
             json_rpc_service,
             pubsub_service,
+            rpc_completed_slots_service,
             optimistically_confirmed_bank_tracker,
             transaction_status_service,
             rewards_recorder_service,
@@ -826,6 +833,10 @@ impl Validator {
         if let Some(pubsub_service) = self.pubsub_service {
             pubsub_service.join().expect("pubsub_service");
         }
+
+        self.rpc_completed_slots_service
+            .join()
+            .expect("rpc_completed_slots_service");
 
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker
@@ -966,7 +977,7 @@ fn post_process_restored_tower(
         })
         .unwrap_or_else(|err| {
             let voting_has_been_active =
-                active_vote_account_exists_in_bank(&bank_forks.working_bank(), &vote_account);
+                active_vote_account_exists_in_bank(&bank_forks.working_bank(), vote_account);
             if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
@@ -999,10 +1010,10 @@ fn post_process_restored_tower(
             }
 
             Tower::new_from_bankforks(
-                &bank_forks,
+                bank_forks,
                 tower_path,
-                &validator_identity,
-                &vote_account,
+                validator_identity,
+                vote_account,
             )
         })
 }
@@ -1017,6 +1028,7 @@ fn new_banks_from_ledger(
     exit: &Arc<AtomicBool>,
     enforce_ulimit_nofile: bool,
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
+    no_poh_speed_test: bool,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1050,6 +1062,10 @@ fn new_banks_from_ledger(
         }
     }
 
+    if !no_poh_speed_test {
+        check_poh_speed(&genesis_config, None);
+    }
+
     let BlockstoreSignals {
         mut blockstore,
         ledger_signal_receiver,
@@ -1065,9 +1081,9 @@ fn new_banks_from_ledger(
 
     let tower_path = config.tower_path.as_deref().unwrap_or(ledger_path);
 
-    let restored_tower = Tower::restore(tower_path, &validator_identity);
+    let restored_tower = Tower::restore(tower_path, validator_identity);
     if let Ok(tower) = &restored_tower {
-        reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap_or_else(|err| {
+        reconcile_blockstore_roots_with_tower(tower, &blockstore).unwrap_or_else(|err| {
             error!("Failed to reconcile blockstore with tower: {:?}", err);
             abort()
         });
@@ -1099,6 +1115,7 @@ fn new_banks_from_ledger(
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+        shrink_ratio: config.accounts_shrink_ratio,
         ..blockstore_processor::ProcessOptions::default()
     };
 
@@ -1168,7 +1185,7 @@ fn new_banks_from_ledger(
             None,
             &snapshot_config.snapshot_package_output_path,
             snapshot_config.archive_format,
-            Some(&bank_forks.root_bank().get_thread_pool()),
+            Some(bank_forks.root_bank().get_thread_pool()),
             snapshot_config.maximum_snapshots_to_retain,
         )
         .unwrap_or_else(|err| {
@@ -1180,9 +1197,9 @@ fn new_banks_from_ledger(
 
     let tower = post_process_restored_tower(
         restored_tower,
-        &validator_identity,
-        &vote_account,
-        &config,
+        validator_identity,
+        vote_account,
+        config,
         tower_path,
         &bank_forks,
     );
@@ -1387,7 +1404,7 @@ fn wait_for_supermajority(
             );
         }
 
-        let gossip_stake_percent = get_stake_percent_in_gossip(&bank, &cluster_info, i % 10 == 0);
+        let gossip_stake_percent = get_stake_percent_in_gossip(bank, cluster_info, i % 10 == 0);
 
         if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
             break;

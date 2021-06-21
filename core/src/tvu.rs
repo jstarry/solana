@@ -25,8 +25,7 @@ use crate::{
 use crossbeam_channel::unbounded;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_ledger::{
-    blockstore::{Blockstore, CompletedSlotsReceiver},
-    blockstore_processor::TransactionStatusSender,
+    blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
     leader_schedule_cache::LeaderScheduleCache,
 };
 use solana_poh::poh_recorder::PohRecorder;
@@ -38,6 +37,7 @@ use solana_runtime::{
     accounts_background_service::{
         AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
     },
+    accounts_db::AccountShrinkThreshold,
     bank_forks::{BankForks, SnapshotConfig},
     commitment::BlockCommitmentCache,
     vote_sender_types::ReplayVoteSender,
@@ -89,6 +89,7 @@ pub struct TvuConfig {
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
+    pub accounts_shrink_ratio: AccountShrinkThreshold,
 }
 
 impl Tvu {
@@ -107,12 +108,11 @@ impl Tvu {
         sockets: Sockets,
         blockstore: Arc<Blockstore>,
         ledger_signal_receiver: Receiver<bool>,
-        subscriptions: &Arc<RpcSubscriptions>,
+        rpc_subscriptions: &Arc<RpcSubscriptions>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         tower: Tower,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
-        completed_slots_receiver: CompletedSlotsReceiver,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         cfg: Option<Arc<AtomicBool>>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -152,7 +152,7 @@ impl Tvu {
             repair_socket.clone(),
             &fetch_sender,
             Some(bank_forks.clone()),
-            &exit,
+            exit,
         );
 
         let (verified_sender, verified_receiver) = unbounded();
@@ -172,12 +172,11 @@ impl Tvu {
             bank_forks.clone(),
             leader_schedule_cache,
             blockstore.clone(),
-            &cluster_info,
+            cluster_info,
             Arc::new(retransmit_sockets),
             repair_socket,
             verified_receiver,
-            &exit,
-            completed_slots_receiver,
+            exit,
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             cfg,
@@ -188,7 +187,7 @@ impl Tvu {
             tvu_config.repair_validators,
             completed_data_sets_sender,
             max_slots,
-            Some(subscriptions.clone()),
+            Some(rpc_subscriptions.clone()),
             duplicate_slots_sender,
         );
 
@@ -212,7 +211,7 @@ impl Tvu {
             accounts_hash_receiver,
             pending_snapshot_package,
             exit,
-            &cluster_info,
+            cluster_info,
             tvu_config.trusted_validators.clone(),
             tvu_config.halt_on_trusted_validators_accounts_hash_mismatch,
             tvu_config.accounts_hash_fault_injection_slots,
@@ -264,7 +263,7 @@ impl Tvu {
             vote_account: *vote_account,
             authorized_voter_keypairs,
             exit: exit.clone(),
-            subscriptions: subscriptions.clone(),
+            rpc_subscriptions: rpc_subscriptions.clone(),
             leader_schedule_cache: leader_schedule_cache.clone(),
             latest_root_senders: vec![ledger_cleanup_slot_sender],
             accounts_background_request_sender,
@@ -301,7 +300,7 @@ impl Tvu {
                 ledger_cleanup_slot_receiver,
                 blockstore.clone(),
                 max_ledger_shreds,
-                &exit,
+                exit,
                 compaction_interval,
                 max_compaction_jitter,
             )
@@ -309,7 +308,7 @@ impl Tvu {
 
         let accounts_background_service = AccountsBackgroundService::new(
             bank_forks.clone(),
-            &exit,
+            exit,
             accounts_background_request_handler,
             tvu_config.accounts_db_caching_enabled,
             tvu_config.test_hash_calculation,
@@ -379,7 +378,6 @@ pub mod tests {
         let BlockstoreSignals {
             blockstore,
             ledger_signal_receiver,
-            completed_slots_receiver,
             ..
         } = Blockstore::open_with_signal(&blockstore_path, None, true)
             .expect("Expected to successfully open ledger");
@@ -423,7 +421,6 @@ pub mod tests {
             tower,
             &leader_schedule_cache,
             &exit,
-            completed_slots_receiver,
             block_commitment_cache,
             None,
             None,

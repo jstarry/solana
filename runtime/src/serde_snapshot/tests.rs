@@ -3,7 +3,7 @@ use {
     super::*,
     crate::{
         accounts::{create_test_accounts, Accounts},
-        accounts_db::get_temp_accounts_paths,
+        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
         bank::{Bank, StatusCacheRc},
         hardened_unpack::UnpackedAppendVecMap,
     },
@@ -74,6 +74,7 @@ where
         AccountSecondaryIndexes::default(),
         false,
         None,
+        AccountShrinkThreshold::default(),
     )
 }
 
@@ -129,6 +130,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
         false,
+        AccountShrinkThreshold::default(),
     );
 
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -228,6 +230,7 @@ fn test_bank_serialize_style(serde_style: SerdeStyle) {
         AccountSecondaryIndexes::default(),
         false,
         None,
+        AccountShrinkThreshold::default(),
     )
     .unwrap();
     dbank.src = ref_sc;
@@ -247,7 +250,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     accountsdb_to_stream(
         SerdeStyle::Newer,
         &mut writer,
-        &accounts,
+        accounts,
         slot,
         &snapshot_storages,
     )
@@ -258,7 +261,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     let copied_accounts = TempDir::new().unwrap();
 
     // Simulate obtaining a copy of the AppendVecs from a tarball
-    let unpacked_append_vec_map = copy_append_vecs(&accounts, copied_accounts.path()).unwrap();
+    let unpacked_append_vec_map = copy_append_vecs(accounts, copied_accounts.path()).unwrap();
     let mut accounts_db =
         accountsdb_from_stream(SerdeStyle::Newer, &mut reader, &[], unpacked_append_vec_map)
             .unwrap();
@@ -290,7 +293,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "DuRGntVwLGNAv5KooafUSpxk67BPAx2yC7Z8A9c8wr2G")]
+    #[frozen_abi(digest = "6msodEzE7YzFtorBhiP6ax4PKBaPZTkmYdGAdpoxLCvV")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperFuture {
         #[serde(serialize_with = "wrapper_future")]

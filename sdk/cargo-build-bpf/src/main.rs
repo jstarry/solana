@@ -7,7 +7,7 @@ use {
     solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         env,
         ffi::OsStr,
         fs::{self, File},
@@ -20,7 +20,8 @@ use {
     tar::Archive,
 };
 
-struct Config {
+struct Config<'a> {
+    cargo_args: Option<Vec<&'a str>>,
     bpf_out_dir: Option<PathBuf>,
     bpf_sdk: PathBuf,
     dump: bool,
@@ -31,9 +32,10 @@ struct Config {
     workspace: bool,
 }
 
-impl Default for Config {
+impl Default for Config<'_> {
     fn default() -> Self {
         Self {
+            cargo_args: None,
             bpf_sdk: env::current_exe()
                 .expect("Unable to get current executable")
                 .parent()
@@ -112,7 +114,7 @@ fn install_if_missing(
         url.push_str(version);
         url.push('/');
         url.push_str(file.to_str().unwrap());
-        download_file(&url.as_str(), &file, true, &mut None)?;
+        download_file(url.as_str(), file, true, &mut None)?;
         fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
         let zip = File::open(&file).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
@@ -247,6 +249,56 @@ fn postprocess_dump(program_dump: &Path) {
     fs::rename(postprocessed_dump, program_dump).unwrap();
 }
 
+// Check whether the built .so file contains undefined symbols that are
+// not known to the runtime and warn about them if any.
+fn check_undefined_symbols(config: &Config, program: &Path) {
+    let syscalls_txt = config.bpf_sdk.join("syscalls.txt");
+    let file = match File::open(syscalls_txt) {
+        Ok(x) => x,
+        _ => return,
+    };
+    let mut syscalls = HashSet::new();
+    for line_result in BufReader::new(file).lines() {
+        let line = line_result.unwrap();
+        let line = line.trim_end();
+        syscalls.insert(line.to_string());
+    }
+    let entry =
+        Regex::new(r"^ *[0-9]+: [0-9a-f]{16} +[0-9a-f]+ +NOTYPE +GLOBAL +DEFAULT +UND +(.+)")
+            .unwrap();
+    let readelf = config
+        .bpf_sdk
+        .join("dependencies")
+        .join("bpf-tools")
+        .join("llvm")
+        .join("bin")
+        .join("llvm-readelf");
+    let mut readelf_args = vec!["--dyn-symbols"];
+    readelf_args.push(program.to_str().unwrap());
+    let output = spawn(&readelf, &readelf_args);
+    if config.verbose {
+        println!("{}", output);
+    }
+    let mut unresolved_symbols: Vec<String> = Vec::new();
+    for line in output.lines() {
+        let line = line.trim_end();
+        if entry.is_match(line) {
+            let captures = entry.captures(line).unwrap();
+            let symbol = captures[1].to_string();
+            if !syscalls.contains(&symbol) {
+                unresolved_symbols.push(symbol);
+            }
+        }
+    }
+    if !unresolved_symbols.is_empty() {
+        println!(
+            "Warning: the following functions are undefined and not known syscalls {:?}.",
+            unresolved_symbols
+        );
+        println!("         Calling them will trigger a run-time error.");
+    }
+}
+
 // check whether custom BPF toolchain is linked, and link it if it is not.
 fn link_bpf_toolchain(config: &Config) {
     let toolchain_path = config
@@ -322,10 +374,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     let legacy_program_feature_present = package.name == "solana-sdk";
     let root_package_dir = &package.manifest_path.parent().unwrap_or_else(|| {
-        eprintln!(
-            "Unable to get directory of {}",
-            package.manifest_path.display()
-        );
+        eprintln!("Unable to get directory of {}", package.manifest_path);
         exit(1);
     });
 
@@ -342,8 +391,7 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
         eprintln!(
             "Unable to set current directory to {}: {}",
-            root_package_dir.display(),
-            err
+            root_package_dir, err
         );
         exit(1);
     });
@@ -364,14 +412,14 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
         "solana-bpf-tools-linux.tar.bz2"
     };
     install_if_missing(
-        &config,
+        config,
         "bpf-tools",
-        "v1.10",
+        "v1.11",
         "https://github.com/solana-labs/bpf-tools/releases/download",
         &PathBuf::from(bpf_tools_filename),
     )
     .expect("Failed to install bpf-tools");
-    link_bpf_toolchain(&config);
+    link_bpf_toolchain(config);
 
     let llvm_bin = config
         .bpf_sdk
@@ -383,9 +431,14 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("AR", llvm_bin.join("llvm-ar"));
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
-    let mut rust_flags = String::from("-C lto=no");
-    rust_flags.push_str(" -C opt-level=2");
-    env::set_var("RUSTFLAGS", rust_flags);
+    let rustflags = match env::var("RUSTFLAGS") {
+        Ok(rf) => rf + &" -C lto=no".to_string(),
+        _ => "-C lto=no".to_string(),
+    };
+    if config.verbose {
+        println!("RUSTFLAGS={}", rustflags);
+    }
+    env::set_var("RUSTFLAGS", rustflags);
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
         "+bpf",
@@ -409,6 +462,11 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
     }
     if config.verbose {
         cargo_build_args.push("--verbose");
+    }
+    if let Some(args) = &config.cargo_args {
+        for arg in args {
+            cargo_build_args.push(arg);
+        }
     }
     let output = spawn(&cargo_build, &cargo_build_args);
     if config.verbose {
@@ -472,6 +530,8 @@ fn build_bpf_package(config: &Config, target_directory: &Path, package: &cargo_m
             postprocess_dump(&program_dump);
         }
 
+        check_undefined_symbols(config, &program_so);
+
         println!();
         println!("To deploy this program:");
         println!("  $ solana program deploy {}", program_so.display());
@@ -496,7 +556,7 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
 
     if let Some(root_package) = metadata.root_package() {
         if !config.workspace {
-            build_bpf_package(&config, &metadata.target_directory, root_package);
+            build_bpf_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
     }
@@ -517,7 +577,7 @@ fn build_bpf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_bpf_packages {
-        build_bpf_package(&config, &metadata.target_directory, package);
+        build_bpf_package(&config, metadata.target_directory.as_ref(), package);
     }
 }
 
@@ -603,12 +663,16 @@ fn main() {
                 .alias("all")
                 .help("Build all BPF packages in the workspace"),
         )
+        .arg(Arg::with_name("cargo_args").multiple(true).last(true))
         .get_matches_from(args);
 
     let bpf_sdk = value_t_or_exit!(matches, "bpf_sdk", PathBuf);
     let bpf_out_dir = value_t!(matches, "bpf_out_dir", PathBuf).ok();
 
     let config = Config {
+        cargo_args: matches
+            .values_of("cargo_args")
+            .map(|vals| vals.collect::<Vec<_>>()),
         bpf_sdk: fs::canonicalize(&bpf_sdk).unwrap_or_else(|err| {
             eprintln!(
                 "BPF SDK path does not exist: {}: {}",

@@ -49,11 +49,12 @@ impl GossipService {
         );
         let t_receiver = streamer::receiver(
             gossip_socket.clone(),
-            &exit,
+            exit,
             request_sender,
             Recycler::default(),
             "gossip_receiver",
             1,
+            false,
         );
         let (response_sender, response_receiver) = channel();
         let (consume_sender, listen_receiver) = channel();
@@ -318,7 +319,7 @@ fn make_gossip_node(
         gossip_socket,
         None,
         should_check_duplicate_instance,
-        &exit,
+        exit,
     );
     (gossip_service, ip_echo, cluster_info)
 }

@@ -171,7 +171,7 @@ impl ServeRepair {
                         Self::run_window_request(
                             recycler,
                             from,
-                            &from_addr,
+                            from_addr,
                             blockstore,
                             &me.read().unwrap().my_info,
                             *slot,
@@ -186,7 +186,7 @@ impl ServeRepair {
                     (
                         Self::run_highest_window_request(
                             recycler,
-                            &from_addr,
+                            from_addr,
                             blockstore,
                             *slot,
                             *highest_index,
@@ -200,7 +200,7 @@ impl ServeRepair {
                     (
                         Self::run_orphan(
                             recycler,
-                            &from_addr,
+                            from_addr,
                             blockstore,
                             *slot,
                             MAX_ORPHAN_REPAIR_RESPONSES,
@@ -256,7 +256,7 @@ impl ServeRepair {
 
         let mut time = Measure::start("repair::handle_packets");
         for reqs in reqs_v {
-            Self::handle_packets(obj, &recycler, blockstore, reqs, response_sender, stats);
+            Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
         }
         time.stop();
         if total_packets >= *max_packets {
@@ -323,7 +323,7 @@ impl ServeRepair {
                         &mut max_packets,
                     );
                     match result {
-                        Err(Error::RecvTimeoutError(_)) | Ok(_) => {}
+                        Err(Error::RecvTimeout(_)) | Ok(_) => {}
                         Err(err) => info!("repair listener error: {:?}", err),
                     };
                     if exit.load(Ordering::Relaxed) {
@@ -411,7 +411,7 @@ impl ServeRepair {
         let (repair_peers, weighted_index) = match cache.entry(slot) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
-                let repair_peers = self.repair_peers(&repair_validators, slot);
+                let repair_peers = self.repair_peers(repair_validators, slot);
                 if repair_peers.is_empty() {
                     return Err(Error::from(ClusterInfoError::NoPeers));
                 }
@@ -515,7 +515,7 @@ impl ServeRepair {
 
             if let Some(packet) = packet {
                 inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
-                return Some(Packets::new_with_recycler_data(
+                return Some(Packets::new_unpinned_with_recycler_data(
                     recycler,
                     "run_window_request",
                     vec![packet],
@@ -555,7 +555,7 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(Packets::new_with_recycler_data(
+            return Some(Packets::new_unpinned_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
                 vec![packet],
@@ -572,7 +572,7 @@ impl ServeRepair {
         max_responses: usize,
         nonce: Nonce,
     ) -> Option<Packets> {
-        let mut res = Packets::new_with_recycler(recycler.clone(), 64, "run_orphan");
+        let mut res = Packets::new_unpinned_with_recycler(recycler.clone(), 64, "run_orphan");
         if let Some(blockstore) = blockstore {
             // Try to find the next "n" parent slots of the input slot
             while let Ok(Some(meta)) = blockstore.meta(slot) {
@@ -777,7 +777,7 @@ mod tests {
             &None,
             &mut outstanding_requests,
         );
-        assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
+        assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
         let serve_repair_addr = socketaddr!([127, 0, 0, 1], 1243);
         let nxt = ContactInfo {

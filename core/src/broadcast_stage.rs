@@ -191,15 +191,15 @@ impl BroadcastStage {
     fn handle_error(r: Result<()>, name: &str) -> Option<BroadcastStageReturnType> {
         if let Err(e) = r {
             match e {
-                Error::RecvTimeoutError(RecvTimeoutError::Disconnected)
-                | Error::SendError
-                | Error::RecvError(RecvError)
-                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Disconnected) => {
+                Error::RecvTimeout(RecvTimeoutError::Disconnected)
+                | Error::Send
+                | Error::Recv(RecvError)
+                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Disconnected) => {
                     return Some(BroadcastStageReturnType::ChannelDisconnected);
                 }
-                Error::RecvTimeoutError(RecvTimeoutError::Timeout)
-                | Error::CrossbeamRecvTimeoutError(CrossbeamRecvTimeoutError::Timeout) => (),
-                Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
+                Error::RecvTimeout(RecvTimeoutError::Timeout)
+                | Error::CrossbeamRecvTimeout(CrossbeamRecvTimeoutError::Timeout) => (),
+                Error::ClusterInfo(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
                 _ => {
                     inc_new_counter_error!("streamer-broadcaster-error", 1, 1);
                     error!("{} broadcaster error: {:?}", name, e);
@@ -408,7 +408,7 @@ pub fn broadcast_shreds(
     let packets: Vec<_> = shreds
         .iter()
         .map(|shred| {
-            let broadcast_index = weighted_best(&peers_and_stakes, shred.seed());
+            let broadcast_index = weighted_best(peers_and_stakes, shred.seed());
 
             (&shred.payload, &peers[broadcast_index].tvu)
         })
@@ -429,7 +429,7 @@ pub fn broadcast_shreds(
     send_mmsg_time.stop();
     transmit_stats.send_mmsg_elapsed += send_mmsg_time.as_us();
 
-    let num_live_peers = num_live_peers(&peers);
+    let num_live_peers = num_live_peers(peers);
     update_peer_stats(
         num_live_peers,
         broadcast_len as i64 + 1,

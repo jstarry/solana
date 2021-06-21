@@ -265,7 +265,7 @@ impl PruneData {
             destination: Pubkey::new_unique(),
             wallclock,
         };
-        prune_data.sign(&self_keypair);
+        prune_data.sign(self_keypair);
         prune_data
     }
 }
@@ -1170,10 +1170,16 @@ impl ClusterInfo {
             .map(map)
     }
 
+    /// Returns epoch-slots inserted since the given cursor.
+    /// Excludes entries from nodes with unkown or different shred version.
     pub fn get_epoch_slots(&self, cursor: &mut Cursor) -> Vec<EpochSlots> {
+        let self_shred_version = Some(self.my_shred_version());
         let gossip = self.gossip.read().unwrap();
         let entries = gossip.crds.get_epoch_slots(cursor);
         entries
+            .filter(|entry| {
+                gossip.crds.get_shred_version(&entry.value.pubkey()) == self_shred_version
+            })
             .map(|entry| match &entry.value.data {
                 CrdsData::EpochSlots(_, slots) => slots.clone(),
                 _ => panic!("this should not happen!"),
@@ -1319,7 +1325,7 @@ impl ClusterInfo {
                 if r_stake == l_stake {
                     peers[*r_info].id.cmp(&peers[*l_info].id)
                 } else {
-                    r_stake.cmp(&l_stake)
+                    r_stake.cmp(l_stake)
                 }
             })
             .collect();
@@ -1632,7 +1638,7 @@ impl ClusterInfo {
         generate_pull_requests: bool,
         require_stake_for_gossip: bool,
     ) -> Vec<(SocketAddr, Protocol)> {
-        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, &stakes);
+        self.trim_crds_table(CRDS_UNIQUE_PUBKEY_CAPACITY, stakes);
         // This will flush local pending push messages before generating
         // pull-request bloom filters, preventing pull responses to return the
         // same values back to the node itself. Note that packets will arrive
@@ -1643,7 +1649,7 @@ impl ClusterInfo {
             .add_relaxed(out.len() as u64);
         if generate_pull_requests {
             let (pings, pull_requests) =
-                self.new_pull_requests(&thread_pool, gossip_validators, stakes);
+                self.new_pull_requests(thread_pool, gossip_validators, stakes);
             self.stats
                 .packets_sent_pull_requests_count
                 .add_relaxed(pull_requests.len() as u64);
@@ -2042,7 +2048,8 @@ impl ClusterInfo {
             .process_pull_requests(callers.cloned(), timestamp());
         let output_size_limit =
             self.update_data_budget(stakes.len()) / PULL_RESPONSE_MIN_SERIALIZED_SIZE;
-        let mut packets = Packets::new_with_recycler(recycler.clone(), 64, "handle_pull_requests");
+        let mut packets =
+            Packets::new_unpinned_with_recycler(recycler.clone(), 64, "handle_pull_requests");
         let (caller_and_filters, addrs): (Vec<_>, Vec<_>) = {
             let mut rng = rand::thread_rng();
             let check_pull_request =
@@ -2186,7 +2193,7 @@ impl ClusterInfo {
         if !responses.is_empty() {
             let timeouts = {
                 let gossip = self.gossip.read().unwrap();
-                gossip.make_timeouts(&stakes, epoch_duration)
+                gossip.make_timeouts(stakes, epoch_duration)
             };
             for (from, data) in responses {
                 self.handle_pull_response(&from, data, &timeouts);
@@ -2203,9 +2210,10 @@ impl ClusterInfo {
     ) -> (usize, usize, usize) {
         let len = crds_values.len();
         trace!("PullResponse me: {} from: {} len={}", self.id, from, len);
-        let shred_version = self
-            .lookup_contact_info(from, |ci| ci.shred_version)
-            .unwrap_or(0);
+        let shred_version = {
+            let gossip = self.gossip.read().unwrap();
+            gossip.crds.get_shred_version(from).unwrap_or_default()
+        };
         Self::filter_by_shred_version(
             from,
             &mut crds_values,
@@ -2314,7 +2322,7 @@ impl ClusterInfo {
             None
         } else {
             let packets =
-                Packets::new_with_recycler_data(recycler, "handle_ping_messages", packets);
+                Packets::new_unpinned_with_recycler_data(recycler, "handle_ping_messages", packets);
             Some(packets)
         }
     }
@@ -2355,10 +2363,7 @@ impl ClusterInfo {
             let gossip = self.gossip.read().unwrap();
             messages
                 .iter()
-                .map(|(from, _)| match gossip.crds.get_contact_info(*from) {
-                    None => 0,
-                    Some(info) => info.shred_version,
-                })
+                .map(|(from, _)| gossip.crds.get_shred_version(from).unwrap_or_default())
                 .collect()
         };
         // Filter out data if the origin has different shred version.
@@ -3839,6 +3844,43 @@ mod tests {
 
         let slots = cluster_info.get_epoch_slots(&mut cursor);
         assert!(slots.is_empty());
+
+        // Test with different shred versions.
+        let mut rng = rand::thread_rng();
+        let node_pubkey = Pubkey::new_unique();
+        let mut node = ContactInfo::new_rand(&mut rng, Some(node_pubkey));
+        node.shred_version = 42;
+        let epoch_slots = EpochSlots::new_rand(&mut rng, Some(node_pubkey));
+        let entries = vec![
+            CrdsValue::new_unsigned(CrdsData::ContactInfo(node)),
+            CrdsValue::new_unsigned(CrdsData::EpochSlots(0, epoch_slots)),
+        ];
+        {
+            let mut gossip = cluster_info.gossip.write().unwrap();
+            for entry in entries {
+                assert!(gossip.crds.insert(entry, /*now=*/ 0).is_ok());
+            }
+        }
+        // Should exclude other node's epoch-slot because of different
+        // shred-version.
+        let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0].from, cluster_info.id);
+        // Match shred versions.
+        {
+            let mut node = cluster_info.my_contact_info.write().unwrap();
+            node.shred_version = 42;
+        }
+        cluster_info.push_self(
+            &HashMap::default(), // stakes
+            None,                // gossip validators
+        );
+        cluster_info.flush_push_queue();
+        // Should now include both epoch slots.
+        let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
+        assert_eq!(slots.len(), 2);
+        assert_eq!(slots[0].from, cluster_info.id);
+        assert_eq!(slots[1].from, node_pubkey);
     }
 
     #[test]

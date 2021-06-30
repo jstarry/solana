@@ -355,26 +355,6 @@ impl CompiledInstruction {
     pub fn program_id<'a>(&self, program_ids: &'a [Pubkey]) -> &'a Pubkey {
         &program_ids[self.program_id_index as usize]
     }
-
-    /// Visit each unique instruction account index once
-    pub fn visit_each_account(
-        &self,
-        work: &mut dyn FnMut(usize, usize) -> Result<(), InstructionError>,
-    ) -> Result<(), InstructionError> {
-        let mut unique_index = 0;
-        'root: for (i, account_index) in self.accounts.iter().enumerate() {
-            // Note: This is an O(n^2) algorithm,
-            // but performed on a very small slice and requires no heap allocations
-            for account_index_before in self.accounts[..i].iter() {
-                if account_index_before == account_index {
-                    continue 'root; // skip dups
-                }
-            }
-            work(unique_index, *account_index as usize)?;
-            unique_index += 1;
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]

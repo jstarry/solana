@@ -61,7 +61,7 @@ pub trait InvokeContext {
     /// Verify and update PreAccount state based on program execution
     fn verify_and_update(
         &mut self,
-        instruction: &CompiledInstruction,
+        account_indices: &[usize],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         write_privileges: &[bool],
     ) -> Result<(), InstructionError>;
@@ -399,7 +399,7 @@ impl<'a> InvokeContext for MockInvokeContext<'a> {
     }
     fn verify_and_update(
         &mut self,
-        _instruction: &CompiledInstruction,
+        _account_indices: &[usize],
         _accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         _write_pivileges: &[bool],
     ) -> Result<(), InstructionError> {

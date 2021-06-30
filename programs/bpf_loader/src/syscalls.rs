@@ -1537,7 +1537,7 @@ trait SyscallInvokeSigned<'a> {
     ) -> Result<Instruction, EbpfError<BpfError>>;
     fn translate_accounts(
         &self,
-        account_keys: &[Pubkey],
+        account_keys: &[&Pubkey],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1613,7 +1613,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedRust<'a> {
 
     fn translate_accounts(
         &self,
-        account_keys: &[Pubkey],
+        account_keys: &[&Pubkey],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -1950,7 +1950,7 @@ impl<'a> SyscallInvokeSigned<'a> for SyscallInvokeSignedC<'a> {
 
     fn translate_accounts(
         &self,
-        account_keys: &[Pubkey],
+        account_keys: &[&Pubkey],
         program_account_index: usize,
         account_infos_addr: u64,
         account_infos_len: u64,
@@ -2142,7 +2142,7 @@ impl<'a> SyscallObject<BpfError> for SyscallInvokeSignedC<'a> {
 }
 
 fn get_translated_accounts<'a, T, F>(
-    account_keys: &[Pubkey],
+    account_keys: &[&Pubkey],
     program_account_index: usize,
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
@@ -2166,14 +2166,14 @@ where
 
         if i == program_account_index || account.borrow().executable() {
             // Use the known account
-            accounts.push((**account_key, account));
+            accounts.push((***account_key, account));
             refs.push(None);
         } else if let Some(account_info) =
             account_info_keys
                 .iter()
                 .zip(account_infos)
                 .find_map(|(key, account_info)| {
-                    if key == account_key {
+                    if key == *account_key {
                         Some(account_info)
                     } else {
                         None
@@ -2181,7 +2181,7 @@ where
                 })
         {
             let (account, account_ref) = do_translate(account_info, invoke_context)?;
-            accounts.push((**account_key, account));
+            accounts.push((***account_key, account));
             refs.push(account_ref);
         } else {
             ic_msg!(
@@ -2291,108 +2291,87 @@ fn call<'a>(
     signers_seeds_len: u64,
     memory_mapping: &MemoryMapping,
 ) -> Result<u64, EbpfError<BpfError>> {
-    let (message, executables, accounts, account_refs, caller_write_privileges) = {
-        let invoke_context = syscall.get_context()?;
+    let invoke_context = syscall.get_context()?;
 
-        invoke_context
-            .get_compute_meter()
-            .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
+    invoke_context
+        .get_compute_meter()
+        .consume(invoke_context.get_bpf_compute_budget().invoke_units)?;
 
-        let enforce_aligned_host_addrs =
-            invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
+    let enforce_aligned_host_addrs =
+        invoke_context.is_feature_active(&enforce_aligned_host_addrs::id());
 
-        let caller_program_id = invoke_context
-            .get_caller()
-            .map_err(SyscallError::InstructionError)?;
+    let caller_program_id = invoke_context
+        .get_caller()
+        .map_err(SyscallError::InstructionError)?;
 
-        // Translate and verify caller's data
+    // Translate and verify caller's data
 
-        let instruction = syscall.translate_instruction(
-            instruction_addr,
-            memory_mapping,
-            enforce_aligned_host_addrs,
-        )?;
-        let signers = syscall.translate_signers(
-            caller_program_id,
-            signers_seeds_addr,
-            signers_seeds_len,
-            memory_mapping,
-            enforce_aligned_host_addrs,
-        )?;
-        let keyed_account_refs = invoke_context
-            .get_keyed_accounts()
-            .map_err(SyscallError::InstructionError)?
-            .iter()
-            .collect::<Vec<&KeyedAccount>>();
-        let (message, callee_program_id, callee_program_id_index) =
-            MessageProcessor::create_message(
-                &instruction,
-                &keyed_account_refs,
-                &signers,
-                &invoke_context,
-            )
-            .map_err(SyscallError::InstructionError)?;
-        let caller_write_privileges = message
-            .account_keys
-            .iter()
-            .map(|key| {
-                if let Some(keyed_account) = keyed_account_refs
-                    .iter()
-                    .find(|keyed_account| key == keyed_account.unsigned_key())
-                {
-                    keyed_account.is_writable()
-                } else {
-                    false
-                }
-            })
-            .collect::<Vec<bool>>();
-        check_authorized_program(&callee_program_id, &instruction.data)?;
-        let (accounts, account_refs) = syscall.translate_accounts(
-            &message.account_keys,
-            callee_program_id_index,
-            account_infos_addr,
-            account_infos_len,
-            memory_mapping,
-        )?;
-
-        // Construct executables
-
-        let program_account = accounts
-            .get(callee_program_id_index)
-            .ok_or_else(|| {
-                ic_msg!(invoke_context, "Unknown program {}", callee_program_id,);
-                SyscallError::InstructionError(InstructionError::MissingAccount)
-            })?
-            .1
-            .clone();
-        let programdata_executable =
-            get_upgradeable_executable(&callee_program_id, &program_account, &invoke_context)?;
-        let mut executables = vec![(callee_program_id, program_account)];
-        if let Some(executable) = programdata_executable {
-            executables.push(executable);
-        }
-
-        // Record the instruction
-
-        invoke_context.record_instruction(&instruction);
-
-        (
-            message,
-            executables,
-            accounts,
-            account_refs,
-            caller_write_privileges,
+    let translated_instruction = syscall.translate_instruction(
+        instruction_addr,
+        memory_mapping,
+        enforce_aligned_host_addrs,
+    )?;
+    let signers = syscall.translate_signers(
+        caller_program_id,
+        signers_seeds_addr,
+        signers_seeds_len,
+        memory_mapping,
+        enforce_aligned_host_addrs,
+    )?;
+    let keyed_account_refs = invoke_context
+        .get_keyed_accounts()
+        .map_err(SyscallError::InstructionError)?
+        .iter()
+        .collect::<Vec<&KeyedAccount>>();
+    let (instruction, account_details) =
+        MessageProcessor::create_runtime_instruction(
+            &translated_instruction,
+            &keyed_account_refs,
+            &signers,
+            &invoke_context,
         )
-    };
+        .map_err(SyscallError::InstructionError)?;
+    check_authorized_program(instruction.program_id, &translated_instruction.data)?;
+    let account_keys: Vec<_> = account_details.iter().map(|d| d.pubkey).collect();
+    let (accounts, account_refs) = syscall.translate_accounts(
+        &account_keys,
+        instruction.program_id_index,
+        account_infos_addr,
+        account_infos_len,
+        memory_mapping,
+    )?;
+
+    // Construct executables
+
+    let program_account = accounts
+        .get(instruction.program_id_index)
+        .ok_or_else(|| {
+            ic_msg!(invoke_context, "Unknown program {}", instruction.program_id_index,);
+            SyscallError::InstructionError(InstructionError::MissingAccount)
+        })?
+        .1
+        .clone();
+    let programdata_executable =
+        get_upgradeable_executable(&instruction.program_id, &program_account, &invoke_context)?;
+    let mut executables = vec![(*instruction.program_id, program_account)];
+    if let Some(executable) = programdata_executable {
+        executables.push(executable);
+    }
+
+    // Record the instruction
+    invoke_context.record_instruction(&translated_instruction);
 
     // Process instruction
+    let caller_write_privileges: Vec<_> = account_details.iter().map(|d| d.caller_writable).collect();
+    let callee_write_privileges: Vec<_> = account_details.iter().map(|d| d.callee_writable).collect();
 
     #[allow(clippy::deref_addrof)]
     match MessageProcessor::process_cross_program_instruction(
-        &message,
+        &instruction,
         &executables,
         &accounts,
         &caller_write_privileges,
+        &callee_write_privileges,
         *(&mut *(syscall.get_context_mut()?)),
     ) {
         Ok(()) => (),
@@ -2407,7 +2386,7 @@ fn call<'a>(
         for (i, ((_key, account), account_ref)) in accounts.iter().zip(account_refs).enumerate() {
             let account = account.borrow();
             if let Some(mut account_ref) = account_ref {
-                if message.is_writable(i) && !account.executable() {
+                if callee_write_privileges[i] && !account.executable() {
                     *account_ref.lamports = account.lamports();
                     *account_ref.owner = *account.owner();
                     if account_ref.data.len() != account.data().len() {

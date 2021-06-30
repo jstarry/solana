@@ -10,6 +10,7 @@ use crate::{
         TransactionExecutionResult,
     },
     blockhash_queue::BlockhashQueue,
+    message::RuntimeTransaction,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
 };
@@ -191,14 +192,13 @@ impl Accounts {
     fn load_transaction(
         &self,
         ancestors: &Ancestors,
-        tx: &Transaction,
+        tx: &RuntimeTransaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
     ) -> Result<LoadedTransaction> {
         // Copy all the accounts
-        let message = tx.message();
         if tx.signatures.is_empty() && fee != 0 {
             Err(TransactionError::MissingSignatureForFee)
         } else {
@@ -206,32 +206,32 @@ impl Accounts {
             // If a fee can pay for execution then the program will be scheduled
             let mut payer_index = None;
             let mut tx_rent: TransactionRent = 0;
-            let mut accounts = Vec::with_capacity(message.account_keys.len());
-            let mut account_deps = Vec::with_capacity(message.account_keys.len());
+            let mut accounts = Vec::with_capacity(tx.accounts.len());
+            let mut account_deps = Vec::with_capacity(tx.accounts.len());
             let mut rent_debits = RentDebits::default();
             let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
 
-            for (i, key) in message.account_keys.iter().enumerate() {
-                let account = if message.is_non_loader_key(i) {
+            for account_meta in tx.accounts.iter() {
+                let account = if tx.is_non_loader_key(account_meta.index) {
                     if payer_index.is_none() {
-                        payer_index = Some(i);
+                        payer_index = Some(account_meta.index);
                     }
 
-                    if solana_sdk::sysvar::instructions::check_id(key)
+                    if solana_sdk::sysvar::instructions::check_id(account_meta.pubkey)
                         && feature_set.is_active(&feature_set::instructions_sysvar_enabled::id())
                     {
-                        if message.is_writable(i) {
+                        if account_meta.is_writable {
                             return Err(TransactionError::InvalidAccountIndex);
                         }
-                        Self::construct_instructions_account(message)
+                        Self::construct_instructions_account(&tx.message)
                     } else {
                         let (account, rent) = self
                             .accounts_db
-                            .load_with_fixed_root(ancestors, key)
+                            .load_with_fixed_root(ancestors, account_meta.pubkey)
                             .map(|(mut account, _)| {
-                                if message.is_writable(i) {
+                                if account_meta.is_writable {
                                     let rent_due = rent_collector.collect_from_existing_account(
-                                        key,
+                                        account_meta.pubkey,
                                         &mut account,
                                         rent_for_sysvars,
                                     );
@@ -266,7 +266,7 @@ impl Accounts {
                         }
 
                         tx_rent += rent;
-                        rent_debits.push(key, rent, account.lamports());
+                        rent_debits.push(account_meta.pubkey, rent, account.lamports());
 
                         account
                     }
@@ -274,14 +274,14 @@ impl Accounts {
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
                 };
-                accounts.push((*key, account));
+                accounts.push((*account_meta.pubkey, account));
             }
-            debug_assert_eq!(accounts.len(), message.account_keys.len());
+            debug_assert_eq!(accounts.len(), tx.accounts.len());
             // Appends the account_deps at the end of the accounts,
             // this way they can be accessed in a uniform way.
             // At places where only the accounts are needed,
             // the account_deps are truncated using e.g:
-            // accounts.iter().take(message.account_keys.len())
+            // accounts.iter().take(tx.accounts.len())
             accounts.append(&mut account_deps);
 
             if let Some(payer_index) = payer_index {
@@ -314,19 +314,13 @@ impl Accounts {
                             .checked_sub_lamports(fee)
                             .map_err(|_| TransactionError::InsufficientFundsForFee)?;
 
-                        let message = tx.message();
-                        let loaders = message
+                        let loaders = tx
                             .instructions
                             .iter()
                             .map(|ix| {
-                                if message.account_keys.len() <= ix.program_id_index as usize {
-                                    error_counters.account_not_found += 1;
-                                    return Err(TransactionError::AccountNotFound);
-                                }
-                                let program_id = message.account_keys[ix.program_id_index as usize];
                                 self.load_executable_accounts(
                                     ancestors,
-                                    &program_id,
+                                    ix.program_id,
                                     error_counters,
                                 )
                             })
@@ -417,7 +411,7 @@ impl Accounts {
     pub fn load_accounts<'a>(
         &self,
         ancestors: &Ancestors,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         lock_results: Vec<TransactionCheckResult>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
@@ -432,11 +426,11 @@ impl Accounts {
                         .map(|nonce_rollback| nonce_rollback.fee_calculator())
                         .unwrap_or_else(|| {
                             hash_queue
-                                .get_fee_calculator(&tx.message().recent_blockhash)
+                                .get_fee_calculator(&tx.recent_blockhash)
                                 .cloned()
                         });
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        fee_calculator.calculate_fee(tx.message())
+                        fee_calculator.calculate_fee(&tx.message)
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
@@ -457,7 +451,7 @@ impl Accounts {
                     let nonce_rollback = if let Some(nonce_rollback) = nonce_rollback {
                         match NonceRollbackFull::from_partial(
                             nonce_rollback,
-                            tx.message(),
+                            tx,
                             &loaded_transaction.accounts,
                         ) {
                             Ok(nonce_rollback) => Some(nonce_rollback),
@@ -857,18 +851,12 @@ impl Accounts {
     /// same time
     #[must_use]
     #[allow(clippy::needless_collect)]
-    pub fn lock_accounts<'a>(&self, txs: impl Iterator<Item = &'a Transaction>) -> Vec<Result<()>> {
-        use solana_sdk::sanitize::Sanitize;
-        let keys: Vec<Result<_>> = txs
-            .map(|tx| {
-                tx.sanitize().map_err(TransactionError::from)?;
-
-                if Self::has_duplicates(&tx.message.account_keys) {
-                    return Err(TransactionError::AccountLoadedTwice);
-                }
-
-                Ok(tx.message().get_account_keys_by_lock_type())
-            })
+    pub fn lock_accounts<'a>(
+        &self,
+        messages: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+    ) -> Vec<Result<()>> {
+        let keys: Vec<Result<_>> = messages
+            .map(|message| Ok(message.get_account_keys_by_lock_type()))
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
@@ -885,7 +873,7 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         results: &[Result<()>],
     ) {
         let keys: Vec<_> = txs
@@ -894,7 +882,7 @@ impl Accounts {
                 Err(TransactionError::AccountInUse) => None,
                 Err(TransactionError::SanitizeFailure) => None,
                 Err(TransactionError::AccountLoadedTwice) => None,
-                _ => Some(tx.message.get_account_keys_by_lock_type()),
+                _ => Some(tx.get_account_keys_by_lock_type()),
             })
             .collect();
         let mut account_locks = self.account_locks.lock().unwrap();
@@ -910,7 +898,7 @@ impl Accounts {
     pub fn store_cached<'a>(
         &self,
         slot: Slot,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
@@ -944,7 +932,7 @@ impl Accounts {
 
     fn collect_accounts_to_store<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
@@ -975,12 +963,11 @@ impl Accounts {
                 (Err(_), _nonce_rollback) => continue,
             };
 
-            let message = &tx.message();
             let loaded_transaction = raccs.as_mut().unwrap();
             let mut fee_payer_index = None;
-            for (i, (key, account)) in (0..message.account_keys.len())
+            for (i, (key, account)) in (0..tx.accounts.len())
                 .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|(i, _account)| message.is_non_loader_key(*i))
+                .filter(|(i, _account)| tx.is_non_loader_key(*i))
             {
                 let is_nonce_account = prepare_if_nonce_account(
                     account,
@@ -994,7 +981,7 @@ impl Accounts {
                     fee_payer_index = Some(i);
                 }
                 let is_fee_payer = Some(i) == fee_payer_index;
-                if message.is_writable(i)
+                if tx.is_writable(i)
                     && (res.is_ok()
                         || (maybe_nonce_rollback.is_some() && (is_nonce_account || is_fee_payer)))
                 {

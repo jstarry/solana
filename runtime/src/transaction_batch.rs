@@ -1,13 +1,12 @@
-use crate::bank::Bank;
-use crate::hashed_transaction::HashedTransaction;
-use solana_sdk::transaction::{Result, Transaction};
+use crate::{bank::Bank, message::RuntimeTransaction};
+use solana_sdk::transaction::Result;
 use std::borrow::Cow;
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    hashed_txs: Cow<'b, [HashedTransaction<'b>]>,
+    hashed_txs: Cow<'b, [RuntimeTransaction<'b>]>,
     pub(crate) needs_unlock: bool,
 }
 
@@ -15,7 +14,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
         lock_results: Vec<Result<()>>,
         bank: &'a Bank,
-        hashed_txs: Cow<'b, [HashedTransaction<'b>]>,
+        hashed_txs: Cow<'b, [RuntimeTransaction<'b>]>,
     ) -> Self {
         assert_eq!(lock_results.len(), hashed_txs.len());
         Self {
@@ -30,12 +29,8 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         &self.lock_results
     }
 
-    pub fn hashed_transactions(&self) -> &[HashedTransaction] {
+    pub fn hashed_transactions(&self) -> &[RuntimeTransaction] {
         &self.hashed_txs
-    }
-
-    pub fn transactions_iter(&self) -> impl Iterator<Item = &Transaction> {
-        self.hashed_txs.iter().map(|h| h.transaction())
     }
 
     pub fn bank(&self) -> &Bank {
@@ -54,7 +49,7 @@ impl<'a, 'b> Drop for TransactionBatch<'a, 'b> {
 mod tests {
     use super::*;
     use crate::genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo};
-    use solana_sdk::{signature::Keypair, system_transaction};
+    use solana_sdk::{signature::Keypair, system_transaction, transaction::Transaction};
 
     #[test]
     fn test_transaction_batch() {

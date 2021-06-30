@@ -48,6 +48,7 @@ use crate::{
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
+    message::RuntimeTransaction,
     message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
     rent_collector::RentCollector,
     stake_weighted_timestamp::{
@@ -628,16 +629,16 @@ impl NonceRollbackFull {
     }
     pub fn from_partial(
         partial: NonceRollbackPartial,
-        message: &Message,
+        tx: &RuntimeTransaction,
         accounts: &[(Pubkey, AccountSharedData)],
     ) -> Result<Self> {
         let NonceRollbackPartial {
             nonce_address,
             nonce_account,
         } = partial;
-        let fee_payer = (0..message.account_keys.len()).find_map(|i| {
+        let fee_payer = (0..tx.accounts.len()).find_map(|i| {
             if let Some((k, a)) = &accounts.get(i) {
-                if message.is_non_loader_key(i) {
+                if tx.is_non_loader_key(i) {
                     return Some((k, a));
                 }
             }
@@ -2588,19 +2589,18 @@ impl Bank {
 
     fn update_transaction_statuses(
         &self,
-        hashed_txs: &[HashedTransaction],
+        hashed_txs: &[RuntimeTransaction],
         res: &[TransactionExecutionResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
         assert_eq!(hashed_txs.len(), res.len());
-        for (hashed_tx, (res, _nonce_rollback)) in hashed_txs.iter().zip(res) {
-            let tx = hashed_tx.transaction();
+        for (tx, (res, _nonce_rollback)) in hashed_txs.iter().zip(res) {
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
                 status_cache.insert(
-                    &tx.message().recent_blockhash,
-                    &hashed_tx.message_hash,
+                    &tx.recent_blockhash,
+                    &tx.hash,
                     self.slot(),
                     res.clone(),
                 );
@@ -2608,7 +2608,7 @@ impl Bank {
                 // can be queried by transaction signature over RPC. In the future, this should
                 // only be added for API nodes because voting validators don't need to do this.
                 status_cache.insert(
-                    &tx.message().recent_blockhash,
+                    &tx.recent_blockhash,
                     &tx.signatures[0],
                     self.slot(),
                     res.clone(),
@@ -2655,43 +2655,22 @@ impl Bank {
         &'a self,
         txs: impl Iterator<Item = &'b Transaction>,
     ) -> TransactionBatch<'a, 'b> {
-        let hashed_txs: Vec<HashedTransaction> = txs.map(HashedTransaction::from).collect();
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(hashed_txs.as_transactions_iter());
-        TransactionBatch::new(lock_results, self, Cow::Owned(hashed_txs))
+        unimplemented!()
     }
 
     pub fn prepare_hashed_batch<'a, 'b>(
         &'a self,
-        hashed_txs: &'b [HashedTransaction],
+        txs: &'b [RuntimeTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(hashed_txs.as_transactions_iter());
-        TransactionBatch::new(lock_results, self, Cow::Borrowed(hashed_txs))
+        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
+        TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
     pub(crate) fn prepare_simulation_batch<'a, 'b>(
         &'a self,
-        tx: &'b Transaction,
+        tx: RuntimeTransaction<'b>,
     ) -> TransactionBatch<'a, 'b> {
-        let check_transaction = |tx: &Transaction| -> Result<()> {
-            tx.sanitize().map_err(TransactionError::from)?;
-            if Accounts::has_duplicates(&tx.message.account_keys) {
-                Err(TransactionError::AccountLoadedTwice)
-            } else {
-                Ok(())
-            }
-        };
-
-        let mut batch = TransactionBatch::new(
-            vec![check_transaction(tx)],
-            self,
-            Cow::Owned(vec![HashedTransaction::from(tx)]),
-        );
+        let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![tx]));
         batch.needs_unlock = false;
         batch
     }
@@ -2707,7 +2686,9 @@ impl Bank {
     ) {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        let batch = self.prepare_simulation_batch(transaction);
+        // todo handle error
+        let tx = RuntimeTransaction::try_from(transaction).unwrap();
+        let batch = self.prepare_simulation_batch(tx);
 
         let mut timings = ExecuteTimings::default();
 
@@ -2751,7 +2732,7 @@ impl Bank {
             batch.needs_unlock = false;
             self.rc
                 .accounts
-                .unlock_accounts(batch.transactions_iter(), batch.lock_results())
+                .unlock_accounts(batch.hashed_transactions().iter(), batch.lock_results())
         }
     }
 
@@ -2765,7 +2746,7 @@ impl Bank {
 
     fn check_age<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
@@ -2774,8 +2755,7 @@ impl Bank {
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
-                    let message = tx.message();
-                    let hash_age = hash_queue.check_hash_age(&message.recent_blockhash, max_age);
+                    let hash_age = hash_queue.check_hash_age(&tx.recent_blockhash, max_age);
                     if hash_age == Some(true) {
                         (Ok(()), None)
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(tx) {
@@ -2795,11 +2775,11 @@ impl Bank {
 
     fn is_tx_already_processed(
         &self,
-        hashed_tx: &HashedTransaction,
+        hashed_tx: &RuntimeTransaction,
         status_cache: &StatusCache<Result<()>>,
     ) -> bool {
-        let key = &hashed_tx.message_hash;
-        let transaction_blockhash = &hashed_tx.transaction().message().recent_blockhash;
+        let key = &hashed_tx.hash;
+        let transaction_blockhash = &hashed_tx.recent_blockhash;
         status_cache
             .get_status(key, transaction_blockhash, &self.ancestors)
             .is_some()
@@ -2807,7 +2787,7 @@ impl Bank {
 
     fn check_status_cache(
         &self,
-        hashed_txs: &[HashedTransaction],
+        hashed_txs: &[RuntimeTransaction],
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
@@ -2828,7 +2808,7 @@ impl Bank {
 
     fn filter_by_vote_transactions<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
@@ -2854,16 +2834,20 @@ impl Bank {
             .check_hash_age(hash, max_age)
     }
 
-    pub fn check_tx_durable_nonce(&self, tx: &Transaction) -> Option<(Pubkey, AccountSharedData)> {
-        transaction::uses_durable_nonce(tx)
-            .and_then(|nonce_ix| transaction::get_nonce_pubkey_from_instruction(nonce_ix, tx))
-            .and_then(|nonce_pubkey| {
-                self.get_account(nonce_pubkey)
-                    .map(|acc| (*nonce_pubkey, acc))
-            })
-            .filter(|(_pubkey, nonce_account)| {
-                nonce_account::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
-            })
+    pub fn check_tx_durable_nonce(
+        &self,
+        tx: &RuntimeTransaction,
+    ) -> Option<(Pubkey, AccountSharedData)> {
+        todo!()
+        // transaction::uses_durable_nonce(tx)
+        //     .and_then(|nonce_ix| transaction::get_nonce_pubkey_from_instruction(nonce_ix, tx))
+        //     .and_then(|nonce_pubkey| {
+        //         self.get_account(nonce_pubkey)
+        //             .map(|acc| (*nonce_pubkey, acc))
+        //     })
+        //     .filter(|(_pubkey, nonce_account)| {
+        //         nonce_account::verify_nonce_account(nonce_account, &tx.message().recent_blockhash)
+        //     })
     }
 
     // Determine if the bank is currently in an upgrade epoch, where only votes are permitted
@@ -2881,13 +2865,13 @@ impl Bank {
 
     pub fn check_transactions(
         &self,
-        hashed_txs: &[HashedTransaction],
+        hashed_txs: &[RuntimeTransaction],
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
         let age_results = self.check_age(
-            hashed_txs.as_transactions_iter(),
+            hashed_txs.iter(),
             lock_results.to_vec(),
             max_age,
             &mut error_counters,
@@ -2895,11 +2879,7 @@ impl Bank {
         let cache_results = self.check_status_cache(hashed_txs, age_results, &mut error_counters);
         if self.upgrade_epoch() {
             // Reject all non-vote transactions
-            self.filter_by_vote_transactions(
-                hashed_txs.as_transactions_iter(),
-                cache_results,
-                &mut error_counters,
-            )
+            self.filter_by_vote_transactions(hashed_txs.iter(), cache_results, &mut error_counters)
         } else {
             cache_results
         }
@@ -2907,10 +2887,10 @@ impl Bank {
 
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
         let mut balances: TransactionBalances = vec![];
-        for transaction in batch.transactions_iter() {
+        for transaction in batch.hashed_transactions() {
             let mut transaction_balances: Vec<u64> = vec![];
-            for account_key in transaction.message.account_keys.iter() {
-                transaction_balances.push(self.get_balance(account_key));
+            for account in transaction.accounts.iter() {
+                transaction_balances.push(self.get_balance(account.pubkey));
             }
             balances.push(transaction_balances);
         }
@@ -3162,7 +3142,7 @@ impl Bank {
         let mut load_time = Measure::start("accounts_load");
         let mut loaded_txs = self.rc.accounts.load_accounts(
             &self.ancestors,
-            hashed_txs.as_transactions_iter(),
+            hashed_txs.iter(),
             check_results,
             &self.blockhash_queue.read().unwrap(),
             &mut error_counters,
@@ -3183,7 +3163,7 @@ impl Bank {
 
         let executed: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
-            .zip(hashed_txs.as_transactions_iter())
+            .zip(hashed_txs.iter())
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce_rollback) => {
                     inner_instructions.push(None);
@@ -3191,7 +3171,7 @@ impl Bank {
                     (Err(e.clone()), None)
                 }
                 (Ok(loaded_transaction), nonce_rollback) => {
-                    signature_count += u64::from(tx.message().header.num_required_signatures);
+                    signature_count += tx.signatures.len() as u64;
                     let executors = self.get_executors(&tx.message, &loaded_transaction.loaders);
 
                     let (account_refcells, loader_refcells) = Self::accounts_to_refcells(
@@ -3215,7 +3195,7 @@ impl Bank {
                     };
 
                     let mut process_result = self.message_processor.process_message(
-                        tx.message(),
+                        tx,
                         &loader_refcells,
                         &account_refcells,
                         &self.rent_collector,
@@ -3281,11 +3261,10 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), hashed_tx)) in executed.iter().zip(hashed_txs).enumerate() {
-            let tx = hashed_tx.transaction();
+        for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(hashed_txs).enumerate() {
             if let Some(debug_keys) = &self.transaction_debug_keys {
-                for key in &tx.message.account_keys {
-                    if debug_keys.contains(key) {
+                for account_meta in &tx.accounts {
+                    if debug_keys.contains(account_meta.pubkey) {
                         info!("slot: {} result: {:?} tx: {:?}", self.slot, r, tx);
                         break;
                     }
@@ -3368,7 +3347,7 @@ impl Bank {
 
     fn filter_program_errors_and_collect_fee<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         executed: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
@@ -3384,16 +3363,13 @@ impl Bank {
                     .unwrap_or_else(|| {
                         (
                             hash_queue
-                                .get_fee_calculator(&tx.message().recent_blockhash)
+                                .get_fee_calculator(&tx.recent_blockhash)
                                 .cloned(),
                             false,
                         )
                     });
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
-
-                let fee = fee_calculator.calculate_fee(tx.message());
-
-                let message = tx.message();
+                let fee = fee_calculator.calculate_fee(&tx.message);
                 match *res {
                     Err(TransactionError::InstructionError(_, _)) => {
                         // credit the transaction fee even in case of InstructionError
@@ -3403,7 +3379,7 @@ impl Bank {
                         // ...except nonce accounts, which will have their post-load,
                         // pre-execute account state stored
                         if !is_durable_nonce {
-                            self.withdraw(&message.account_keys[0], fee)?;
+                            self.withdraw(&tx.accounts[0].pubkey, fee)?;
                         }
                         fees += fee;
                         Ok(())
@@ -3423,7 +3399,7 @@ impl Bank {
 
     pub fn commit_transactions(
         &self,
-        hashed_txs: &[HashedTransaction],
+        hashed_txs: &[RuntimeTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         executed: &[TransactionExecutionResult],
         tx_count: u64,
@@ -3461,7 +3437,7 @@ impl Bank {
         let mut write_time = Measure::start("write_time");
         self.rc.accounts.store_cached(
             self.slot(),
-            hashed_txs.as_transactions_iter(),
+            hashed_txs.iter(),
             executed,
             loaded_txs,
             &self.rent_collector,
@@ -3472,7 +3448,7 @@ impl Bank {
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
         let overwritten_vote_accounts =
-            self.update_cached_accounts(hashed_txs.as_transactions_iter(), executed, loaded_txs);
+            self.update_cached_accounts(hashed_txs.iter(), executed, loaded_txs);
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -3484,7 +3460,7 @@ impl Bank {
         timings.store_us += write_time.as_us();
         self.update_transaction_statuses(hashed_txs, executed);
         let fee_collection_results =
-            self.filter_program_errors_and_collect_fee(hashed_txs.as_transactions_iter(), executed);
+            self.filter_program_errors_and_collect_fee(hashed_txs.iter(), executed);
 
         TransactionResults {
             fee_collection_results,
@@ -4853,7 +4829,7 @@ impl Bank {
     /// a bank-level cache of vote accounts
     fn update_cached_accounts<'a>(
         &self,
-        txs: impl Iterator<Item = &'a Transaction>,
+        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
         res: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
     ) -> Vec<OverwrittenVoteAccount> {
@@ -4864,10 +4840,8 @@ impl Bank {
                 continue;
             }
 
-            let message = &tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
-
-            for (_i, (pubkey, account)) in (0..message.account_keys.len())
+            for (_i, (pubkey, account)) in (0..tx.accounts.len())
                 .zip(loaded_transaction.accounts.iter())
                 .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
             {
@@ -5435,12 +5409,10 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-fn is_simple_vote_transaction(transaction: &Transaction) -> bool {
-    if transaction.message.instructions.len() == 1 {
-        let instruction = &transaction.message.instructions[0];
-        let program_pubkey =
-            transaction.message.account_keys[instruction.program_id_index as usize];
-        if program_pubkey == solana_vote_program::id() {
+fn is_simple_vote_transaction(transaction: &RuntimeTransaction) -> bool {
+    if transaction.instructions.len() == 1 {
+        let instruction = &transaction.instructions[0];
+        if instruction.program_id == &solana_vote_program::id() {
             if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
             {
                 return matches!(

@@ -99,7 +99,7 @@ mod tests {
         assert!(budget.take(2));
         assert!(!budget.take(3)); // budget = 2, out of budget.
 
-        assert_eq!(budget.update(30, |_| 10), 2); // no update, budget = 2.
+        assert_eq!(budget.update(1000, |_| 10), 2); // no update, budget = 2.
         assert!(!budget.take(3)); // budget = 2, out of budget.
 
         std::thread::sleep(Duration::from_millis(50));

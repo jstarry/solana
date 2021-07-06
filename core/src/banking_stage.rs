@@ -1031,7 +1031,7 @@ impl BankingStage {
         let valid_transactions = valid_txs
             .iter()
             .enumerate()
-            .filter_map(|(index, (x, _h))| if x.is_ok() { Some(index) } else { None })
+            .filter_map(|(index, x)| if x.is_ok() { Some(index) } else { None })
             .collect_vec();
 
         valid_transactions

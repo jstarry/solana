@@ -487,7 +487,7 @@ impl StatusCacheRc {
     }
 }
 
-pub type TransactionCheckResult = (Result<()>, Option<NonceRollbackPartial>);
+pub type TransactionCheckResult = Result<Option<NonceRollbackPartial>>;
 pub type TransactionExecutionResult = (Result<()>, Option<NonceRollbackFull>);
 pub struct TransactionResults {
     pub fee_collection_results: Vec<Result<()>>,
@@ -2715,9 +2715,10 @@ impl Bank {
             .into_iter()
             .next()
             .unwrap()
-            .0
             .ok()
-            .map(|loaded_transaction| loaded_transaction.accounts.into_iter().collect::<Vec<_>>())
+            .map(|(loaded_transaction, _nonce_rollback)| {
+                loaded_transaction.accounts.into_iter().collect::<Vec<_>>()
+            })
             .unwrap_or_default();
 
         debug!("simulate_transaction: {:?}", timings);
@@ -2751,23 +2752,22 @@ impl Bank {
     ) -> Vec<TransactionCheckResult> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         txs.zip(lock_results)
-            .map(|(tx, lock_res)| match lock_res {
-                Ok(()) => {
+            .map(|(tx, lock_res)| {
+                lock_res.and_then(|_| {
                     let message = tx.message();
                     let hash_age = hash_queue.check_hash_age(&message.recent_blockhash, max_age);
                     if hash_age == Some(true) {
-                        (Ok(()), None)
+                        Ok(None)
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(tx) {
-                        (Ok(()), Some(NonceRollbackPartial::new(pubkey, acc)))
+                        Ok(Some(NonceRollbackPartial::new(pubkey, acc)))
                     } else if hash_age == Some(false) {
                         error_counters.blockhash_too_old += 1;
-                        (Err(TransactionError::BlockhashNotFound), None)
+                        Err(TransactionError::BlockhashNotFound)
                     } else {
                         error_counters.blockhash_not_found += 1;
-                        (Err(TransactionError::BlockhashNotFound), None)
+                        Err(TransactionError::BlockhashNotFound)
                     }
-                }
-                Err(e) => (Err(e), None),
+                })
             })
             .collect()
     }
@@ -2794,13 +2794,13 @@ impl Bank {
         hashed_txs
             .iter()
             .zip(lock_results)
-            .map(|(hashed_tx, (lock_res, nonce_rollback))| {
+            .map(|(hashed_tx, lock_res)| {
                 if lock_res.is_ok() && self.is_tx_already_processed(hashed_tx, &rcache) {
                     error_counters.already_processed += 1;
-                    return (Err(TransactionError::AlreadyProcessed), None);
+                    Err(TransactionError::AlreadyProcessed)
+                } else {
+                    lock_res
                 }
-
-                (lock_res, nonce_rollback)
             })
             .collect()
     }
@@ -2813,15 +2813,12 @@ impl Bank {
     ) -> Vec<TransactionCheckResult> {
         txs.zip(lock_results)
             .map(|(tx, lock_res)| {
-                if lock_res.0.is_ok() {
-                    if is_simple_vote_transaction(tx) {
-                        return lock_res;
-                    }
-
+                if lock_res.is_ok() && !is_simple_vote_transaction(tx) {
                     error_counters.not_allowed_during_cluster_maintenance += 1;
-                    return (Err(TransactionError::ClusterMaintenance), lock_res.1);
+                    Err(TransactionError::ClusterMaintenance)
+                } else {
+                    lock_res
                 }
-                lock_res
             })
             .collect()
     }
@@ -3164,12 +3161,12 @@ impl Bank {
             .iter_mut()
             .zip(hashed_txs.as_transactions_iter())
             .map(|(accs, tx)| match accs {
-                (Err(e), _nonce_rollback) => {
+                Err(e) => (Err(e.clone()), None),
                     inner_instructions.push(None);
                     transaction_log_messages.push(None);
                     (Err(e.clone()), None)
                 }
-                (Ok(loaded_transaction), nonce_rollback) => {
+                Ok((loaded_transaction, nonce_rollback)) => {
                     signature_count += u64::from(tx.message().header.num_required_signatures);
                     let executors = self.get_executors(&tx.message, &loaded_transaction.loaders);
 
@@ -3639,14 +3636,14 @@ impl Bank {
     ) -> Vec<RentDebits> {
         let mut collected_rent: u64 = 0;
         let mut rent_debits: Vec<RentDebits> = Vec::with_capacity(loaded_txs.len());
-        for (i, (raccs, _nonce_rollback)) in loaded_txs.iter_mut().enumerate() {
+        for (i, raccs) in loaded_txs.iter_mut().enumerate() {
             let (res, _nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 rent_debits.push(RentDebits::default());
                 continue;
             }
 
-            let loaded_transaction = raccs.as_mut().unwrap();
+            let (loaded_transaction, _nonce_rollback) = raccs.as_mut().unwrap();
 
             collected_rent += loaded_transaction.rent;
             rent_debits.push(mem::take(&mut loaded_transaction.rent_debits));
@@ -4840,14 +4837,14 @@ impl Bank {
         loaded_txs: &[TransactionLoadResult],
     ) -> Vec<OverwrittenVoteAccount> {
         let mut overwritten_vote_accounts = vec![];
-        for (i, ((raccs, _load_nonce_rollback), tx)) in loaded_txs.iter().zip(txs).enumerate() {
+        for (i, (raccs, tx)) in loaded_txs.iter().zip(txs).enumerate() {
             let (res, _res_nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
                 continue;
             }
 
             let message = &tx.message();
-            let loaded_transaction = raccs.as_ref().unwrap();
+            let (loaded_transaction, _nonce_rollback) = raccs.as_ref().unwrap();
 
             for (_i, (pubkey, account)) in (0..message.account_keys.len())
                 .zip(loaded_transaction.accounts.iter())

@@ -4676,14 +4676,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-failure-program"
-version = "1.8.0"
-dependencies = [
- "solana-runtime",
- "solana-sdk",
-]
-
-[[package]]
 name = "solana-faucet"
 version = "1.8.0"
 dependencies = [
@@ -5136,18 +5128,6 @@ dependencies = [
  "log 0.4.14",
  "reqwest",
  "serde_json",
-]
-
-[[package]]
-name = "solana-ownable"
-version = "1.8.0"
-dependencies = [
- "bincode",
- "num-derive",
- "num-traits",
- "solana-runtime",
- "solana-sdk",
- "thiserror",
 ]
 
 [[package]]

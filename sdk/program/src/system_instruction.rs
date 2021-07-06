@@ -1,6 +1,6 @@
 use crate::{
     decode_error::DecodeError,
-    instruction::{AccountMeta, Instruction},
+    instruction::{AccountMeta, Instruction, InstructionError},
     nonce,
     pubkey::Pubkey,
     system_program,
@@ -23,6 +23,12 @@ pub enum SystemError {
     MaxSeedLengthExceeded,
     #[error("provided address does not match addressed derived from seed")]
     AddressWithSeedMismatch,
+    #[error("advancing stored nonce requires a populated RecentBlockhashes sysvar")]
+    NonceNoRecentBlockhashes,
+    #[error("stored nonce is still in recent_blockhashes")]
+    NonceBlockhashNotExpired,
+    #[error("specified nonce does not match stored nonce")]
+    NonceUnexpectedBlockhashValue,
 }
 
 impl<T> DecodeError<T> for SystemError {
@@ -41,6 +47,19 @@ pub enum NonceError {
     UnexpectedValue,
     #[error("cannot handle request in current account state")]
     BadAccountState,
+}
+
+pub fn nonce_to_system_error(error: NonceError, use_system_variant: bool) -> InstructionError {
+    if use_system_variant {
+        match error {
+            NonceError::NoRecentBlockhashes => SystemError::NonceNoRecentBlockhashes.into(),
+            NonceError::NotExpired => SystemError::NonceBlockhashNotExpired.into(),
+            NonceError::UnexpectedValue => SystemError::NonceUnexpectedBlockhashValue.into(),
+            NonceError::BadAccountState => InstructionError::InvalidAccountData,
+        }
+    } else {
+        error.into()
+    }
 }
 
 impl<E> DecodeError<E> for NonceError {
@@ -553,6 +572,42 @@ mod tests {
         assert_eq!(
             "Custom(3): NonceError::BadAccountState - cannot handle request in current account state",
             pretty_err::<NonceError>(NonceError::BadAccountState.into())
+        );
+    }
+
+    #[test]
+    fn test_nonce_to_system_error() {
+        assert_eq!(
+            nonce_to_system_error(NonceError::NoRecentBlockhashes, false),
+            NonceError::NoRecentBlockhashes.into(),
+        );
+        assert_eq!(
+            nonce_to_system_error(NonceError::NotExpired, false),
+            NonceError::NotExpired.into(),
+        );
+        assert_eq!(
+            nonce_to_system_error(NonceError::UnexpectedValue, false),
+            NonceError::UnexpectedValue.into(),
+        );
+        assert_eq!(
+            nonce_to_system_error(NonceError::BadAccountState, false),
+            NonceError::BadAccountState.into(),
+        );
+        assert_eq!(
+            nonce_to_system_error(NonceError::NoRecentBlockhashes, true),
+            SystemError::NonceNoRecentBlockhashes.into(),
+        );
+        assert_eq!(
+            nonce_to_system_error(NonceError::NotExpired, true),
+            SystemError::NonceBlockhashNotExpired.into(),
+        );
+        assert_eq!(
+            nonce_to_system_error(NonceError::UnexpectedValue, true),
+            SystemError::NonceUnexpectedBlockhashValue.into(),
+        );
+        assert_eq!(
+            nonce_to_system_error(NonceError::BadAccountState, true),
+            InstructionError::InvalidAccountData,
         );
     }
 }

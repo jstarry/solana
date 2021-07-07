@@ -29,6 +29,7 @@ pub mod hash;
 pub mod inflation;
 pub mod keyed_account;
 pub mod log;
+pub mod message;
 pub mod native_loader;
 pub mod nonce_account;
 pub mod nonce_keyed_account;

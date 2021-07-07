@@ -179,7 +179,7 @@ impl Accounts {
     }
 
     fn construct_instructions_account(message: &Message) -> AccountSharedData {
-        let mut data = message.serialize_instructions();
+        let mut data = message.serialize_to_instructions_sysvar();
         // add room for current instruction index.
         data.resize(data.len() + 2, 0);
         AccountSharedData::from(Account {
@@ -437,7 +437,8 @@ impl Accounts {
                                 .cloned()
                         });
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        fee_calculator.calculate_fee(tx.message())
+                        let num_signatures = tx.message().count_signatures();
+                        fee_calculator.calculate_fee(num_signatures)
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
@@ -1276,7 +1277,10 @@ mod tests {
         );
 
         let fee_calculator = FeeCalculator::new(10);
-        assert_eq!(fee_calculator.calculate_fee(tx.message()), 10);
+        assert_eq!(
+            fee_calculator.calculate_fee(tx.message().count_signatures()),
+            10
+        );
 
         let loaded_accounts =
             load_accounts_with_fee(tx, &accounts, &fee_calculator, &mut error_counters);

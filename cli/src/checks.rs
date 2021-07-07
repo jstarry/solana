@@ -101,7 +101,7 @@ pub fn check_account_for_spend_multiple_fees_with_commitment(
 pub fn calculate_fee(fee_calculator: &FeeCalculator, messages: &[&Message]) -> u64 {
     messages
         .iter()
-        .map(|message| fee_calculator.calculate_fee(message))
+        .map(|message| fee_calculator.calculate_fee(message.count_signatures()))
         .sum()
 }
 

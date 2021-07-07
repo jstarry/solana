@@ -366,7 +366,7 @@ fn execute_transactions(bank: &Bank, txs: &[Transaction]) -> Vec<ConfirmedTransa
                 .map(|nonce_rollback| nonce_rollback.fee_calculator())
                 .unwrap_or_else(|| bank.get_fee_calculator(&tx.message().recent_blockhash))
                 .expect("FeeCalculator must exist");
-            let fee = fee_calculator.calculate_fee(tx.message());
+            let fee = fee_calculator.calculate_fee(tx.message().count_signatures());
 
             let inner_instructions = inner_instructions.map(|inner_instructions| {
                 inner_instructions

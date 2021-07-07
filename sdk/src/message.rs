@@ -2,15 +2,13 @@
 //! A library for generating a message from a sequence of instructions
 
 use crate::sanitize::{Sanitize, SanitizeError};
-use crate::serialize_utils::{
-    append_slice, append_u16, append_u8, read_pubkey, read_slice, read_u16, read_u8,
-};
+use crate::serialize_utils::{append_slice, append_u16, append_u8};
 use crate::{
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     hash::Hash,
     instruction::{AccountMeta, CompiledInstruction, Instruction},
     pubkey::Pubkey,
-    short_vec, system_instruction, system_program, sysvar,
+    secp256k1_program, short_vec, system_instruction, system_program, sysvar,
 };
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -315,14 +313,12 @@ impl Message {
     }
 
     /// Compute the blake3 hash of this transaction's message
-    #[cfg(not(target_arch = "bpf"))]
     pub fn hash(&self) -> Hash {
         let message_bytes = self.serialize();
         Self::hash_raw_message(&message_bytes)
     }
 
     /// Compute the blake3 hash of a raw transaction message
-    #[cfg(not(target_arch = "bpf"))]
     pub fn hash_raw_message(message_bytes: &[u8]) -> Hash {
         use blake3::traits::digest::Digest;
         let mut hasher = blake3::Hasher::new();
@@ -337,6 +333,23 @@ impl Message {
 
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(self).unwrap()
+    }
+
+    /// Count the number of ed25519 and secp256k1 signatures
+    pub fn count_signatures(&self) -> u64 {
+        let mut num_secp256k1_signatures: u64 = 0;
+        for instruction in &self.instructions {
+            let program_index = instruction.program_id_index as usize;
+            // Transaction may not be sanitized here
+            if program_index < self.account_keys.len() {
+                let id = self.account_keys[program_index];
+                if secp256k1_program::check_id(&id) && !instruction.data.is_empty() {
+                    num_secp256k1_signatures += instruction.data[0] as u64;
+                }
+            }
+        }
+
+        u64::from(self.header.num_required_signatures) + num_secp256k1_signatures
     }
 
     pub fn program_id(&self, instruction_index: usize) -> Option<&Pubkey> {
@@ -420,20 +433,25 @@ impl Message {
         (writable_keys, readonly_keys)
     }
 
-    // First encode the number of instructions:
-    // [0..2 - num_instructions
-    //
-    // Then a table of offsets of where to find them in the data
-    //  3..2 * num_instructions table of instruction offsets
-    //
-    // Each instruction is then encoded as:
-    //   0..2 - num_accounts
-    //   2 - meta_byte -> (bit 0 signer, bit 1 is_writable)
-    //   3..35 - pubkey - 32 bytes
-    //   35..67 - program_id
-    //   67..69 - data len - u16
-    //   69..data_len - data
-    pub fn serialize_instructions(&self) -> Vec<u8> {
+    /// Encodes the message instructions into a raw byte vector that is
+    /// provided to invoked programs through the instructions sysvar.
+    ///
+    /// # Encoding scheme
+    ///
+    /// First encode the number of instructions:
+    /// * 0..2 - num_instructions
+    ///
+    /// Then a table of offsets of where to find them in the data
+    /// * 3..2 * num_instructions table of instruction offsets
+    ///
+    /// Each instruction is then encoded as:
+    /// * 0..2 - num_accounts
+    /// * 2 - meta_byte -> (bit 0 signer, bit 1 is_writable)
+    /// * 3..35 - pubkey - 32 bytes
+    /// * 35..67 - program_id
+    /// * 67..69 - data len - u16
+    /// * 69..data_len - data
+    pub fn serialize_to_instructions_sysvar(&self) -> Vec<u8> {
         // 64 bytes is a reasonable guess, calculating exactly is slower in benchmarks
         let mut data = Vec::with_capacity(self.instructions.len() * (32 * 2));
         append_u16(&mut data, self.instructions.len() as u16);
@@ -451,10 +469,10 @@ impl Message {
                 let is_writable = self.is_writable(account_index);
                 let mut meta_byte = 0;
                 if is_signer {
-                    meta_byte |= 1 << Self::IS_SIGNER_BIT;
+                    meta_byte |= 1 << sysvar::instructions::IS_SIGNER_BIT;
                 }
                 if is_writable {
-                    meta_byte |= 1 << Self::IS_WRITABLE_BIT;
+                    meta_byte |= 1 << sysvar::instructions::IS_WRITABLE_BIT;
                 }
                 append_u8(&mut data, meta_byte);
                 append_slice(&mut data, self.account_keys[account_index].as_ref());
@@ -466,53 +484,6 @@ impl Message {
             append_slice(&mut data, &instruction.data);
         }
         data
-    }
-
-    const IS_SIGNER_BIT: usize = 0;
-    const IS_WRITABLE_BIT: usize = 1;
-
-    pub fn deserialize_instruction(
-        index: usize,
-        data: &[u8],
-    ) -> Result<Instruction, SanitizeError> {
-        let mut current = 0;
-        let num_instructions = read_u16(&mut current, data)?;
-        if index >= num_instructions as usize {
-            return Err(SanitizeError::IndexOutOfBounds);
-        }
-
-        // index into the instruction byte-offset table.
-        current += index * 2;
-        let start = read_u16(&mut current, data)?;
-
-        current = start as usize;
-        let num_accounts = read_u16(&mut current, data)?;
-        let mut accounts = Vec::with_capacity(num_accounts as usize);
-        for _ in 0..num_accounts {
-            let meta_byte = read_u8(&mut current, data)?;
-            let mut is_signer = false;
-            let mut is_writable = false;
-            if meta_byte & (1 << Self::IS_SIGNER_BIT) != 0 {
-                is_signer = true;
-            }
-            if meta_byte & (1 << Self::IS_WRITABLE_BIT) != 0 {
-                is_writable = true;
-            }
-            let pubkey = read_pubkey(&mut current, data)?;
-            accounts.push(AccountMeta {
-                pubkey,
-                is_signer,
-                is_writable,
-            });
-        }
-        let program_id = read_pubkey(&mut current, data)?;
-        let data_len = read_u16(&mut current, data)?;
-        let data = read_slice(&mut current, data, data_len as usize)?;
-        Ok(Instruction {
-            program_id,
-            accounts,
-            data,
-        })
     }
 
     pub fn signer_keys(&self) -> Vec<&Pubkey> {
@@ -950,10 +921,10 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_to_instructions_sysvar();
         for (i, instruction) in instructions.iter().enumerate() {
             assert_eq!(
-                Message::deserialize_instruction(i, &serialized).unwrap(),
+                sysvar::instructions::load_instruction_at(i, &serialized).unwrap(),
                 *instruction
             );
         }
@@ -971,9 +942,9 @@ mod tests {
         ];
 
         let message = Message::new(&instructions, Some(&id1));
-        let serialized = message.serialize_instructions();
+        let serialized = message.serialize_to_instructions_sysvar();
         assert_eq!(
-            Message::deserialize_instruction(instructions.len(), &serialized).unwrap_err(),
+            sysvar::instructions::load_instruction_at(instructions.len(), &serialized).unwrap_err(),
             SanitizeError::IndexOutOfBounds,
         );
     }
@@ -1077,5 +1048,58 @@ mod tests {
             message.hash(),
             Hash::from_str("CXRH7GHLieaQZRUjH1mpnNnUZQtU4V4RpJpAFgy77i3z").unwrap()
         )
+    }
+
+    #[test]
+    fn test_count_signatures() {
+        // Default: no signatures.
+        let message = Message::default();
+        assert_eq!(message.count_signatures(), 0);
+
+        // One signature
+        let pubkey0 = Pubkey::new(&[0; 32]);
+        let pubkey1 = Pubkey::new(&[1; 32]);
+        let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
+        let message = Message::new(&[ix0], Some(&pubkey0));
+        assert_eq!(message.count_signatures(), 1);
+
+        // Two signatures
+        let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
+        let ix1 = system_instruction::transfer(&pubkey1, &pubkey0, 1);
+        let message = Message::new(&[ix0, ix1], Some(&pubkey0));
+        assert_eq!(message.count_signatures(), 2);
+    }
+
+    #[test]
+    fn test_count_signatures_secp256k1() {
+        use crate::instruction::Instruction;
+        let pubkey0 = Pubkey::new(&[0; 32]);
+        let pubkey1 = Pubkey::new(&[1; 32]);
+        let ix0 = system_instruction::transfer(&pubkey0, &pubkey1, 1);
+        let mut secp_instruction = Instruction {
+            program_id: crate::secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![],
+        };
+        let mut secp_instruction2 = Instruction {
+            program_id: crate::secp256k1_program::id(),
+            accounts: vec![],
+            data: vec![1],
+        };
+
+        let message = Message::new(
+            &[
+                ix0.clone(),
+                secp_instruction.clone(),
+                secp_instruction2.clone(),
+            ],
+            Some(&pubkey0),
+        );
+        assert_eq!(message.count_signatures(), 2);
+
+        secp_instruction.data = vec![0];
+        secp_instruction2.data = vec![10];
+        let message = Message::new(&[ix0, secp_instruction, secp_instruction2], Some(&pubkey0));
+        assert_eq!(message.count_signatures(), 11);
     }
 }

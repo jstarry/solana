@@ -26,7 +26,6 @@ pub mod lamports;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;
 pub mod log;
-pub mod message;
 pub mod native_token;
 pub mod nonce;
 pub mod program;

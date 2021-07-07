@@ -109,7 +109,8 @@ impl TransactionStatusService {
                                 bank.get_fee_calculator(&transaction.message().recent_blockhash)
                             })
                             .expect("FeeCalculator must exist");
-                        let fee = fee_calculator.calculate_fee(transaction.message());
+                        let fee =
+                            fee_calculator.calculate_fee(transaction.message().count_signatures());
                         let (writable_keys, readonly_keys) =
                             transaction.message.get_account_keys_by_lock_type();
 

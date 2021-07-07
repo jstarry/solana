@@ -3370,7 +3370,7 @@ impl Bank {
                     });
                 let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
 
-                let fee = fee_calculator.calculate_fee(tx.message());
+                let fee = fee_calculator.calculate_fee(tx.message().count_signatures());
 
                 let message = tx.message();
                 match *res {

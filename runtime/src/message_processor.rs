@@ -821,27 +821,26 @@ impl MessageProcessor {
             let invoke_context = invoke_context.borrow();
 
             // Translate and verify caller's data
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let keyed_accounts = keyed_account_indices
+            let caller_keyed_accounts = invoke_context.get_keyed_accounts()?;
+            let callee_keyed_accounts = keyed_account_indices
                 .iter()
-                .map(|index| keyed_account_at_index(keyed_accounts, *index))
+                .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
                 .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
             let (instruction, account_details) =
-                Self::create_runtime_instruction(&instruction, &keyed_accounts, signers, &invoke_context)?;
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            let mut caller_write_privileges = keyed_account_indices
-                .iter()
-                .map(|index| keyed_accounts[*index].is_writable())
-                .collect::<Vec<bool>>();
-            caller_write_privileges.insert(0, false);
-            let mut accounts = vec![];
-            let mut keyed_account_indices_reordered = vec![];
-            let keyed_accounts = invoke_context.get_keyed_accounts()?;
+                Self::create_runtime_instruction(&instruction, &callee_keyed_accounts, signers, &invoke_context)?;
+
+            let mut accounts = Vec::with_capacity(account_details.len());
+            let mut caller_write_privileges = Vec::with_capacity(account_details.len());
+            let mut callee_write_privileges = Vec::with_capacity(account_details.len());
+            let mut keyed_account_indices_reordered =
+                Vec::with_capacity(account_details.len());
             'root: for detail in account_details {
                 for keyed_account_index in keyed_account_indices {
-                    let keyed_account = &keyed_accounts[*keyed_account_index];
+                    let keyed_account = &caller_keyed_accounts[*keyed_account_index];
                     if detail.pubkey == keyed_account.unsigned_key() {
                         accounts.push((*detail.pubkey, Rc::new(keyed_account.account.clone())));
+                        caller_write_privileges.push(keyed_account.is_writable());
+                        callee_write_privileges.push(detail.callee_writable);
                         keyed_account_indices_reordered.push(*keyed_account_index);
                         continue 'root;
                     }
@@ -919,6 +918,7 @@ impl MessageProcessor {
             &executable_accounts,
             &accounts,
             &caller_write_privileges,
+            &callee_write_privileges,
             *(&mut *(invoke_context.borrow_mut())),
         )?;
 

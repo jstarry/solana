@@ -44,7 +44,6 @@ use crate::{
     blockhash_queue::BlockhashQueue,
     builtins::{self, ActivationType},
     epoch_stakes::{EpochStakes, NodeVoteAccounts},
-    hashed_transaction::{HashedTransaction, HashedTransactionSlice},
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
@@ -2598,17 +2597,12 @@ impl Bank {
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
-                status_cache.insert(
-                    &tx.recent_blockhash,
-                    &tx.hash,
-                    self.slot(),
-                    res.clone(),
-                );
+                status_cache.insert(&tx.message.recent_blockhash, &tx.hash, self.slot(), res.clone());
                 // Add the transaction signature to the status cache so that transaction status
                 // can be queried by transaction signature over RPC. In the future, this should
                 // only be added for API nodes because voting validators don't need to do this.
                 status_cache.insert(
-                    &tx.recent_blockhash,
+                    &tx.message.recent_blockhash,
                     &tx.signatures[0],
                     self.slot(),
                     res.clone(),
@@ -2687,7 +2681,8 @@ impl Bank {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
         // todo handle error
-        let tx = RuntimeTransaction::try_from(transaction).unwrap();
+        let message_hash = transaction.message.hash();
+        let tx = RuntimeTransaction::try_build(Cow::Borrowed(transaction), message_hash).unwrap();
         let batch = self.prepare_simulation_batch(tx);
 
         let mut timings = ExecuteTimings::default();
@@ -2755,7 +2750,7 @@ impl Bank {
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
-                    let hash_age = hash_queue.check_hash_age(&tx.recent_blockhash, max_age);
+                    let hash_age = hash_queue.check_hash_age(&tx.message.recent_blockhash, max_age);
                     if hash_age == Some(true) {
                         (Ok(()), None)
                     } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(tx) {
@@ -2779,7 +2774,7 @@ impl Bank {
         status_cache: &StatusCache<Result<()>>,
     ) -> bool {
         let key = &hashed_tx.hash;
-        let transaction_blockhash = &hashed_tx.recent_blockhash;
+        let transaction_blockhash = &hashed_tx.message.recent_blockhash;
         status_cache
             .get_status(key, transaction_blockhash, &self.ancestors)
             .is_some()
@@ -3362,9 +3357,7 @@ impl Bank {
                     .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
                     .unwrap_or_else(|| {
                         (
-                            hash_queue
-                                .get_fee_calculator(&tx.recent_blockhash)
-                                .cloned(),
+                            hash_queue.get_fee_calculator(&tx.message.recent_blockhash).cloned(),
                             false,
                         )
                     });

@@ -78,7 +78,10 @@ fn get_first_error(
     fee_collection_results: Vec<Result<()>>,
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
-    for (result, transaction) in fee_collection_results.iter().zip(batch.transactions_iter()) {
+    for (result, transaction) in fee_collection_results
+        .iter()
+        .zip(batch.hashed_transactions().iter())
+    {
         if let Err(ref err) = result {
             if first_err.is_none() {
                 first_err = Some((result.clone(), transaction.signatures[0]));
@@ -137,26 +140,27 @@ fn execute_batch(
     } = tx_results;
 
     if let Some(transaction_status_sender) = transaction_status_sender {
-        let txs = batch.transactions_iter().cloned().collect();
-        let post_token_balances = if record_token_balances {
-            collect_token_balances(bank, batch, &mut mint_decimals)
-        } else {
-            vec![]
-        };
+        todo!()
+        // let txs = batch.hashed_transactions().cloned().collect();
+        // let post_token_balances = if record_token_balances {
+        //     collect_token_balances(bank, batch, &mut mint_decimals)
+        // } else {
+        //     vec![]
+        // };
 
-        let token_balances =
-            TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
+        // let token_balances =
+        //     TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
 
-        transaction_status_sender.send_transaction_status_batch(
-            bank.clone(),
-            txs,
-            execution_results,
-            balances,
-            token_balances,
-            inner_instructions,
-            transaction_logs,
-            rent_debits,
-        );
+        // transaction_status_sender.send_transaction_status_batch(
+        //     bank.clone(),
+        //     txs,
+        //     execution_results,
+        //     balances,
+        //     token_balances,
+        //     inner_instructions,
+        //     transaction_logs,
+        //     rent_debits,
+        // );
     }
 
     let first_err = get_first_error(batch, fee_collection_results);
@@ -217,7 +221,7 @@ pub fn process_entries(
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
     let mut timings = ExecuteTimings::default();
-    let mut entry_types: Vec<_> = entries.iter().map(EntryType::from).collect();
+    let mut entry_types: Vec<_> = entries.iter().map(EntryType::try_from).collect()?;
     let result = process_entries_with_callback(
         bank,
         &mut entry_types,
@@ -277,7 +281,7 @@ fn process_entries_with_callback(
 
                 loop {
                     // try to lock the accounts
-                    let batch = bank.prepare_hashed_batch(transactions);
+                    let batch = bank.prepare_hashed_batch(&transactions);
                     let first_lock_err = first_err(batch.lock_results());
 
                     // if locking worked
@@ -791,15 +795,14 @@ pub fn confirm_slot(
     };
 
     let check_start = Instant::now();
-    let check_result = entries
-        .verify_and_hash_transactions(skip_verification, bank.verify_tx_signatures_len_enabled());
-    if check_result.is_none() {
-        warn!("Ledger proof of history failed at slot: {}", slot);
-        return Err(BlockError::InvalidEntryHash.into());
-    }
+    let mut entries = entries
+        .verify_and_hash_transactions(skip_verification, bank.verify_tx_signatures_len_enabled())
+        .map_err(|err| {
+            warn!("Transaction verification failed at slot: {}", slot);
+            BlockstoreProcessorError::from(err)
+        })?;
     let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    let mut entries = check_result.unwrap();
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let mut execute_timings = ExecuteTimings::default();
     // Note: This will shuffle entries' transactions in-place.

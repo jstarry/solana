@@ -2323,14 +2323,13 @@ fn call<'a>(
         .map_err(SyscallError::InstructionError)?
         .iter()
         .collect::<Vec<&KeyedAccount>>();
-    let (instruction, account_details) =
-        MessageProcessor::create_runtime_instruction(
-            &translated_instruction,
-            &keyed_account_refs,
-            &signers,
-            &invoke_context,
-        )
-        .map_err(SyscallError::InstructionError)?;
+    let (instruction, account_details) = MessageProcessor::create_runtime_instruction(
+        &translated_instruction,
+        &keyed_account_refs,
+        &signers,
+        &invoke_context,
+    )
+    .map_err(SyscallError::InstructionError)?;
     check_authorized_program(instruction.program_id, &translated_instruction.data)?;
     let account_keys: Vec<_> = account_details.iter().map(|d| d.pubkey).collect();
     let (accounts, account_refs) = syscall.translate_accounts(
@@ -2346,7 +2345,11 @@ fn call<'a>(
     let program_account = accounts
         .get(instruction.program_id_index)
         .ok_or_else(|| {
-            ic_msg!(invoke_context, "Unknown program {}", instruction.program_id_index,);
+            ic_msg!(
+                invoke_context,
+                "Unknown program {}",
+                instruction.program_id_index,
+            );
             SyscallError::InstructionError(InstructionError::MissingAccount)
         })?
         .1
@@ -2362,8 +2365,10 @@ fn call<'a>(
     invoke_context.record_instruction(&translated_instruction);
 
     // Process instruction
-    let caller_write_privileges: Vec<_> = account_details.iter().map(|d| d.caller_writable).collect();
-    let callee_write_privileges: Vec<_> = account_details.iter().map(|d| d.callee_writable).collect();
+    let caller_write_privileges: Vec<_> =
+        account_details.iter().map(|d| d.caller_writable).collect();
+    let callee_write_privileges: Vec<_> =
+        account_details.iter().map(|d| d.callee_writable).collect();
 
     #[allow(clippy::deref_addrof)]
     match MessageProcessor::process_cross_program_instruction(

@@ -425,12 +425,10 @@ impl Accounts {
                         .as_ref()
                         .map(|nonce_rollback| nonce_rollback.fee_calculator())
                         .unwrap_or_else(|| {
-                            hash_queue
-                                .get_fee_calculator(&tx.recent_blockhash)
-                                .cloned()
+                            hash_queue.get_fee_calculator(&tx.message().recent_blockhash).cloned()
                         });
                     let fee = if let Some(fee_calculator) = fee_calculator {
-                        fee_calculator.calculate_fee(&tx.message)
+                        fee_calculator.calculate_fee(&tx.message())
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };

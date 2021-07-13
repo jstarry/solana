@@ -23,7 +23,7 @@ use solana_runtime::{
         TransactionExecutionResult,
     },
     bank_utils,
-    hashed_transaction::HashedTransaction,
+    message::RuntimeTransaction,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
@@ -914,7 +914,7 @@ impl BankingStage {
 
     pub fn process_and_record_transactions(
         bank: &Arc<Bank>,
-        txs: &[HashedTransaction],
+        txs: &[RuntimeTransaction],
         poh: &TransactionRecorder,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -958,7 +958,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        transactions: &[HashedTransaction],
+        transactions: &[RuntimeTransaction],
         poh: &TransactionRecorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -1060,7 +1060,7 @@ impl BankingStage {
         transaction_indexes: &[usize],
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
-    ) -> (Vec<HashedTransaction<'static>>, Vec<usize>, Vec<usize>) {
+    ) -> (Vec<RuntimeTransaction<'static>>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
         let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
@@ -1068,17 +1068,20 @@ impl BankingStage {
             .filter_map(|tx_index| {
                 let p = &msgs.packets[*tx_index];
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
-                tx.verify_precompiles().ok()?;
-                Some((tx, *tx_index))
+                let message_bytes = Self::packet_message(p)?;
+                let message_hash = Message::hash_raw_message(message_bytes);
+                let runtime_tx = RuntimeTransaction::try_build(Cow::Owned(tx), message_hash)?;
+                Some((runtime_tx, *tx_index))
             })
             .collect();
+
         banking_stage_stats.cost_tracker_check_count.fetch_add(
             verified_transactions_with_packet_indexes.len(),
             Ordering::Relaxed,
         );
 
         let mut cost_tracker_check_time = Measure::start("cost_tracker_check_time");
-        let filtered_transactions_with_packet_indexes: Vec<_> = {
+        let (filtered_transactions, filter_transaction_packet_indexes) = {
             let cost_tracker_readonly = cost_tracker.read().unwrap();
             verified_transactions_with_packet_indexes
                 .into_iter()
@@ -1091,23 +1094,9 @@ impl BankingStage {
                     }
                     Some((tx, tx_index))
                 })
-                .collect()
+                .unzip()
         };
         cost_tracker_check_time.stop();
-
-        let (filtered_transactions, filter_transaction_packet_indexes) =
-            filtered_transactions_with_packet_indexes
-                .into_iter()
-                .filter_map(|(tx, tx_index)| {
-                    let p = &msgs.packets[tx_index];
-                    let message_bytes = Self::packet_message(p)?;
-                    let message_hash = Message::hash_raw_message(message_bytes);
-                    Some((
-                        HashedTransaction::new(Cow::Owned(tx), message_hash),
-                        tx_index,
-                    ))
-                })
-                .unzip();
 
         banking_stage_stats
             .cost_tracker_check_elapsed
@@ -1127,7 +1116,7 @@ impl BankingStage {
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
         bank: &Arc<Bank>,
-        transactions: &[HashedTransaction],
+        transactions: &[RuntimeTransaction],
         transaction_to_packet_indexes: &[usize],
         pending_indexes: &[usize],
     ) -> Vec<usize> {

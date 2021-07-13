@@ -43,7 +43,10 @@ impl CostTracker {
         }
     }
 
-    pub fn would_transaction_fit(&self, transaction: &Transaction) -> Result<(), &'static str> {
+    pub fn would_transaction_fit(
+        &self,
+        transaction: &RuntimeTransaction,
+    ) -> Result<(), &'static str> {
         let mut cost_model = self.cost_model.write().unwrap();
         let tx_cost = cost_model.calculate_cost(transaction);
         self.would_fit(

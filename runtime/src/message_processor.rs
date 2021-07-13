@@ -1,4 +1,13 @@
-use crate::{accounts::Accounts, ancestors::Ancestors, instruction_recorder::InstructionRecorder, log_collector::LogCollector, message::{AccountDetails, AccountMeta, RuntimeInstruction, RuntimeTransaction}, native_loader::NativeLoader, rent_collector::RentCollector};
+use crate::{
+    accounts::Accounts,
+    ancestors::Ancestors,
+    instruction_recorder::InstructionRecorder,
+    log_collector::LogCollector,
+    message::{AccountDetails, AccountMeta, RuntimeInstruction, RuntimeTransaction},
+    native_loader::NativeLoader,
+    rent_collector::RentCollector,
+};
+use itertools::izip;
 use log::*;
 use serde::{Deserialize, Serialize};
 use solana_measure::measure::Measure;
@@ -10,9 +19,8 @@ use solana_sdk::{
         instructions_sysvar_enabled, neon_evm_compute_budget, updated_verify_policy, FeatureSet,
     },
     ic_logger_msg, ic_msg,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    instruction::{Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, keyed_account_at_index, KeyedAccount},
-    message::Message,
     native_loader,
     process_instruction::{
         BpfComputeBudget, ComputeMeter, Executor, InvokeContext, InvokeContextStackFrame, Logger,
@@ -303,12 +311,10 @@ impl<'a> ThisInvokeContext<'a> {
         account_db: Arc<Accounts>,
         ancestors: &'a Ancestors,
     ) -> Self {
-        let pre_accounts = MessageProcessor::create_pre_accounts(&instruction.unique_account_indices, accounts);
-        let keyed_accounts = MessageProcessor::create_keyed_accounts(
-            instruction,
-            executable_accounts,
-            accounts,
-        );
+        let pre_accounts =
+            MessageProcessor::create_pre_accounts(&instruction.unique_account_indices, accounts);
+        let keyed_accounts =
+            MessageProcessor::create_keyed_accounts(instruction, executable_accounts, accounts);
         let mut invoke_context = Self {
             invoke_stack: Vec::with_capacity(bpf_compute_budget.max_invoke_depth),
             rent,
@@ -682,7 +688,8 @@ impl MessageProcessor {
 
         // Check for privilege escalation
         for account_meta in ix.accounts.iter() {
-            let (index, details) = if let Some(index) = account_index_map.get(&account_meta.pubkey) {
+            let (index, details) = if let Some(index) = account_index_map.get(&account_meta.pubkey)
+            {
                 (*index, &mut account_details[*index])
             } else {
                 let keyed_account = keyed_accounts
@@ -728,7 +735,10 @@ impl MessageProcessor {
 
             if account_meta.is_signer {
                 if !details.caller_signer {
-                    if !details.program_signer.unwrap_or_else(|| signers.contains(&account_meta.pubkey)) {
+                    if !details
+                        .program_signer
+                        .unwrap_or_else(|| signers.contains(&account_meta.pubkey))
+                    {
                         ic_msg!(
                             invoke_context,
                             "{}'s signer privilege escalated",
@@ -746,13 +756,14 @@ impl MessageProcessor {
                 index,
                 pubkey: &account_meta.pubkey,
                 is_signer: account_meta.is_signer,
-                is_writable: account_meta.is_writable
+                is_writable: account_meta.is_writable,
             });
         }
 
         // validate the caller has access to the program account
         let program_id = &ix.program_id;
-        let (program_id_index, executable) = if let Some(index) = account_index_map.get(program_id) {
+        let (program_id_index, executable) = if let Some(index) = account_index_map.get(program_id)
+        {
             (*index, account_details[*index].is_executable)
         } else {
             let keyed_account = keyed_accounts
@@ -782,11 +793,7 @@ impl MessageProcessor {
 
         // validate the program account is callable
         if !executable {
-            ic_msg!(
-                invoke_context,
-                "Account {} is not executable",
-                program_id,
-            );
+            ic_msg!(invoke_context, "Account {} is not executable", program_id,);
             return Err(InstructionError::AccountNotExecutable);
         }
 
@@ -794,7 +801,7 @@ impl MessageProcessor {
         let runtime_ix = RuntimeInstruction {
             program_id: &ix.program_id,
             program_id_index,
-            accounts, 
+            accounts,
             unique_account_indices,
             data: &ix.data,
         };
@@ -817,6 +824,7 @@ impl MessageProcessor {
             accounts,
             keyed_account_indices_reordered,
             caller_write_privileges,
+            callee_write_privileges,
         ) = {
             let invoke_context = invoke_context.borrow();
 
@@ -826,14 +834,17 @@ impl MessageProcessor {
                 .iter()
                 .map(|index| keyed_account_at_index(caller_keyed_accounts, *index))
                 .collect::<Result<Vec<&KeyedAccount>, InstructionError>>()?;
-            let (instruction, account_details) =
-                Self::create_runtime_instruction(&instruction, &callee_keyed_accounts, signers, &invoke_context)?;
+            let (runtime_instruction, account_details) = Self::create_runtime_instruction(
+                &instruction,
+                &callee_keyed_accounts,
+                signers,
+                &invoke_context,
+            )?;
 
             let mut accounts = Vec::with_capacity(account_details.len());
             let mut caller_write_privileges = Vec::with_capacity(account_details.len());
             let mut callee_write_privileges = Vec::with_capacity(account_details.len());
-            let mut keyed_account_indices_reordered =
-                Vec::with_capacity(account_details.len());
+            let mut keyed_account_indices_reordered = Vec::with_capacity(account_details.len());
             'root: for detail in account_details {
                 for keyed_account_index in keyed_account_indices {
                     let keyed_account = &caller_keyed_accounts[*keyed_account_index];
@@ -857,13 +868,12 @@ impl MessageProcessor {
 
             invoke_context.record_instruction(&instruction);
 
-            let program_account =
-                invoke_context
-                    .get_account(instruction.program_id)
-                    .ok_or_else(|| {
-                        ic_msg!(invoke_context, "Unknown program {}", instruction.program_id);
-                        InstructionError::MissingAccount
-                    })?;
+            let program_account = invoke_context
+                .get_account(runtime_instruction.program_id)
+                .ok_or_else(|| {
+                    ic_msg!(invoke_context, "Unknown program {}", instruction.program_id);
+                    InstructionError::MissingAccount
+                })?;
             if !program_account.borrow().executable() {
                 ic_msg!(
                     invoke_context,
@@ -903,7 +913,7 @@ impl MessageProcessor {
                 executable_accounts.push(programdata);
             }
             (
-                instruction,
+                runtime_instruction,
                 executable_accounts,
                 accounts,
                 keyed_account_indices_reordered,
@@ -927,14 +937,14 @@ impl MessageProcessor {
         {
             let invoke_context = invoke_context.borrow();
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            for (src_keyed_account_index, ((_key, account), dst_keyed_account_index)) in accounts
-                .iter()
-                .zip(keyed_account_indices_reordered)
-                .enumerate()
-            {
+            for ((_key, account), dst_keyed_account_index, is_writable) in izip!(
+                accounts,
+                keyed_account_indices_reordered,
+                callee_write_privileges,
+            ) {
                 let dst_keyed_account = &keyed_accounts[dst_keyed_account_index];
                 let src_keyed_account = account.borrow();
-                if message.is_writable(src_keyed_account_index) && !src_keyed_account.executable() {
+                if is_writable && !src_keyed_account.executable() {
                     if dst_keyed_account.data_len()? != src_keyed_account.data().len()
                         && dst_keyed_account.data_len()? != 0
                     {
@@ -973,7 +983,11 @@ impl MessageProcessor {
         invoke_context: &mut dyn InvokeContext,
     ) -> Result<(), InstructionError> {
         // Verify the calling program hasn't misbehaved
-        invoke_context.verify_and_update(&instruction.unique_account_indices, accounts, caller_write_privileges)?;
+        invoke_context.verify_and_update(
+            &instruction.unique_account_indices,
+            accounts,
+            caller_write_privileges,
+        )?;
 
         // Construct keyed accounts
         let keyed_accounts =
@@ -988,14 +1002,15 @@ impl MessageProcessor {
             message_processor.add_program(*program_id, *process_instruction);
         }
 
-        let mut result = message_processor.process_instruction(
-            program_id,
-            &instruction.data,
-            invoke_context,
-        );
+        let mut result =
+            message_processor.process_instruction(program_id, &instruction.data, invoke_context);
         if result.is_ok() {
             // Verify the called program has not misbehaved
-            result = invoke_context.verify_and_update(&instruction.unique_account_indices, accounts, callee_write_privileges);
+            result = invoke_context.verify_and_update(
+                &instruction.unique_account_indices,
+                accounts,
+                callee_write_privileges,
+            );
         }
 
         // Restore previous state
@@ -1019,7 +1034,10 @@ impl MessageProcessor {
                 }
                 Err(InstructionError::MissingAccount)
             };
-            let _ = unique_account_indices.iter().map(&mut work).collect::<Result<Vec<_>, InstructionError>>();
+            let _ = unique_account_indices
+                .iter()
+                .map(&mut work)
+                .collect::<Result<Vec<_>, InstructionError>>();
         }
         pre_accounts
     }
@@ -1087,7 +1105,12 @@ impl MessageProcessor {
                 post_sum += u128::from(account.lamports());
                 Ok(())
             };
-            instruction.unique_account_indices.iter().enumerate().map(&mut work).collect::<Result<_, InstructionError>>()?;
+            instruction
+                .unique_account_indices
+                .iter()
+                .enumerate()
+                .map(&mut work)
+                .collect::<Result<_, InstructionError>>()?;
         }
 
         // Verify that the total sum of all the lamports did not change
@@ -1151,7 +1174,10 @@ impl MessageProcessor {
             }
             Err(InstructionError::MissingAccount)
         };
-        account_indices.iter().map(&mut work).collect::<Result<Vec<_>, InstructionError>>()?;
+        account_indices
+            .iter()
+            .map(&mut work)
+            .collect::<Result<Vec<_>, InstructionError>>()?;
 
         // Verify that the total sum of all the lamports did not change
         if pre_sum != post_sum {

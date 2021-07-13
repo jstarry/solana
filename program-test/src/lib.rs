@@ -238,6 +238,8 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
         account_infos: &[AccountInfo],
         signers_seeds: &[&[&[u8]]],
     ) -> ProgramResult {
+        todo!()
+        /*
         //
         // TODO: Merge the business logic below with the BPF invoke path in
         //       programs/bpf_loader/src/syscalls.rs
@@ -368,6 +370,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
         stable_log::program_success(&logger, &program_id);
         Ok(())
+        */
     }
 
     fn sol_get_clock_sysvar(&self, var_addr: *mut u8) -> u64 {

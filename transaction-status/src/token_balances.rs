@@ -53,35 +53,36 @@ pub fn collect_token_balances(
     batch: &TransactionBatch,
     mut mint_decimals: &mut HashMap<Pubkey, u8>,
 ) -> TransactionTokenBalances {
-    let mut balances: TransactionTokenBalances = vec![];
+    todo!()
+    // let mut balances: TransactionTokenBalances = vec![];
 
-    for transaction in batch.transactions_iter() {
-        let account_keys = &transaction.message.account_keys;
-        let has_token_program = account_keys.iter().any(|p| is_token_program(p));
+    // for transaction in batch.hashed_transactions() {
+    //     let account_keys = &transaction.message.account_keys;
+    //     let has_token_program = account_keys.iter().any(|p| is_token_program(p));
 
-        let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
-        if has_token_program {
-            for (index, account_id) in account_keys.iter().enumerate() {
-                if is_token_program(account_id)
-                    || transaction.message.program_ids().contains(&account_id)
-                {
-                    continue;
-                }
+    //     let mut transaction_balances: Vec<TransactionTokenBalance> = vec![];
+    //     if has_token_program {
+    //         for (index, account_id) in account_keys.iter().enumerate() {
+    //             if is_token_program(account_id)
+    //                 || transaction.message.program_ids().contains(&account_id)
+    //             {
+    //                 continue;
+    //             }
 
-                if let Some((mint, ui_token_amount)) =
-                    collect_token_balance_from_account(bank, account_id, &mut mint_decimals)
-                {
-                    transaction_balances.push(TransactionTokenBalance {
-                        account_index: index as u8,
-                        mint,
-                        ui_token_amount,
-                    });
-                }
-            }
-        }
-        balances.push(transaction_balances);
-    }
-    balances
+    //             if let Some((mint, ui_token_amount)) =
+    //                 collect_token_balance_from_account(bank, account_id, &mut mint_decimals)
+    //             {
+    //                 transaction_balances.push(TransactionTokenBalance {
+    //                     account_index: index as u8,
+    //                     mint,
+    //                     ui_token_amount,
+    //                 });
+    //             }
+    //         }
+    //     }
+    //     balances.push(transaction_balances);
+    // }
+    // balances
 }
 
 pub fn collect_token_balance_from_account(

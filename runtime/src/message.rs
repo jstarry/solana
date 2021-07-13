@@ -1,18 +1,24 @@
 //! Verified and sanitized runtime message
 use itertools::Itertools;
-use solana_sdk::{bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, hash::Hash, instruction::{CompiledInstruction, Instruction, InstructionError}, message::Message, pubkey::Pubkey, sanitize::{Sanitize, SanitizeError}, signature::Signature, system_program, sysvar, transaction::Transaction};
-use std::{collections::HashMap, convert::TryFrom, str::FromStr};
-use thiserror::Error;
+use solana_sdk::{
+    bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+    hash::Hash,
+    message::Message,
+    pubkey::Pubkey,
+    sanitize::Sanitize,
+    signature::Signature,
+    system_program, sysvar,
+    transaction::{Result, Transaction, TransactionError},
+};
+use std::{borrow::Cow, ops::Deref, str::FromStr};
 
 use crate::accounts::Accounts;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct RuntimeTransaction<'a> {
+    pub tx: Cow<'a, Transaction>,
     pub hash: Hash,
-    pub message: &'a Message,
-    pub signatures: &'a [Signature],
     pub accounts: Vec<AccountMeta<'a>>,
-    pub recent_blockhash: Hash,
     pub instructions: Vec<RuntimeInstruction<'a>>,
 }
 
@@ -77,7 +83,68 @@ static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
 };
 }
 
-impl RuntimeTransaction<'_> {
+impl Deref for RuntimeTransaction<'_> {
+    type Target = Transaction;
+    fn deref(&self) -> &Self::Target {
+        &self.tx
+    }
+}
+
+impl <'a> RuntimeTransaction<'a> {
+    pub fn try_build(transaction: Cow<'a, Transaction>, message_hash: Hash) -> Result<RuntimeTransaction<'a>> {
+        transaction.verify_precompiles()?;
+        transaction.sanitize()?;
+
+        let message = &transaction.message;
+        if Accounts::has_duplicates(&message.account_keys) {
+            return Err(TransactionError::AccountLoadedTwice);
+        }
+
+        let accounts: Vec<_> = message
+            .account_keys
+            .iter()
+            .enumerate()
+            .map(|(i, key)| AccountMeta {
+                index: i,
+                pubkey: key,
+                is_signer: message.is_signer(i),
+                is_writable: message.is_writable(i),
+            })
+            .collect();
+
+        let instructions = message
+            .instructions
+            .iter()
+            .map(|compiled_ix| {
+                let program_id_index = compiled_ix.program_id_index as usize;
+                let unique_account_indices = compiled_ix
+                    .accounts
+                    .iter()
+                    .unique()
+                    .map(|index| *index as usize)
+                    .collect();
+                RuntimeInstruction {
+                    data: &compiled_ix.data,
+                    program_id_index,
+                    program_id: &accounts[program_id_index].pubkey,
+                    unique_account_indices,
+                    accounts: compiled_ix
+                        .accounts
+                        .iter()
+                        .map(|account_index| accounts[*account_index as usize].clone())
+                        .collect(),
+                }
+            })
+            .collect();
+
+        Ok(Self {
+            tx: transaction,
+            hash: message_hash,
+            accounts,
+            instructions,
+        })
+    }
+
     pub fn is_writable(&self, i: usize) -> bool {
         let account = &self.accounts[i];
         if sysvar::is_sysvar_id(account.pubkey) || BUILTIN_PROGRAMS_KEYS.contains(&account.pubkey) {
@@ -114,72 +181,5 @@ impl RuntimeTransaction<'_> {
 
     pub fn is_non_loader_key(&self, key_index: usize) -> bool {
         !self.is_key_called_as_program(key_index) || self.is_key_passed_to_program(key_index)
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum MessageError {
-    #[error("Duplicate account key")]
-    DuplicateAccountKey,
-    #[error("Message failed sanitize check")]
-    SanitizeFailure,
-}
-
-impl From<SanitizeError> for MessageError {
-    fn from(_: SanitizeError) -> Self {
-        Self::SanitizeFailure
-    }
-}
-
-impl<'a> TryFrom<&'a Transaction> for RuntimeTransaction<'a> {
-    type Error = MessageError;
-    fn try_from(transaction: &'a Transaction) -> Result<Self, Self::Error> {
-        transaction.sanitize()?;
-
-        let message = &transaction.message;
-        if Accounts::has_duplicates(&message.account_keys) {
-            return Err(MessageError::DuplicateAccountKey);
-        }
-
-        let accounts: Vec<_> = message
-            .account_keys
-            .iter()
-            .enumerate()
-            .map(|(i, key)| AccountMeta {
-                index: i,
-                pubkey: key,
-                is_signer: message.is_signer(i),
-                is_writable: message.is_writable(i),
-            })
-            .collect();
-
-        let instructions = message
-            .instructions
-            .iter()
-            .map(|compiled_ix| {
-                let program_id_index = compiled_ix.program_id_index as usize;
-                let unique_account_indices = compiled_ix.accounts.iter().unique().map(|index| *index as usize).collect();
-                RuntimeInstruction {
-                    data: &compiled_ix.data,
-                    program_id_index,
-                    program_id: &accounts[program_id_index].pubkey,
-                    unique_account_indices,
-                    accounts: compiled_ix
-                        .accounts
-                        .iter()
-                        .map(|account_index| accounts[*account_index as usize].clone())
-                        .collect(),
-                }
-            })
-            .collect();
-
-        Ok(Self {
-            hash: message.hash(),
-            message,
-            signatures: &transaction.signatures,
-            accounts,
-            recent_blockhash: message.recent_blockhash,
-            instructions,
-        })
     }
 }

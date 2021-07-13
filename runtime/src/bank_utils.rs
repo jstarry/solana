@@ -1,7 +1,7 @@
 use crate::{
     bank::{Bank, TransactionResults},
     genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
-    hashed_transaction::HashedTransaction,
+    message::RuntimeTransaction,
     vote_sender_types::ReplayVoteSender,
 };
 use solana_sdk::{pubkey::Pubkey, signature::Signer};
@@ -28,7 +28,7 @@ pub fn setup_bank_and_vote_pubkeys(num_vote_accounts: usize, stake: u64) -> (Ban
 }
 
 pub fn find_and_send_votes(
-    hashed_txs: &[HashedTransaction],
+    hashed_txs: &[RuntimeTransaction],
     tx_results: &TransactionResults,
     vote_sender: Option<&ReplayVoteSender>,
 ) {
@@ -42,8 +42,9 @@ pub fn find_and_send_votes(
             assert!(execution_results[old_account.transaction_result_index]
                 .0
                 .is_ok());
-            let transaction = hashed_txs[old_account.transaction_index].transaction();
-            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
+            let transaction = &hashed_txs[old_account.transaction_index];
+            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction)
+            {
                 if parsed_vote.1.slots.last().is_some() {
                     let _ = vote_sender.send(parsed_vote);
                 }

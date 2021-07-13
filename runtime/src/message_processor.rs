@@ -812,7 +812,7 @@ impl MessageProcessor {
         let invoke_context = RefCell::new(invoke_context);
 
         let (
-            message,
+            instruction,
             executable_accounts,
             accounts,
             keyed_account_indices_reordered,
@@ -837,11 +837,11 @@ impl MessageProcessor {
             let mut accounts = vec![];
             let mut keyed_account_indices_reordered = vec![];
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
-            'root: for account_key in message.account_keys.iter() {
+            'root: for detail in account_details {
                 for keyed_account_index in keyed_account_indices {
                     let keyed_account = &keyed_accounts[*keyed_account_index];
-                    if account_key == keyed_account.unsigned_key() {
-                        accounts.push((*account_key, Rc::new(keyed_account.account.clone())));
+                    if detail.pubkey == keyed_account.unsigned_key() {
+                        accounts.push((*detail.pubkey, Rc::new(keyed_account.account.clone())));
                         keyed_account_indices_reordered.push(*keyed_account_index);
                         continue 'root;
                     }
@@ -849,7 +849,7 @@ impl MessageProcessor {
                 ic_msg!(
                     invoke_context,
                     "Instruction references an unknown account {}",
-                    account_key
+                    detail.pubkey
                 );
                 return Err(InstructionError::MissingAccount);
             }
@@ -860,16 +860,16 @@ impl MessageProcessor {
 
             let program_account =
                 invoke_context
-                    .get_account(&callee_program_id)
+                    .get_account(instruction.program_id)
                     .ok_or_else(|| {
-                        ic_msg!(invoke_context, "Unknown program {}", callee_program_id);
+                        ic_msg!(invoke_context, "Unknown program {}", instruction.program_id);
                         InstructionError::MissingAccount
                     })?;
             if !program_account.borrow().executable() {
                 ic_msg!(
                     invoke_context,
                     "Account {} is not executable",
-                    callee_program_id
+                    instruction.program_id
                 );
                 return Err(InstructionError::AccountNotExecutable);
             }
@@ -892,29 +892,30 @@ impl MessageProcessor {
                     ic_msg!(
                         invoke_context,
                         "Upgradeable program account state not valid {}",
-                        callee_program_id,
+                        instruction.program_id,
                     );
                     return Err(InstructionError::MissingAccount);
                 }
             } else {
                 None
             };
-            let mut executable_accounts = vec![(callee_program_id, program_account)];
+            let mut executable_accounts = vec![(instruction.program_id, program_account)];
             if let Some(programdata) = programdata {
                 executable_accounts.push(programdata);
             }
             (
-                message,
+                instruction,
                 executable_accounts,
                 accounts,
                 keyed_account_indices_reordered,
                 caller_write_privileges,
+                callee_write_privileges,
             )
         };
 
         #[allow(clippy::deref_addrof)]
         MessageProcessor::process_cross_program_instruction(
-            &message,
+            &instruction,
             &executable_accounts,
             &accounts,
             &caller_write_privileges,

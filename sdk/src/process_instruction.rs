@@ -1,6 +1,6 @@
 use solana_sdk::{
     account::AccountSharedData,
-    instruction::{CompiledInstruction, Instruction, InstructionError},
+    instruction::{Instruction, InstructionError},
     keyed_account::{create_keyed_accounts_unified, KeyedAccount},
     pubkey::Pubkey,
     sysvar::Sysvar,

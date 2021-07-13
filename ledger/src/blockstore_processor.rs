@@ -3,7 +3,7 @@ use crate::{
     blockstore::Blockstore,
     blockstore_db::BlockstoreError,
     blockstore_meta::SlotMeta,
-    entry::{create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers},
+    entry::{create_ticks, validate_transaction_entries, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers},
     leader_schedule_cache::LeaderScheduleCache,
 };
 use chrono_humanize::{Accuracy, HumanTime, Tense};
@@ -45,6 +45,7 @@ use solana_transaction_status::token_balances::{
 
 use std::{
     cell::RefCell,
+    convert::TryFrom,
     collections::{HashMap, HashSet},
     path::PathBuf,
     result,
@@ -215,25 +216,26 @@ fn execute_batches(
 /// 4. Update the leader scheduler, goto 1
 pub fn process_entries(
     bank: &Arc<Bank>,
-    entries: &mut [Entry],
+    entries: &mut Vec<Entry>,
     randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
-    let mut timings = ExecuteTimings::default();
-    let mut entry_types: Vec<_> = entries.iter().map(EntryType::try_from).collect()?;
-    let result = process_entries_with_callback(
-        bank,
-        &mut entry_types,
-        randomize,
-        None,
-        transaction_status_sender,
-        replay_vote_sender,
-        &mut timings,
-    );
+    todo!()
+    // let mut timings = ExecuteTimings::default();
+    // let mut entry_types: Vec<_> = entries.iter().map(EntryType::try_from).collect()?;
+    // let result = process_entries_with_callback(
+    //     bank,
+    //     &mut entry_types,
+    //     randomize,
+    //     None,
+    //     transaction_status_sender,
+    //     replay_vote_sender,
+    //     &mut timings,
+    // );
 
-    debug!("process_entries: {:?}", timings);
-    result
+    // debug!("process_entries: {:?}", timings);
+    // result
 }
 
 // Note: If randomize is true this will shuffle entries' transactions in-place.
@@ -281,7 +283,7 @@ fn process_entries_with_callback(
 
                 loop {
                     // try to lock the accounts
-                    let batch = bank.prepare_hashed_batch(&transactions);
+                    let batch = bank.prepare_hashed_batch(transactions);
                     let first_lock_err = first_err(batch.lock_results());
 
                     // if locking worked
@@ -795,8 +797,8 @@ pub fn confirm_slot(
     };
 
     let check_start = Instant::now();
-    let mut entries = entries
-        .verify_and_hash_transactions(skip_verification, bank.verify_tx_signatures_len_enabled())
+    let mut entries = validate_transaction_entries(entries,
+        bank.verify_tx_signatures_len_enabled())
         .map_err(|err| {
             warn!("Transaction verification failed at slot: {}", slot);
             BlockstoreProcessorError::from(err)

@@ -3,7 +3,7 @@ use crate::{
     ancestors::Ancestors,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
-    message::{AccountDetails, AccountMeta, RuntimeInstruction, RuntimeTransaction},
+    transaction::{AccountDetails, AccountMeta, ValidatedInstruction, ValidatedTransaction},
     native_loader::NativeLoader,
     rent_collector::RentCollector,
 };
@@ -299,7 +299,7 @@ impl<'a> ThisInvokeContext<'a> {
     pub fn new(
         program_id: &Pubkey,
         rent: Rent,
-        instruction: &'a RuntimeInstruction<'a>,
+        instruction: &'a ValidatedInstruction<'a>,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         programs: &'a [(Pubkey, ProcessInstructionWithContext)],
@@ -621,7 +621,7 @@ impl MessageProcessor {
 
     /// Create the KeyedAccounts that will be passed to the program
     fn create_keyed_accounts<'a>(
-        instruction: &'a RuntimeInstruction<'a>,
+        instruction: &'a ValidatedInstruction<'a>,
         executable_accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &'a [(Pubkey, Rc<RefCell<AccountSharedData>>)],
     ) -> Vec<(bool, bool, &'a Pubkey, &'a RefCell<AccountSharedData>)> {
@@ -681,7 +681,7 @@ impl MessageProcessor {
         keyed_accounts: &[&KeyedAccount],
         signers: &[Pubkey],
         invoke_context: &Ref<&mut dyn InvokeContext>,
-    ) -> Result<(RuntimeInstruction<'a>, Vec<AccountDetails<'a>>), InstructionError> {
+    ) -> Result<(ValidatedInstruction<'a>, Vec<AccountDetails<'a>>), InstructionError> {
         let mut accounts = Vec::with_capacity(ix.accounts.len() + 1);
         let mut account_details = Vec::<AccountDetails>::with_capacity(ix.accounts.len() + 1);
         let mut account_index_map = HashMap::with_capacity(ix.accounts.len() + 1);
@@ -798,7 +798,7 @@ impl MessageProcessor {
         }
 
         let unique_account_indices = account_details.iter().map(|d| d.index).collect();
-        let runtime_ix = RuntimeInstruction {
+        let runtime_ix = ValidatedInstruction {
             program_id: &ix.program_id,
             program_id_index,
             accounts,
@@ -975,7 +975,7 @@ impl MessageProcessor {
     /// Process a cross-program instruction
     /// This method calls the instruction's program entrypoint function
     pub fn process_cross_program_instruction(
-        instruction: &RuntimeInstruction,
+        instruction: &ValidatedInstruction,
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         caller_write_privileges: &[bool],
@@ -1056,8 +1056,8 @@ impl MessageProcessor {
 
     /// Verify the results of an instruction
     pub fn verify(
-        message: &RuntimeTransaction,
-        instruction: &RuntimeInstruction,
+        message: &ValidatedTransaction,
+        instruction: &ValidatedInstruction,
         pre_accounts: &[PreAccount],
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
@@ -1193,8 +1193,8 @@ impl MessageProcessor {
     #[allow(clippy::too_many_arguments)]
     fn execute_instruction(
         &self,
-        message: &RuntimeTransaction,
-        instruction: &RuntimeInstruction,
+        message: &ValidatedTransaction,
+        instruction: &ValidatedInstruction,
         executable_accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,
@@ -1273,7 +1273,7 @@ impl MessageProcessor {
     #[allow(clippy::type_complexity)]
     pub fn process_message(
         &self,
-        message: &RuntimeTransaction,
+        message: &ValidatedTransaction,
         loaders: &[Vec<(Pubkey, Rc<RefCell<AccountSharedData>>)>],
         accounts: &[(Pubkey, Rc<RefCell<AccountSharedData>>)],
         rent_collector: &RentCollector,

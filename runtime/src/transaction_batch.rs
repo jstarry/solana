@@ -1,11 +1,12 @@
-use crate::{bank::Bank, message::RuntimeTransaction};
+use crate::{bank::Bank, transaction::ValidatedTransaction};
 use solana_sdk::transaction::Result;
+use std::borrow::Cow;
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
     lock_results: Vec<Result<()>>,
     bank: &'a Bank,
-    hashed_txs: &'b [RuntimeTransaction<'b>],
+    hashed_txs: Cow<'b, [ValidatedTransaction<'b>]>,
     pub(crate) needs_unlock: bool,
 }
 
@@ -13,7 +14,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
         lock_results: Vec<Result<()>>,
         bank: &'a Bank,
-        hashed_txs: &'b [RuntimeTransaction<'b>],
+        hashed_txs: Cow<'b, [ValidatedTransaction<'b>]>,
     ) -> Self {
         assert_eq!(lock_results.len(), hashed_txs.len());
         Self {
@@ -28,7 +29,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         &self.lock_results
     }
 
-    pub fn hashed_transactions(&self) -> &[RuntimeTransaction] {
+    pub fn hashed_transactions(&self) -> &[ValidatedTransaction] {
         &self.hashed_txs
     }
 

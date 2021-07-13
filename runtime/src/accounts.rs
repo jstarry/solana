@@ -10,7 +10,7 @@ use crate::{
         TransactionExecutionResult,
     },
     blockhash_queue::BlockhashQueue,
-    message::RuntimeTransaction,
+    transaction::ValidatedTransaction,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
 };
@@ -192,7 +192,7 @@ impl Accounts {
     fn load_transaction(
         &self,
         ancestors: &Ancestors,
-        tx: &RuntimeTransaction,
+        tx: &ValidatedTransaction,
         fee: u64,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
@@ -411,7 +411,7 @@ impl Accounts {
     pub fn load_accounts<'a>(
         &self,
         ancestors: &Ancestors,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         lock_results: Vec<TransactionCheckResult>,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
@@ -853,7 +853,7 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(
         &self,
-        messages: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        messages: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
     ) -> Vec<Result<()>> {
         let keys: Vec<Result<_>> = messages
             .map(|message| Ok(message.get_account_keys_by_lock_type()))
@@ -873,7 +873,7 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         results: &[Result<()>],
     ) {
         let keys: Vec<_> = txs
@@ -898,7 +898,7 @@ impl Accounts {
     pub fn store_cached<'a>(
         &self,
         slot: Slot,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,
@@ -932,7 +932,7 @@ impl Accounts {
 
     fn collect_accounts_to_store<'a>(
         &self,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         res: &'a [TransactionExecutionResult],
         loaded: &'a mut [TransactionLoadResult],
         rent_collector: &RentCollector,

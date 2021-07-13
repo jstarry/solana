@@ -17,11 +17,12 @@ use solana_perf::cuda_runtime::PinnedVec;
 use solana_perf::perf_libs;
 use solana_perf::recycler::Recycler;
 use solana_rayon_threadlimit::get_thread_count;
+use solana_runtime::transaction::ValidatedTransaction;
 use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::sanitize::SanitizeError;
+use solana_sdk::sanitize::{Sanitize, SanitizeError};
 use solana_sdk::timing;
-use solana_sdk::transaction::{Result, Transaction};
+use solana_sdk::transaction::{Result, Transaction, TransactionError};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::ffi::OsStr;
@@ -31,6 +32,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Instant;
 use std::{cmp, thread};
+use std::convert::TryFrom;
+
 
 thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
                     .num_threads(get_thread_count())
@@ -122,23 +125,26 @@ pub struct Entry {
 
 /// Typed entry to distinguish between transaction and tick entries
 pub enum EntryType<'a> {
-    Transactions(Vec<RuntimeTransaction<'a>>),
+    Transactions(Vec<ValidatedTransaction<'a>>),
     Tick(Hash),
 }
 
-impl<'a> TryFrom<&'a Entry> for EntryType<'a> {
+impl TryFrom<Entry> for EntryType<'_> {
     type Error = TransactionError;
-    fn try_from(entry: &'a Entry) -> Result<Self> {
+    fn try_from(entry: Entry) -> Result<Self> {
         if entry.transactions.is_empty() {
             Ok(EntryType::Tick(entry.hash))
         } else {
-            EntryType::Transactions(
+            Ok(EntryType::Transactions(
                 entry
                     .transactions
-                    .iter()
-                    .map(RuntimeTransaction::try_build)
-                    .collect::<Result<_>>(),
-            )
+                    .into_iter()
+                    .map(|tx| {
+                        let message_hash = tx.message.hash();
+                        ValidatedTransaction::try_build(tx, message_hash)
+                    })
+                    .collect::<Result<_>>()?,
+            ))
         }
     }
 }
@@ -328,6 +334,46 @@ impl EntryVerificationState {
     }
 }
 
+pub fn validate_transaction_entries(
+    entries: Vec<Entry>,
+    verify_tx_signatures_len: bool,
+) -> Result<Vec<EntryType<'static>>> {
+    let verify_and_hash = |tx: Transaction| -> Result<ValidatedTransaction> {
+        let size = bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?;
+        if size > PACKET_DATA_SIZE as u64 {
+            return Err(TransactionError::SanitizeFailure);
+        }
+        if verify_tx_signatures_len && !tx.verify_signatures_len() {
+            return Err(TransactionError::SanitizeFailure);
+        }
+        tx.sanitize()?;
+        tx.verify_precompiles()?;
+        let message_hash = tx.verify_and_hash_message()?;
+
+        ValidatedTransaction::try_build(tx, message_hash)
+    };
+
+    PAR_THREAD_POOL.with(|thread_pool| {
+        thread_pool.borrow().install(|| {
+            entries.into_par_iter()
+                .map(|entry| {
+                    if entry.transactions.is_empty() {
+                        Ok(EntryType::Tick(entry.hash))
+                    } else {
+                        Ok(EntryType::Transactions(
+                            entry
+                                .transactions
+                                .into_par_iter()
+                                .map(verify_and_hash)
+                                .collect::<Result<Vec<ValidatedTransaction>>>()?,
+                        ))
+                    }
+                })
+                .collect()
+        })
+    })
+}
+
 fn compare_hashes(computed_hash: Hash, ref_entry: &Entry) -> bool {
     let actual = if !ref_entry.transactions.is_empty() {
         let tx_hash = hash_transactions(&ref_entry.transactions);
@@ -357,10 +403,6 @@ pub trait EntrySlice {
     fn verify_tick_hash_count(&self, tick_hash_count: &mut u64, hashes_per_tick: u64) -> bool;
     /// Counts tick entries
     fn tick_count(&self) -> u64;
-    fn verify_and_hash_transactions(
-        &self,
-        verify_tx_signatures_len: bool,
-    ) -> Result<Vec<EntryType<'_>>>;
 }
 
 impl EntrySlice for [Entry] {
@@ -509,46 +551,6 @@ impl EntrySlice for [Entry] {
         } else {
             self.verify_cpu_generic(start_hash)
         }
-    }
-
-    fn verify_and_hash_transactions<'a>(
-        &'a self,
-        verify_tx_signatures_len: bool,
-    ) -> Result<Vec<EntryType<'a>>> {
-        let verify_and_hash = |tx: &'a Transaction| -> Result<RuntimeTransaction<'a>> {
-            let size = bincode::serialized_size(tx).map_err(|_| SanitizeError)?;
-            if size > PACKET_DATA_SIZE as u64 {
-                return Err(TransactionError::SanitizeError);
-            }
-            tx.sanitize()?;
-            if verify_tx_signatures_len && !tx.verify_signatures_len() {
-                return Err(TransactionError::SanitizeError);
-            }
-            tx.verify_precompiles()?;
-            let message_hash = tx.verify_and_hash_message()?;
-
-            RuntimeTransaction::try_build(tx, message_hash)
-        };
-
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                self.par_iter()
-                    .map(|entry| {
-                        if entry.transactions.is_empty() {
-                            Some(EntryType::Tick(entry.hash))
-                        } else {
-                            Some(EntryType::Transactions(
-                                entry
-                                    .transactions
-                                    .par_iter()
-                                    .map(verify_and_hash)
-                                    .collect::<Result<Vec<RuntimeTransaction>>>()?,
-                            ))
-                        }
-                    })
-                    .collect()
-            })
-        })
     }
 
     fn start_verify(

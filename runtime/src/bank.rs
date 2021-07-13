@@ -47,7 +47,7 @@ use crate::{
     inline_spl_token_v2_0,
     instruction_recorder::InstructionRecorder,
     log_collector::LogCollector,
-    message::RuntimeTransaction,
+    transaction::ValidatedTransaction,
     message_processor::{ExecuteDetailsTimings, Executors, MessageProcessor},
     rent_collector::RentCollector,
     stake_weighted_timestamp::{
@@ -628,7 +628,7 @@ impl NonceRollbackFull {
     }
     pub fn from_partial(
         partial: NonceRollbackPartial,
-        tx: &RuntimeTransaction,
+        tx: &ValidatedTransaction,
         accounts: &[(Pubkey, AccountSharedData)],
     ) -> Result<Self> {
         let NonceRollbackPartial {
@@ -2588,7 +2588,7 @@ impl Bank {
 
     fn update_transaction_statuses(
         &self,
-        hashed_txs: &[RuntimeTransaction],
+        hashed_txs: &[ValidatedTransaction],
         res: &[TransactionExecutionResult],
     ) {
         let mut status_cache = self.src.status_cache.write().unwrap();
@@ -2659,7 +2659,7 @@ impl Bank {
 
     pub fn prepare_hashed_batch<'a, 'b>(
         &'a self,
-        txs: &'b [RuntimeTransaction],
+        txs: &'b [ValidatedTransaction],
     ) -> TransactionBatch<'a, 'b> {
         let lock_results = self.rc.accounts.lock_accounts(txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
@@ -2667,7 +2667,7 @@ impl Bank {
 
     pub(crate) fn prepare_simulation_batch<'a, 'b>(
         &'a self,
-        tx: RuntimeTransaction<'b>,
+        tx: ValidatedTransaction<'b>,
     ) -> TransactionBatch<'a, 'b> {
         let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![tx]));
         batch.needs_unlock = false;
@@ -2677,7 +2677,7 @@ impl Bank {
     /// Run transactions against a frozen bank without committing the results
     pub fn simulate_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: Transaction,
     ) -> (
         Result<()>,
         TransactionLogMessages,
@@ -2687,7 +2687,7 @@ impl Bank {
 
         // todo handle error
         let message_hash = transaction.message.hash();
-        let tx = RuntimeTransaction::try_build(Cow::Borrowed(transaction), message_hash).unwrap();
+        let tx = ValidatedTransaction::try_build(transaction, message_hash).unwrap();
         let batch = self.prepare_simulation_batch(tx);
 
         let mut timings = ExecuteTimings::default();
@@ -2746,7 +2746,7 @@ impl Bank {
 
     fn check_age<'a>(
         &self,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
@@ -2775,7 +2775,7 @@ impl Bank {
 
     fn is_tx_already_processed(
         &self,
-        hashed_tx: &RuntimeTransaction,
+        hashed_tx: &ValidatedTransaction,
         status_cache: &StatusCache<Result<()>>,
     ) -> bool {
         let key = &hashed_tx.hash;
@@ -2787,7 +2787,7 @@ impl Bank {
 
     fn check_status_cache(
         &self,
-        hashed_txs: &[RuntimeTransaction],
+        hashed_txs: &[ValidatedTransaction],
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
@@ -2808,7 +2808,7 @@ impl Bank {
 
     fn filter_by_vote_transactions<'a>(
         &self,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<TransactionCheckResult> {
@@ -2836,7 +2836,7 @@ impl Bank {
 
     pub fn check_tx_durable_nonce(
         &self,
-        tx: &RuntimeTransaction,
+        tx: &ValidatedTransaction,
     ) -> Option<(Pubkey, AccountSharedData)> {
         todo!()
         // transaction::uses_durable_nonce(tx)
@@ -2865,7 +2865,7 @@ impl Bank {
 
     pub fn check_transactions(
         &self,
-        hashed_txs: &[RuntimeTransaction],
+        hashed_txs: &[ValidatedTransaction],
         lock_results: &[Result<()>],
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
@@ -3347,7 +3347,7 @@ impl Bank {
 
     fn filter_program_errors_and_collect_fee<'a>(
         &self,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         executed: &[TransactionExecutionResult],
     ) -> Vec<Result<()>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
@@ -3399,7 +3399,7 @@ impl Bank {
 
     pub fn commit_transactions(
         &self,
-        hashed_txs: &[RuntimeTransaction],
+        hashed_txs: &[ValidatedTransaction],
         loaded_txs: &mut [TransactionLoadResult],
         executed: &[TransactionExecutionResult],
         tx_count: u64,
@@ -4829,7 +4829,7 @@ impl Bank {
     /// a bank-level cache of vote accounts
     fn update_cached_accounts<'a>(
         &self,
-        txs: impl Iterator<Item = &'a RuntimeTransaction<'a>>,
+        txs: impl Iterator<Item = &'a ValidatedTransaction<'a>>,
         res: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
     ) -> Vec<OverwrittenVoteAccount> {
@@ -5409,7 +5409,7 @@ pub fn goto_end_of_slot(bank: &mut Bank) {
     }
 }
 
-fn is_simple_vote_transaction(transaction: &RuntimeTransaction) -> bool {
+fn is_simple_vote_transaction(transaction: &ValidatedTransaction) -> bool {
     if transaction.instructions.len() == 1 {
         let instruction = &transaction.instructions[0];
         if instruction.program_id == &solana_vote_program::id() {

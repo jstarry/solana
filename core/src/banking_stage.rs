@@ -23,7 +23,7 @@ use solana_runtime::{
         TransactionExecutionResult,
     },
     bank_utils,
-    message::RuntimeTransaction,
+    transaction::ValidatedTransaction,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
@@ -914,7 +914,7 @@ impl BankingStage {
 
     pub fn process_and_record_transactions(
         bank: &Arc<Bank>,
-        txs: &[RuntimeTransaction],
+        txs: &[ValidatedTransaction],
         poh: &TransactionRecorder,
         chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -958,7 +958,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         bank_creation_time: &Instant,
-        transactions: &[RuntimeTransaction],
+        transactions: &[ValidatedTransaction],
         poh: &TransactionRecorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -1060,7 +1060,7 @@ impl BankingStage {
         transaction_indexes: &[usize],
         cost_tracker: &Arc<RwLock<CostTracker>>,
         banking_stage_stats: &BankingStageStats,
-    ) -> (Vec<RuntimeTransaction<'static>>, Vec<usize>, Vec<usize>) {
+    ) -> (Vec<ValidatedTransaction<'static>>, Vec<usize>, Vec<usize>) {
         let mut retryable_transaction_packet_indexes: Vec<usize> = vec![];
 
         let verified_transactions_with_packet_indexes: Vec<_> = transaction_indexes
@@ -1070,8 +1070,8 @@ impl BankingStage {
                 let tx: Transaction = limited_deserialize(&p.data[0..p.meta.size]).ok()?;
                 let message_bytes = Self::packet_message(p)?;
                 let message_hash = Message::hash_raw_message(message_bytes);
-                let runtime_tx = RuntimeTransaction::try_build(Cow::Owned(tx), message_hash)?;
-                Some((runtime_tx, *tx_index))
+                let validated_tx = ValidatedTransaction::try_build(Cow::Owned(tx), message_hash)?;
+                Some((validated_tx, *tx_index))
             })
             .collect();
 
@@ -1116,7 +1116,7 @@ impl BankingStage {
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
         bank: &Arc<Bank>,
-        transactions: &[RuntimeTransaction],
+        transactions: &[ValidatedTransaction],
         transaction_to_packet_indexes: &[usize],
         pending_indexes: &[usize],
     ) -> Vec<usize> {

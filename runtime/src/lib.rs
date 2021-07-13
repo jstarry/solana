@@ -24,7 +24,7 @@ pub mod inline_spl_token_v2_0;
 pub mod instruction_recorder;
 pub mod loader_utils;
 pub mod log_collector;
-mod message;
+pub mod transaction;
 pub mod message_processor;
 mod native_loader;
 pub mod neon_evm_program;

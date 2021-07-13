@@ -95,24 +95,23 @@ impl <'a> RuntimeTransaction<'a> {
         transaction.verify_precompiles()?;
         transaction.sanitize()?;
 
-        let message = &transaction.message;
-        if Accounts::has_duplicates(&message.account_keys) {
+        if Accounts::has_duplicates(&transaction.message.account_keys) {
             return Err(TransactionError::AccountLoadedTwice);
         }
 
-        let accounts: Vec<_> = message
+        let accounts: Vec<_> = transaction.message
             .account_keys
             .iter()
             .enumerate()
             .map(|(i, key)| AccountMeta {
                 index: i,
                 pubkey: key,
-                is_signer: message.is_signer(i),
-                is_writable: message.is_writable(i),
+                is_signer: transaction.message.is_signer(i),
+                is_writable: transaction.message.is_writable(i),
             })
             .collect();
 
-        let instructions = message
+        let instructions = transaction.message
             .instructions
             .iter()
             .map(|compiled_ix| {

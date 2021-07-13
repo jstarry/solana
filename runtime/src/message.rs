@@ -1,5 +1,6 @@
 //! Verified and sanitized runtime message
 use itertools::Itertools;
+use ouroboros::self_referencing;
 use solana_sdk::{
     bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
     hash::Hash,
@@ -14,12 +15,17 @@ use std::{borrow::Cow, ops::Deref, str::FromStr};
 
 use crate::accounts::Accounts;
 
+#[self_referencing]
 #[derive(Debug, PartialEq, Clone)]
 pub struct RuntimeTransaction<'a> {
     pub tx: Cow<'a, Transaction>,
     pub hash: Hash,
-    pub accounts: Vec<AccountMeta<'a>>,
-    pub instructions: Vec<RuntimeInstruction<'a>>,
+    #[borrows(tx)]
+    #[covariant]
+    pub accounts: Vec<AccountMeta<'this>>,
+    #[borrows(tx, accounts)]
+    #[covariant]
+    pub instructions: Vec<RuntimeInstruction<'this>>,
 }
 
 /// Account metadata used to define Instructions
@@ -86,66 +92,70 @@ static ref BUILTIN_PROGRAMS_KEYS: [Pubkey; 10] = {
 impl Deref for RuntimeTransaction<'_> {
     type Target = Transaction;
     fn deref(&self) -> &Self::Target {
-        &self.tx
+        &self.borrow_tx()
     }
 }
 
-impl <'a> RuntimeTransaction<'a> {
-    pub fn try_build(transaction: Cow<'a, Transaction>, message_hash: Hash) -> Result<RuntimeTransaction<'a>> {
-        transaction.verify_precompiles()?;
+impl<'a> RuntimeTransaction<'a> {
+    pub fn try_build(
+        transaction: Cow<'a, Transaction>,
+        message_hash: Hash,
+    ) -> Result<RuntimeTransaction<'a>> {
         transaction.sanitize()?;
+        transaction.verify_precompiles()?;
 
         if Accounts::has_duplicates(&transaction.message.account_keys) {
             return Err(TransactionError::AccountLoadedTwice);
         }
 
-        let accounts: Vec<_> = transaction.message
-            .account_keys
-            .iter()
-            .enumerate()
-            .map(|(i, key)| AccountMeta {
-                index: i,
-                pubkey: key,
-                is_signer: transaction.message.is_signer(i),
-                is_writable: transaction.message.is_writable(i),
-            })
-            .collect();
-
-        let instructions = transaction.message
-            .instructions
-            .iter()
-            .map(|compiled_ix| {
-                let program_id_index = compiled_ix.program_id_index as usize;
-                let unique_account_indices = compiled_ix
-                    .accounts
-                    .iter()
-                    .unique()
-                    .map(|index| *index as usize)
-                    .collect();
-                RuntimeInstruction {
-                    data: &compiled_ix.data,
-                    program_id_index,
-                    program_id: &accounts[program_id_index].pubkey,
-                    unique_account_indices,
-                    accounts: compiled_ix
-                        .accounts
-                        .iter()
-                        .map(|account_index| accounts[*account_index as usize].clone())
-                        .collect(),
-                }
-            })
-            .collect();
-
-        Ok(Self {
+        Ok(RuntimeTransactionBuilder {
             tx: transaction,
             hash: message_hash,
-            accounts,
-            instructions,
-        })
+            accounts_builder: |tx: &Cow<Transaction>| {
+                tx.message
+                    .account_keys
+                    .iter()
+                    .enumerate()
+                    .map(|(i, key)| AccountMeta {
+                        index: i,
+                        pubkey: key,
+                        is_signer: tx.message.is_signer(i),
+                        is_writable: tx.message.is_writable(i),
+                    })
+                    .collect()
+            },
+            instructions_builder: |tx: &Cow<Transaction>, accounts: &Vec<AccountMeta>| {
+                tx.message
+                    .instructions
+                    .iter()
+                    .map(|compiled_ix| {
+                        let program_id_index = compiled_ix.program_id_index as usize;
+                        let unique_account_indices = compiled_ix
+                            .accounts
+                            .iter()
+                            .unique()
+                            .map(|index| *index as usize)
+                            .collect();
+                        RuntimeInstruction {
+                            data: &compiled_ix.data,
+                            program_id_index,
+                            program_id: &accounts[program_id_index].pubkey,
+                            unique_account_indices,
+                            accounts: compiled_ix
+                                .accounts
+                                .iter()
+                                .map(|account_index| accounts[*account_index as usize].clone())
+                                .collect(),
+                        }
+                    })
+                    .collect()
+            },
+        }
+        .build())
     }
 
     pub fn is_writable(&self, i: usize) -> bool {
-        let account = &self.accounts[i];
+        let account = &self.borrow_accounts()[i];
         if sysvar::is_sysvar_id(account.pubkey) || BUILTIN_PROGRAMS_KEYS.contains(&account.pubkey) {
             false
         } else {
@@ -156,7 +166,7 @@ impl <'a> RuntimeTransaction<'a> {
     pub fn get_account_keys_by_lock_type(&self) -> (Vec<&Pubkey>, Vec<&Pubkey>) {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
-        for account in self.accounts.iter() {
+        for account in self.borrow_accounts().iter() {
             if account.is_writable {
                 writable_keys.push(account.pubkey);
             } else {
@@ -167,13 +177,13 @@ impl <'a> RuntimeTransaction<'a> {
     }
 
     pub fn is_key_passed_to_program(&self, key_index: usize) -> bool {
-        self.instructions
+        self.borrow_instructions()
             .iter()
             .any(|ix| ix.accounts.iter().any(|account| account.index == key_index))
     }
 
     pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
-        self.instructions
+        self.borrow_instructions()
             .iter()
             .any(|ix| ix.program_id_index == key_index)
     }

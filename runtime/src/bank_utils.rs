@@ -43,8 +43,7 @@ pub fn find_and_send_votes(
                 .0
                 .is_ok());
             let transaction = &hashed_txs[old_account.transaction_index];
-            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction)
-            {
+            if let Some(parsed_vote) = vote_transaction::parse_vote_transaction(transaction) {
                 if parsed_vote.1.slots.last().is_some() {
                     let _ = vote_sender.send(parsed_vote);
                 }

@@ -2597,7 +2597,12 @@ impl Bank {
             if Self::can_commit(res) && !tx.signatures.is_empty() {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
-                status_cache.insert(&tx.message.recent_blockhash, &tx.hash, self.slot(), res.clone());
+                status_cache.insert(
+                    &tx.message.recent_blockhash,
+                    &tx.hash,
+                    self.slot(),
+                    res.clone(),
+                );
                 // Add the transaction signature to the status cache so that transaction status
                 // can be queried by transaction signature over RPC. In the future, this should
                 // only be added for API nodes because voting validators don't need to do this.
@@ -3357,7 +3362,9 @@ impl Bank {
                     .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
                     .unwrap_or_else(|| {
                         (
-                            hash_queue.get_fee_calculator(&tx.message.recent_blockhash).cloned(),
+                            hash_queue
+                                .get_fee_calculator(&tx.message.recent_blockhash)
+                                .cloned(),
                             false,
                         )
                     });

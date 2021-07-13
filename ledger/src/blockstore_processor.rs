@@ -46,6 +46,7 @@ use solana_transaction_status::token_balances::{
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    convert::TryFrom,
     path::PathBuf,
     result,
     sync::Arc,
@@ -217,7 +218,10 @@ pub fn process_entries(
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
     let mut timings = ExecuteTimings::default();
-    let mut entry_types: Vec<_> = entries.iter().map(EntryType::from).collect();
+    let mut entry_types: Vec<_> = entries
+        .iter()
+        .map(EntryType::try_from)
+        .collect::<Result<_>>()?;
     let result = process_entries_with_callback(
         bank,
         &mut entry_types,
@@ -792,15 +796,10 @@ pub fn confirm_slot(
     };
 
     let check_start = Instant::now();
-    let check_result = entries
-        .verify_and_hash_transactions(skip_verification, bank.verify_tx_signatures_len_enabled());
-    if check_result.is_none() {
-        warn!("Ledger proof of history failed at slot: {}", slot);
-        return Err(BlockError::InvalidEntryHash.into());
-    }
+    let mut entries = entries
+        .verify_and_hash_transactions(skip_verification, bank.verify_tx_signatures_len_enabled())?;
     let transaction_duration_us = timing::duration_as_us(&check_start.elapsed());
 
-    let mut entries = check_result.unwrap();
     let mut replay_elapsed = Measure::start("replay_elapsed");
     let mut execute_timings = ExecuteTimings::default();
     // Note: This will shuffle entries' transactions in-place.
@@ -2410,13 +2409,13 @@ pub mod tests {
         // Check all accounts are unlocked
         let txs1 = &entry_1_to_mint.transactions[..];
         let txs2 = &entry_2_to_3_mint_to_1.transactions[..];
-        let batch1 = bank.prepare_batch(txs1.iter());
+        let batch1 = bank.prepare_batch(txs1.iter()).unwrap();
         for result in batch1.lock_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
         drop(batch1);
-        let batch2 = bank.prepare_batch(txs2.iter());
+        let batch2 = bank.prepare_batch(txs2.iter()).unwrap();
         for result in batch2.lock_results() {
             assert!(result.is_ok());
         }
@@ -3181,7 +3180,7 @@ pub mod tests {
         );
         account_loaded_twice.message.account_keys[1] = mint_keypair.pubkey();
         let transactions = [account_not_found_tx, account_loaded_twice];
-        let batch = bank.prepare_batch(transactions.iter());
+        let batch = bank.prepare_batch(transactions.iter()).unwrap();
         let (
             TransactionResults {
                 fee_collection_results,

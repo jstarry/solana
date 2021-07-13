@@ -1,5 +1,12 @@
-use solana_sdk::{hash::Hash, transaction::Transaction};
+use solana_sdk::{
+    hash::Hash,
+    sanitize::Sanitize,
+    transaction::{Result, Transaction, TransactionError},
+};
 use std::borrow::Cow;
+use std::convert::TryFrom;
+
+use crate::accounts::Accounts;
 
 /// Transaction and the hash of its message
 #[derive(Debug, Clone)]
@@ -9,11 +16,16 @@ pub struct HashedTransaction<'a> {
 }
 
 impl<'a> HashedTransaction<'a> {
-    pub fn new(transaction: Cow<'a, Transaction>, message_hash: Hash) -> Self {
-        Self {
+    pub fn try_create(transaction: Cow<'a, Transaction>, message_hash: Hash) -> Result<Self> {
+        transaction.sanitize()?;
+        if Accounts::has_duplicates(&transaction.message.account_keys) {
+            return Err(TransactionError::AccountLoadedTwice);
+        }
+
+        Ok(Self {
             transaction,
             message_hash,
-        }
+        })
     }
 
     pub fn transaction(&self) -> &Transaction {
@@ -21,21 +33,19 @@ impl<'a> HashedTransaction<'a> {
     }
 }
 
-impl<'a> From<Transaction> for HashedTransaction<'_> {
-    fn from(transaction: Transaction) -> Self {
-        Self {
-            message_hash: transaction.message().hash(),
-            transaction: Cow::Owned(transaction),
-        }
+impl<'a> TryFrom<Transaction> for HashedTransaction<'_> {
+    type Error = TransactionError;
+    fn try_from(transaction: Transaction) -> Result<Self> {
+        let message_hash = transaction.message().hash();
+        Self::try_create(Cow::Owned(transaction), message_hash)
     }
 }
 
-impl<'a> From<&'a Transaction> for HashedTransaction<'a> {
-    fn from(transaction: &'a Transaction) -> Self {
-        Self {
-            message_hash: transaction.message().hash(),
-            transaction: Cow::Borrowed(transaction),
-        }
+impl<'a> TryFrom<&'a Transaction> for HashedTransaction<'a> {
+    type Error = TransactionError;
+    fn try_from(transaction: &'a Transaction) -> Result<Self> {
+        let message_hash = transaction.message().hash();
+        Self::try_create(Cow::Borrowed(transaction), message_hash)
     }
 }
 

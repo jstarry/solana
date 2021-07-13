@@ -858,25 +858,13 @@ impl Accounts {
     #[must_use]
     #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(&self, txs: impl Iterator<Item = &'a Transaction>) -> Vec<Result<()>> {
-        use solana_sdk::sanitize::Sanitize;
-        let keys: Vec<Result<_>> = txs
-            .map(|tx| {
-                tx.sanitize().map_err(TransactionError::from)?;
-
-                if Self::has_duplicates(&tx.message.account_keys) {
-                    return Err(TransactionError::AccountLoadedTwice);
-                }
-
-                Ok(tx.message().get_account_keys_by_lock_type())
-            })
+        let keys: Vec<_> = txs
+            .map(|tx| tx.message().get_account_keys_by_lock_type())
             .collect();
         let mut account_locks = &mut self.account_locks.lock().unwrap();
         keys.into_iter()
-            .map(|result| match result {
-                Ok((writable_keys, readonly_keys)) => {
-                    self.lock_account(&mut account_locks, writable_keys, readonly_keys)
-                }
-                Err(e) => Err(e),
+            .map(|(writable_keys, readonly_keys)| {
+                self.lock_account(&mut account_locks, writable_keys, readonly_keys)
             })
             .collect()
     }

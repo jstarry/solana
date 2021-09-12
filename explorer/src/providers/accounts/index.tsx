@@ -28,6 +28,7 @@ import {
 import { RewardsProvider } from "./rewards";
 import { programs, MetadataJson } from "@metaplex/js";
 import getEditionInfo, { EditionInfo } from "./utils/getEditionInfo";
+import { NamesProvider } from "./names";
 export { useAccountHistory } from "./history";
 
 const Metadata = programs.metadata.Metadata;
@@ -120,7 +121,11 @@ export function AccountsProvider({ children }: AccountsProviderProps) {
         <TokensProvider>
           <HistoryProvider>
             <RewardsProvider>
-              <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
+              <FlaggedAccountsProvider>
+                <NamesProvider>
+                  {children}
+                </NamesProvider>
+              </FlaggedAccountsProvider>
             </RewardsProvider>
           </HistoryProvider>
         </TokensProvider>

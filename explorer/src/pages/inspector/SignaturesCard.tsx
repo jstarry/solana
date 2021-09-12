@@ -4,6 +4,7 @@ import * as nacl from "tweetnacl";
 import { Message, PublicKey } from "@solana/web3.js";
 import { Signature } from "components/common/Signature";
 import { Address } from "components/common/Address";
+import { CardHeader } from "components/common/CardHeader";
 
 export function TransactionSignatures({
   signatures,
@@ -42,9 +43,7 @@ export function TransactionSignatures({
 
   return (
     <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title">Signatures</h3>
-      </div>
+      <CardHeader slug="signatures" title="Signatures" />
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
           <thead>

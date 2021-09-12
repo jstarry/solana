@@ -24,6 +24,7 @@ import { Signature } from "components/common/Signature";
 import { intoTransactionInstruction } from "utils/tx";
 import { FetchStatus } from "providers/cache";
 import { Slot } from "components/common/Slot";
+import { CardHeader } from "components/common/CardHeader";
 import { BigNumber } from "bignumber.js";
 import { BalanceDelta } from "components/common/BalanceDelta";
 import { TokenBalancesCard } from "components/transaction/TokenBalancesCard";
@@ -396,10 +397,8 @@ function AccountsCard({ signature }: SignatureProps) {
   });
 
   return (
-    <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title">Account Input(s)</h3>
-      </div>
+    <div id="account-inputs" className="card">
+      <CardHeader slug="account-inputs" title="Account Input(s)" />
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
           <thead>

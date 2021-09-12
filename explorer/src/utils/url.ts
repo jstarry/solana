@@ -9,6 +9,7 @@ export const clusterPath = (pathname: string, params?: URLSearchParams) => {
   return (location: Location) => ({
     ...pickClusterParams(location, params),
     pathname,
+    hash: "",
   });
 };
 

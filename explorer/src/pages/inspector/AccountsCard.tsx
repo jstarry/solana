@@ -2,6 +2,7 @@ import React from "react";
 import { Message, PublicKey } from "@solana/web3.js";
 import { TableCardBody } from "components/common/TableCardBody";
 import { AddressWithContext } from "./AddressWithContext";
+import { CardHeader } from "components/common/CardHeader";
 import { ErrorCard } from "components/common/ErrorCard";
 
 export function AccountsCard({ message }: { message: Message }) {
@@ -69,10 +70,7 @@ export function AccountsCard({ message }: { message: Message }) {
 
   return (
     <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title">
-          {`Account List (${message.accountKeys.length})`}
-        </h3>
+      <CardHeader slug="account-inputs" title={`Account Keys (${message.accountKeys.length})`}>
         <button
           className={`btn btn-sm d-flex ${
             expanded ? "btn-black active" : "btn-white"
@@ -81,7 +79,7 @@ export function AccountsCard({ message }: { message: Message }) {
         >
           {expanded ? "Collapse" : "Expand"}
         </button>
-      </div>
+      </CardHeader>
       {expanded && <TableCardBody>{accountRows}</TableCardBody>}
     </div>
   );

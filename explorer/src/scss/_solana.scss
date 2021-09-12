@@ -35,6 +35,23 @@ ul.log-messages {
     "Courier New", monospace;
 }
 
+a.header-link {
+  color: $white;
+
+  span.fe-link {
+    display: none;
+  }
+
+  &:hover {
+    color: $gray-600;
+    text-decoration: underline;
+
+    span.fe-link {
+      display: inline;
+    }
+  }
+}
+
 .popover-container {
   position: relative;
 

@@ -4,6 +4,7 @@ import { Connection, Message, Transaction } from "@solana/web3.js";
 import { useCluster } from "providers/cluster";
 import { InstructionLogs, prettyProgramLogs } from "utils/program-logs";
 import { ProgramLogsCardBody } from "components/ProgramLogsCardBody";
+import { CardHeader } from "components/common/CardHeader";
 
 const DEFAULT_SIGNATURE = bs58.encode(Buffer.alloc(64).fill(0));
 
@@ -18,9 +19,7 @@ export function SimulatorCard({ message }: { message: Message }) {
   if (simulating) {
     return (
       <div className="card">
-        <div className="card-header">
-          <h3 className="card-header-title">Transaction Simulation</h3>
-        </div>
+        <CardHeader slug="simulation" title="Simulation" />
         <div className="card-body text-center">
           <span className="spinner-grow spinner-grow-sm me-2"></span>
           Simulating
@@ -30,12 +29,11 @@ export function SimulatorCard({ message }: { message: Message }) {
   } else if (!logs) {
     return (
       <div className="card">
-        <div className="card-header">
-          <h3 className="card-header-title">Transaction Simulation</h3>
+        <CardHeader slug="simulation" title="Simulation">
           <button className="btn btn-sm d-flex btn-white" onClick={simulate}>
             Simulate
           </button>
-        </div>
+        </CardHeader>
         {simulationError ? (
           <div className="card-body">
             Failed to run simulation:
@@ -61,12 +59,11 @@ export function SimulatorCard({ message }: { message: Message }) {
 
   return (
     <div className="card">
-      <div className="card-header">
-        <h3 className="card-header-title">Transaction Simulation</h3>
+      <CardHeader slug="simulation" title="Simulation">
         <button className="btn btn-sm d-flex btn-white" onClick={simulate}>
           Retry
         </button>
-      </div>
+      </CardHeader>
       <ProgramLogsCardBody message={message} logs={logs} cluster={cluster} />
     </div>
   );

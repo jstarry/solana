@@ -7,6 +7,7 @@ import {
   ClusterStatsStatus,
 } from "providers/stats/solanaClusterStats";
 import classNames from "classnames";
+import { CardHeader } from "components/common/CardHeader";
 import { TableCardBody } from "components/common/TableCardBody";
 import { ChartOptions, ChartTooltipModel } from "chart.js";
 import { PerformanceInfo } from "providers/stats/solanaPerformanceInfo";
@@ -15,9 +16,7 @@ import { StatsNotReady } from "pages/ClusterStatsPage";
 export function TpsCard() {
   return (
     <div className="card">
-      <div className="card-header">
-        <h4 className="card-header-title">Live Transaction Stats</h4>
-      </div>
+      <CardHeader slug="transaction-stats" title="Live Transaction Stats" />
       <TpsCardBody />
     </div>
   );

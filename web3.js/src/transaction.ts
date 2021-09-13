@@ -107,6 +107,7 @@ export type SignaturePubkeyPair = {
  *
  */
 type TransactionCtorFields = {
+  
   /** A recent blockhash */
   recentBlockhash?: Blockhash | null;
   /** Optional nonce information used for offline nonce'd transactions */

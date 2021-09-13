@@ -18,7 +18,7 @@ ctrlc = { version = "3.1.9", features = ["termination"] }
 console = "0.14.1"
 const_format = "0.2.19"
 log = "0.4.14"
-humantime = "2.0.1"
+humantime = "2.1.0"
 num-traits = "0.2"
 pretty-hex = "0.2.1"
 reqwest = { version = "0.11.4", default-features = false, features = ["blocking", "rustls-tls", "json"] }

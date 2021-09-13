@@ -66,6 +66,7 @@ function App() {
               ...ADDRESS_ALIASES.map((path) => `/${path}/:address/:tab`),
             ]}
             render={({ match, location }) => {
+              
               let pathname = `/address/${match.params.address}`;
               if (match.params.tab) {
                 pathname += `/${match.params.tab}`;

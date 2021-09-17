@@ -89,8 +89,8 @@ const MIN_THREADS_BANKING: u32 = 1;
 pub struct BankingStageStats {
     last_report: AtomicInterval,
     id: u32,
-    process_packets_count: AtomicUsize,
-    new_tx_count: AtomicUsize,
+    processed_packets_count: AtomicUsize,
+    received_packets_count: AtomicUsize,
     dropped_packet_batches_count: AtomicUsize,
     dropped_packets_count: AtomicUsize,
     dropped_duplicated_packets_count: AtomicUsize,
@@ -125,13 +125,13 @@ impl BankingStageStats {
                 "banking_stage-loop-stats",
                 ("id", self.id as i64, i64),
                 (
-                    "process_packets_count",
-                    self.process_packets_count.swap(0, Ordering::Relaxed) as i64,
+                    "processed_packets_count",
+                    self.processed_packets_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
-                    "new_tx_count",
-                    self.new_tx_count.swap(0, Ordering::Relaxed) as i64,
+                    "received_packets_count",
+                    self.received_packets_count.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -413,7 +413,7 @@ impl BankingStage {
         qos_service: &Arc<QosService>,
     ) {
         let mut rebuffered_packets_len = 0;
-        let mut new_tx_count = 0;
+        let mut consumed_buffered_packets_count = 0;
         let buffered_len = buffered_packets.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = None;
@@ -464,7 +464,7 @@ impl BankingStage {
                             working_bank,
                         ));
                     }
-                    new_tx_count += processed;
+                    consumed_buffered_packets_count += processed;
                     // Out of the buffered packets just retried, collect any still unprocessed
                     // transactions in this batch for forwarding
                     rebuffered_packets_len += new_unprocessed_indexes.len();
@@ -496,8 +496,8 @@ impl BankingStage {
             timestamp(),
             buffered_len,
             proc_start.as_ms(),
-            new_tx_count,
-            (new_tx_count as f32) / (proc_start.as_s())
+            consumed_buffered_packets_count,
+            (consumed_buffered_packets_count as f32) / (proc_start.as_s())
         );
 
         banking_stage_stats
@@ -508,7 +508,7 @@ impl BankingStage {
             .fetch_add(rebuffered_packets_len, Ordering::Relaxed);
         banking_stage_stats
             .consumed_buffered_packets_count
-            .fetch_add(new_tx_count, Ordering::Relaxed);
+            .fetch_add(consumed_buffered_packets_count, Ordering::Relaxed);
     }
 
     fn consume_or_forward_packets(
@@ -1301,17 +1301,17 @@ impl BankingStage {
         recv_time.stop();
 
         let mms_len = mms.len();
-        let count: usize = mms.iter().map(|x| x.packets.len()).sum();
+        let received_packets_count: usize = mms.iter().map(|x| x.packets.len()).sum();
         debug!(
-            "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
+            "@{:?} process start stalled for: {:?}ms received packets: {} id: {}",
             timestamp(),
             duration_as_ms(&recv_start.elapsed()),
-            count,
+            received_packets_count,
             id,
         );
-        inc_new_counter_debug!("banking_stage-transactions_received", count);
+        inc_new_counter_debug!("banking_stage-transactions_received", received_packets_count);
         let mut proc_start = Measure::start("process_packets_transactions_process");
-        let mut new_tx_count = 0;
+        let mut processed_packets_count = 0;
 
         let mut mms_iter = mms.into_iter();
         let mut dropped_packets_count = 0;
@@ -1342,7 +1342,7 @@ impl BankingStage {
                 bank_creation_time,
             } = &*working_bank_start.unwrap();
 
-            let (processed, verified_txs_len, unprocessed_indexes) =
+            let (interrupted, processed_count, unprocessed_indexes) =
                 Self::process_packets_transactions(
                     working_bank,
                     bank_creation_time,
@@ -1355,7 +1355,7 @@ impl BankingStage {
                     qos_service,
                 );
 
-            new_tx_count += processed;
+            processed_packets_count += processed_count;
 
             // Collect any unprocessed transactions in this batch for forwarding
             Self::push_unprocessed(
@@ -1370,8 +1370,8 @@ impl BankingStage {
                 banking_stage_stats,
             );
 
-            // If there were retryable transactions, add the unexpired ones to the buffered queue
-            if processed < verified_txs_len {
+            // If processing was interrupted , add the unexpired ones to the buffered queue
+            if interrupted {
                 let mut handle_retryable_packets_time = Measure::start("handle_retryable_packets");
                 let next_leader = poh.lock().unwrap().next_slot_leader();
                 // Walk thru rest of the transactions and filter out the invalid (e.g. too old) ones
@@ -1411,20 +1411,20 @@ impl BankingStage {
             timestamp(),
             mms_len,
             proc_start.as_ms(),
-            new_tx_count,
-            (new_tx_count as f32) / (proc_start.as_s()),
-            count,
+            processed_packets_count,
+            (processed_packets_count as f32) / (proc_start.as_s()),
+            received_packets_count,
             id,
         );
         banking_stage_stats
             .process_packets_elapsed
             .fetch_add(proc_start.as_us(), Ordering::Relaxed);
         banking_stage_stats
-            .process_packets_count
-            .fetch_add(count, Ordering::Relaxed);
+            .received_packets_count
+            .fetch_add(received_packets_count, Ordering::Relaxed);
         banking_stage_stats
-            .new_tx_count
-            .fetch_add(new_tx_count, Ordering::Relaxed);
+            .processed_packets_count
+            .fetch_add(processed_packets_count, Ordering::Relaxed);
         banking_stage_stats
             .dropped_packet_batches_count
             .fetch_add(dropped_packet_batches_count, Ordering::Relaxed);

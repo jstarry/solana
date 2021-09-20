@@ -5,7 +5,9 @@ pub mod legacy;
 #[cfg(not(target_arch = "bpf"))]
 #[path = ""]
 mod non_bpf_modules {
+    mod borrow;
     mod mapped;
+    mod pod;
     mod sanitized;
     pub mod v0;
     mod versions;

@@ -34,7 +34,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 use crate::{
-    accounts::{AccountAddressFilter, Accounts, TransactionAccounts, TransactionLoadResult},
+    accounts::{AccountAddressFilter, Accounts, LoadedTransaction, TransactionAccounts},
     accounts_db::{
         AccountShrinkThreshold, AccountsDbConfig, ErrorCounters, SnapshotStorages,
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
@@ -56,13 +56,19 @@ use crate::{
     stakes::Stakes,
     status_cache::{SlotDelta, StatusCache},
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
-    transaction_batch::TransactionBatch,
+    transaction_balances::{
+        TransactionBalances, TransactionTokenBalance, TransactionTokenBalances,
+    },
+    transaction_batch::{TransactionBatch, TransactionBatchItem},
     vote_account::VoteAccount,
 };
 use byteorder::{ByteOrder, LittleEndian};
 use itertools::Itertools;
 use log::*;
 use rayon::ThreadPool;
+use solana_account_decoder::parse_token::{
+    spl_token_id_v2_0, spl_token_v2_0_native_mint, token_amount_to_ui_amount, UiTokenAmount,
+};
 use solana_measure::measure::Measure;
 use solana_metrics::{datapoint_debug, inc_new_counter_debug, inc_new_counter_info};
 use solana_program_runtime::{ExecuteDetailsTimings, Executors};
@@ -116,6 +122,10 @@ use solana_vote_program::{
     vote_instruction::VoteInstruction,
     vote_state::{VoteState, VoteStateVersions},
 };
+use spl_token_v2_0::{
+    solana_program::program_pack::Pack,
+    state::{Account as TokenAccount, Mint},
+};
 use std::{
     borrow::Cow,
     cell::RefCell,
@@ -126,6 +136,7 @@ use std::{
     path::PathBuf,
     ptr,
     rc::Rc,
+    str::FromStr,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering::Relaxed},
         LockResult, RwLockWriteGuard, {Arc, RwLock, RwLockReadGuard},
@@ -158,6 +169,31 @@ impl RentDebits {
         }
     }
 }
+
+pub struct ExecutedTransaction {
+    // todo heap allocate
+    pub loaded_tx: LoadedTransaction,
+    pub pre_balances: Vec<u64>,
+    pub post_balances: Vec<u64>,
+    pub pre_token_balances: Vec<TransactionTokenBalance>,
+    pub post_token_balances: Vec<TransactionTokenBalance>,
+    pub inner_instructions: Option<InnerInstructionsList>,
+    pub log_messages: Option<Vec<String>>,
+    // pre_balances: Option<()>,
+    pub process_result: Result<()>,
+}
+
+// impl ExecutedTransaction {
+//     fn new_from_err(loaded_tx: LoadedTransaction, err: TransactionError) -> Self {
+//         Self {
+//             loaded_tx,
+//             inner_instructions: None,
+//             log_messages: None,
+//             // pre_balances: None,
+//             process_result: Err(err),
+//         }
+//     }
+// }
 
 #[derive(Default, Debug)]
 pub struct ExecuteTimings {
@@ -466,10 +502,9 @@ impl StatusCacheRc {
 }
 
 pub type TransactionCheckResult = (Result<()>, Option<NonceRollbackPartial>);
-pub type TransactionExecutionResult = (Result<()>, Option<NonceRollbackFull>);
 pub struct TransactionResults {
-    pub fee_collection_results: Vec<Result<()>>,
-    pub execution_results: Vec<TransactionExecutionResult>,
+    pub fee_collection_results: Vec<Option<u64>>,
+    pub execution_results: Vec<Result<()>>,
     pub overwritten_vote_accounts: Vec<OverwrittenVoteAccount>,
     pub rent_debits: Vec<RentDebits>,
 }
@@ -479,26 +514,11 @@ pub struct TransactionSimulationResult {
     pub post_simulation_accounts: Vec<(Pubkey, AccountSharedData)>,
     pub units_consumed: u64,
 }
-pub struct TransactionBalancesSet {
-    pub pre_balances: TransactionBalances,
-    pub post_balances: TransactionBalances,
-}
 pub struct OverwrittenVoteAccount {
     pub account: VoteAccount,
     pub transaction_index: usize,
     pub transaction_result_index: usize,
 }
-
-impl TransactionBalancesSet {
-    pub fn new(pre_balances: TransactionBalances, post_balances: TransactionBalances) -> Self {
-        assert_eq!(pre_balances.len(), post_balances.len());
-        Self {
-            pre_balances,
-            post_balances,
-        }
-    }
-}
-pub type TransactionBalances = Vec<Vec<u64>>;
 
 /// An ordered list of instructions that were invoked during a transaction instruction
 pub type InnerInstructions = Vec<CompiledInstruction>;
@@ -2716,12 +2736,18 @@ impl Bank {
 
     fn update_transaction_statuses(
         &self,
-        sanitized_txs: &[SanitizedTransaction],
-        res: &[TransactionExecutionResult],
+        txs: &TransactionBatch,
+        executed_txs: &[Option<ExecutedTransaction>],
     ) {
+        assert_eq!(txs.items().len(), executed_txs.len());
         let mut status_cache = self.src.status_cache.write().unwrap();
-        assert_eq!(sanitized_txs.len(), res.len());
-        for (tx, (res, _nonce_rollback)) in sanitized_txs.iter().zip(res) {
+        for (tx, executed_tx) in txs.sanitized_txs_iter().zip(executed_txs.iter()) {
+            let executed_tx = match executed_tx {
+                None => continue,
+                Some(executed_tx) => executed_tx,
+            };
+
+            let res = &executed_tx.process_result;
             if Self::can_commit(res) {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
@@ -2778,6 +2804,7 @@ impl Bank {
 
     /// Prepare a transaction batch from a list of legacy transactionsy. Used for tests only.
     pub fn prepare_batch(&self, txs: Vec<Transaction>) -> Result<TransactionBatch> {
+        // why short circuit if unsanitized?
         let sanitized_txs = txs
             .into_iter()
             .map(SanitizedTransaction::try_from)
@@ -2786,11 +2813,15 @@ impl Bank {
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
-        Ok(TransactionBatch::new(
-            lock_results,
-            self,
-            Cow::Owned(sanitized_txs),
-        ))
+        let batch_items = sanitized_txs
+            .into_iter()
+            .zip(lock_results.into_iter())
+            .map(|(sanitized_tx, lock_result)| {
+                let locked = lock_result.is_ok();
+                TransactionBatchItem::new(Cow::Owned(sanitized_tx), locked)
+            })
+            .collect();
+        Ok(TransactionBatch::new(self, batch_items))
     }
 
     /// Prepare a transaction batch from a list of versioned transactions from
@@ -2809,11 +2840,15 @@ impl Bank {
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), self.demote_program_write_locks());
-        Ok(TransactionBatch::new(
-            lock_results,
-            self,
-            Cow::Owned(sanitized_txs),
-        ))
+        let batch_items = sanitized_txs
+            .into_iter()
+            .zip(lock_results.into_iter())
+            .map(|(sanitized_tx, lock_result)| {
+                let locked = lock_result.is_ok();
+                TransactionBatchItem::new(Cow::Owned(sanitized_tx), locked)
+            })
+            .collect();
+        Ok(TransactionBatch::new(self, batch_items))
     }
 
     /// Prepare a locked transaction batch from a list of sanitized transactions.
@@ -2825,7 +2860,15 @@ impl Bank {
             .rc
             .accounts
             .lock_accounts(txs.iter(), self.demote_program_write_locks());
-        TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
+        let batch_items = txs
+            .iter()
+            .zip(lock_results.into_iter())
+            .map(|(sanitized_tx, lock_result)| {
+                let locked = lock_result.is_ok();
+                TransactionBatchItem::new(Cow::Borrowed(sanitized_tx), locked)
+            })
+            .collect();
+        TransactionBatch::new(self, batch_items)
     }
 
     /// Prepare a transaction batch without locking accounts for transaction simulation.
@@ -2833,9 +2876,14 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
-        let mut batch = TransactionBatch::new(vec![Ok(())], self, Cow::Owned(vec![transaction]));
-        batch.needs_unlock = false;
-        batch
+        TransactionBatch::new(
+            self,
+            vec![TransactionBatchItem::new(
+                Cow::Owned(transaction),
+                Ok(()),
+                false,
+            )],
+        )
     }
 
     /// Run transactions against a frozen bank without committing the results
@@ -2846,44 +2894,28 @@ impl Bank {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
         let number_of_accounts = transaction.message().account_keys_len();
-        let batch = self.prepare_simulation_batch(transaction);
+        let mut batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 
-        let (
-            loaded_transactions,
-            executed,
-            _inner_instructions,
-            logs,
-            _retryable_transactions,
-            _transaction_count,
-            _signature_count,
-        ) = self.load_and_execute_transactions(
-            &batch,
+        let mut executed_txs = self.load_and_execute_transactions(
+            &mut batch,
             // After simulation, transactions will need to be forwarded to the leader
             // for processing. During forwarding, the transaction could expire if the
             // delay is not accounted for.
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
-            false,
             true,
             &mut timings,
         );
 
-        let result = executed[0].0.clone().map(|_| ());
-        let logs = logs.get(0).cloned().flatten().unwrap_or_default();
-        let post_simulation_accounts = loaded_transactions
+        let executed_tx = executed_txs.remove(0).unwrap();
+        let result = executed_tx.process_result;
+        let logs = executed_tx.log_messages.unwrap_or_default();
+        let post_simulation_accounts = executed_tx
+            .loaded_tx
+            .accounts
             .into_iter()
-            .next()
-            .unwrap()
-            .0
-            .ok()
-            .map(|loaded_transaction| {
-                loaded_transaction
-                    .accounts
-                    .into_iter()
-                    .take(number_of_accounts)
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+            .take(number_of_accounts)
+            .collect::<Vec<_>>();
 
         let units_consumed = timings
             .details
@@ -2904,14 +2936,9 @@ impl Bank {
     }
 
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
-        if batch.needs_unlock {
-            batch.needs_unlock = false;
-            self.rc.accounts.unlock_accounts(
-                batch.sanitized_transactions().iter(),
-                batch.lock_results(),
-                self.demote_program_write_locks(),
-            )
-        }
+        self.rc.accounts.unlock_tx_account_locks(
+            batch.take_transaction_account_locks(self.demote_program_write_locks()),
+        )
     }
 
     pub fn remove_unrooted_slots(&self, slots: &[(Slot, BankId)]) {
@@ -2924,32 +2951,43 @@ impl Bank {
 
     fn check_age<'a>(
         &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        lock_results: &[Result<()>],
+        batch: &mut TransactionBatch,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
+    ) {
         let hash_queue = self.blockhash_queue.read().unwrap();
-        txs.zip(lock_results)
-            .map(|(tx, lock_res)| match lock_res {
-                Ok(()) => {
-                    let recent_blockhash = tx.message().recent_blockhash();
-                    let hash_age = hash_queue.check_hash_age(recent_blockhash, max_age);
-                    if hash_age == Some(true) {
-                        (Ok(()), None)
-                    } else if let Some((pubkey, acc)) = self.check_tx_durable_nonce(tx) {
-                        (Ok(()), Some(NonceRollbackPartial::new(pubkey, acc)))
-                    } else if hash_age == Some(false) {
-                        error_counters.blockhash_too_old += 1;
-                        (Err(TransactionError::BlockhashNotFound), None)
-                    } else {
-                        error_counters.blockhash_not_found += 1;
-                        (Err(TransactionError::BlockhashNotFound), None)
+        batch.items_mut().iter_mut().for_each(|item| {
+            if item.is_locked() && item.res.is_err() {
+                return;
+            }
+
+            let tx = &item.tx;
+            let recent_blockhash = tx.message().recent_blockhash();
+            let hash_age = hash_queue.check_hash_age(recent_blockhash, max_age);
+            if hash_age != Some(true) {
+                if let Some(nonce_address) = tx.get_durable_nonce() {
+                    if !item.is_locked() {
+                        // can't check if durable nonce is valid, retry later
+                        return;
+                    }
+
+                    if let Some(nonce_account) = self.get_account(nonce_address) {
+                        item.nonce_rollback =
+                            Some(NonceRollbackPartial::new(*nonce_address, nonce_account));
+                        return;
                     }
                 }
-                Err(e) => (Err(e.clone()), None),
-            })
-            .collect()
+
+                // intentionally overwrite errors for unlocked items
+                if hash_age == Some(false) {
+                    error_counters.blockhash_too_old += 1;
+                    item.res = Err(TransactionError::BlockhashNotFound);
+                } else {
+                    error_counters.blockhash_not_found += 1;
+                    item.res = Err(TransactionError::BlockhashNotFound);
+                }
+            }
+        });
     }
 
     fn is_tx_already_processed(
@@ -2964,46 +3002,38 @@ impl Bank {
             .is_some()
     }
 
-    fn check_status_cache(
-        &self,
-        sanitized_txs: &[SanitizedTransaction],
-        lock_results: Vec<TransactionCheckResult>,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
+    fn check_status_cache(&self, batch: &mut TransactionBatch, error_counters: &mut ErrorCounters) {
         let rcache = self.src.status_cache.read().unwrap();
-        sanitized_txs
-            .iter()
-            .zip(lock_results)
-            .map(|(sanitized_tx, (lock_res, nonce_rollback))| {
-                if lock_res.is_ok() && self.is_tx_already_processed(sanitized_tx, &rcache) {
-                    error_counters.already_processed += 1;
-                    return (Err(TransactionError::AlreadyProcessed), None);
-                }
+        batch.items_mut().iter_mut().for_each(|item| {
+            if item.is_locked() && item.res.is_err() {
+                return;
+            }
 
-                (lock_res, nonce_rollback)
-            })
-            .collect()
+            // intentionally overwrite earlier errors such as AccountInUse
+            if self.is_tx_already_processed(&item.tx, &rcache) {
+                error_counters.already_processed += 1;
+                item.res = Err(TransactionError::AlreadyProcessed);
+                item.nonce_rollback = None;
+            }
+        });
     }
 
-    fn filter_by_vote_transactions<'a>(
+    fn filter_by_vote_transactions(
         &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        lock_results: Vec<TransactionCheckResult>,
+        batch: &mut TransactionBatch,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
-        txs.zip(lock_results)
-            .map(|(tx, lock_res)| {
-                if lock_res.0.is_ok() {
-                    if is_simple_vote_transaction(tx) {
-                        return lock_res;
-                    }
+    ) {
+        batch.items_mut().iter_mut().for_each(|item| {
+            if item.is_locked() && item.res.is_err() {
+                return;
+            }
 
-                    error_counters.not_allowed_during_cluster_maintenance += 1;
-                    return (Err(TransactionError::ClusterMaintenance), lock_res.1);
-                }
-                lock_res
-            })
-            .collect()
+            if !is_simple_vote_transaction(&item.tx) {
+                error_counters.not_allowed_during_cluster_maintenance += 1;
+                item.res = Err(TransactionError::ClusterMaintenance);
+                item.nonce_rollback = None;
+            }
+        });
     }
 
     pub fn check_hash_age(&self, hash: &Hash, max_age: usize) -> Option<bool> {
@@ -3040,43 +3070,18 @@ impl Bank {
         }
     }
 
-    pub fn check_transactions(
+    pub fn check_transaction_batch(
         &self,
-        sanitized_txs: &[SanitizedTransaction],
-        lock_results: &[Result<()>],
+        batch: &mut TransactionBatch,
         max_age: usize,
         mut error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionCheckResult> {
-        let age_results = self.check_age(
-            sanitized_txs.iter(),
-            lock_results,
-            max_age,
-            &mut error_counters,
-        );
-        let cache_results =
-            self.check_status_cache(sanitized_txs, age_results, &mut error_counters);
+    ) {
+        self.check_age(batch, max_age, &mut error_counters);
+        self.check_status_cache(batch, &mut error_counters);
         if self.upgrade_epoch() {
             // Reject all non-vote transactions
-            self.filter_by_vote_transactions(
-                sanitized_txs.iter(),
-                cache_results,
-                &mut error_counters,
-            )
-        } else {
-            cache_results
+            self.filter_by_vote_transactions(batch, &mut error_counters);
         }
-    }
-
-    pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
-        let mut balances: TransactionBalances = vec![];
-        for transaction in batch.sanitized_transactions() {
-            let mut transaction_balances: Vec<u64> = vec![];
-            for account_key in transaction.message().account_keys_iter() {
-                transaction_balances.push(self.get_balance(account_key));
-            }
-            balances.push(transaction_balances);
-        }
-        balances
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -3264,189 +3269,156 @@ impl Bank {
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
-        batch: &TransactionBatch,
+        batch: &mut TransactionBatch,
         max_age: usize,
-        enable_cpi_recording: bool,
-        enable_log_recording: bool,
+        enable_cpi_log_and_balance_recording: bool,
         timings: &mut ExecuteTimings,
-    ) -> (
-        Vec<TransactionLoadResult>,
-        Vec<TransactionExecutionResult>,
-        Vec<Option<InnerInstructionsList>>,
-        Vec<Option<TransactionLogMessages>>,
-        Vec<usize>,
-        u64,
-        u64,
     ) {
-        let sanitized_txs = batch.sanitized_transactions();
-        debug!("processing transactions: {}", sanitized_txs.len());
-        inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
+        debug!("processing transactions: {}", batch.items().len());
+        inc_new_counter_info!("bank-process_transactions", batch.items().len());
         let mut error_counters = ErrorCounters::default();
 
-        let retryable_txs: Vec<_> = batch
-            .lock_results()
-            .iter()
-            .enumerate()
-            .filter_map(|(index, res)| match res {
-                Err(TransactionError::AccountInUse) => {
-                    error_counters.account_in_use += 1;
-                    Some(index)
-                }
-                Err(_) => None,
-                Ok(_) => None,
-            })
-            .collect();
-
         let mut check_time = Measure::start("check_transactions");
-        let check_results = self.check_transactions(
-            sanitized_txs,
-            batch.lock_results(),
-            max_age,
-            &mut error_counters,
-        );
+        self.check_transaction_batch(batch, max_age, &mut error_counters);
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
-        let mut loaded_txs = self.rc.accounts.load_accounts(
+        self.rc.accounts.load_accounts(
             &self.ancestors,
-            sanitized_txs,
-            check_results,
+            batch,
             &self.blockhash_queue.read().unwrap(),
             &mut error_counters,
             &self.rent_collector,
             &self.feature_set,
+            enable_cpi_log_and_balance_recording,
         );
         load_time.stop();
 
         let mut execution_time = Measure::start("execution_time");
+        let feature_set = self.feature_set.clone();
+        let mut mint_decimals = HashMap::new();
         let mut signature_count: u64 = 0;
-        let mut inner_instructions: Vec<Option<InnerInstructionsList>> =
-            Vec::with_capacity(sanitized_txs.len());
-        let mut transaction_log_messages: Vec<Option<Vec<String>>> =
-            Vec::with_capacity(sanitized_txs.len());
+        let mut num_executed_txs = 0;
+        for (batch_item, loaded_transaction) in batch.loaded_txs_iter() {
+            let tx = batch_item.tx();
+            signature_count += u64::from(tx.message().header().num_required_signatures);
 
-        let executed: Vec<TransactionExecutionResult> = loaded_txs
-            .iter_mut()
-            .zip(sanitized_txs.iter())
-            .map(|(accs, tx)| match accs {
-                (Err(e), _nonce_rollback) => {
-                    transaction_log_messages.push(None);
-                    inner_instructions.push(None);
-                    (Err(e.clone()), None)
+            let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
+            if feature_set.is_active(&tx_wide_compute_cap::id()) {
+                if let Err(err) = compute_budget.process_transaction(tx) {
+                    // todo: should be retryable?
+                    batch_item.mark_discarded(err);
+                    continue;
                 }
-                (Ok(loaded_transaction), nonce_rollback) => {
-                    let feature_set = self.feature_set.clone();
-                    signature_count += u64::from(tx.message().header().num_required_signatures);
+            }
 
-                    let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
+            let executors = self.get_executors(
+                tx.message(),
+                &loaded_transaction.accounts,
+                &loaded_transaction.program_indices,
+            );
 
-                    let mut process_result = if feature_set.is_active(&tx_wide_compute_cap::id()) {
-                        compute_budget.process_transaction(tx)
-                    } else {
-                        Ok(())
-                    };
+            let account_refcells = Self::accounts_to_refcells(&mut loaded_transaction.accounts);
 
-                    if process_result.is_ok() {
-                        let executors = self.get_executors(
-                            tx.message(),
-                            &loaded_transaction.accounts,
-                            &loaded_transaction.program_indices,
-                        );
+            let instruction_recorders = if enable_cpi_log_and_balance_recording {
+                let ix_count = tx.message().instructions().len();
+                let mut recorders = Vec::with_capacity(ix_count);
+                recorders.resize_with(ix_count, InstructionRecorder::default);
+                Some(recorders)
+            } else {
+                None
+            };
 
-                        let account_refcells =
-                            Self::accounts_to_refcells(&mut loaded_transaction.accounts);
+            let log_collector = if enable_cpi_log_and_balance_recording {
+                Some(Rc::new(LogCollector::default()))
+            } else {
+                None
+            };
 
-                        let instruction_recorders = if enable_cpi_recording {
-                            let ix_count = tx.message().instructions().len();
-                            let mut recorders = Vec::with_capacity(ix_count);
-                            recorders.resize_with(ix_count, InstructionRecorder::default);
-                            Some(recorders)
-                        } else {
-                            None
-                        };
+            let compute_meter = Rc::new(RefCell::new(TransactionComputeMeter::new(
+                compute_budget.max_units,
+            )));
 
-                        let log_collector = if enable_log_recording {
-                            Some(Rc::new(LogCollector::default()))
-                        } else {
-                            None
-                        };
+            let (blockhash, fee_calculator) = {
+                let blockhash_queue = self.blockhash_queue.read().unwrap();
+                let blockhash = blockhash_queue.last_hash();
+                (
+                    blockhash,
+                    #[allow(deprecated)]
+                    blockhash_queue
+                        .get_fee_calculator(&blockhash)
+                        .cloned()
+                        .unwrap_or_else(|| self.fee_calculator.clone()),
+                )
+            };
 
-                        let compute_meter = Rc::new(RefCell::new(TransactionComputeMeter::new(
-                            compute_budget.max_units,
-                        )));
-
-                        let (blockhash, fee_calculator) = {
-                            let blockhash_queue = self.blockhash_queue.read().unwrap();
-                            let blockhash = blockhash_queue.last_hash();
-                            (
-                                blockhash,
-                                #[allow(deprecated)]
-                                blockhash_queue
-                                    .get_fee_calculator(&blockhash)
-                                    .cloned()
-                                    .unwrap_or_else(|| self.fee_calculator.clone()),
-                            )
-                        };
-
-                        if let Some(legacy_message) = tx.message().legacy_message() {
-                            process_result = self.message_processor.process_message(
-                                legacy_message,
-                                &loaded_transaction.program_indices,
-                                &account_refcells,
-                                &self.rent_collector,
-                                log_collector.clone(),
-                                executors.clone(),
-                                instruction_recorders.as_deref(),
-                                feature_set,
-                                compute_budget,
-                                compute_meter,
-                                &mut timings.details,
-                                self.rc.accounts.clone(),
-                                &self.ancestors,
-                                blockhash,
-                                fee_calculator,
-                            );
-                        } else {
-                            // TODO: support versioned messages
-                            process_result = Err(TransactionError::UnsupportedVersion);
-                        }
-
-                        transaction_log_messages.push(Self::collect_log_messages(log_collector));
-                        inner_instructions.push(Self::compile_recorded_instructions(
-                            instruction_recorders,
-                            tx.message(),
-                        ));
-
-                        if let Err(e) = Self::refcells_to_accounts(
-                            &mut loaded_transaction.accounts,
-                            account_refcells,
-                        ) {
-                            warn!("Account lifetime mismanagement");
-                            process_result = Err(e);
-                        }
-
-                        if process_result.is_ok() {
-                            self.update_executors(executors);
-                        }
-                    } else {
-                        transaction_log_messages.push(None);
-                        inner_instructions.push(None);
-                    }
-
-                    let nonce_rollback =
-                        if let Err(TransactionError::InstructionError(_, _)) = &process_result {
-                            error_counters.instruction_error += 1;
-                            nonce_rollback.clone()
-                        } else if process_result.is_err() {
-                            None
-                        } else {
-                            nonce_rollback.clone()
-                        };
-                    (process_result, nonce_rollback)
+            let process_result = match tx.message().legacy_message() {
+                Some(legacy_message) => self.message_processor.process_message(
+                    legacy_message,
+                    &loaded_transaction.program_indices,
+                    &account_refcells,
+                    &self.rent_collector,
+                    log_collector.clone(),
+                    executors.clone(),
+                    instruction_recorders.as_deref(),
+                    feature_set,
+                    compute_budget,
+                    compute_meter,
+                    &mut timings.details,
+                    self.rc.accounts.clone(),
+                    &self.ancestors,
+                    blockhash,
+                    fee_calculator,
+                ),
+                None => {
+                    // TODO: support versioned messages
+                    batch_item.mark_discarded(TransactionError::UnsupportedVersion);
+                    continue;
                 }
-            })
-            .collect();
+            };
 
+            if let Err(e) =
+                Self::refcells_to_accounts(&mut loaded_transaction.accounts, account_refcells)
+            {
+                warn!("Account lifetime mismanagement");
+                batch_item.mark_discarded(e);
+                continue;
+            }
+
+            let post_balances = if enable_cpi_log_and_balance_recording {
+                self.collect_transaction_account_balances(tx)
+            } else {
+                vec![]
+            };
+
+            let post_token_balances = if enable_cpi_log_and_balance_recording {
+                self.collect_transaction_token_balances(tx, &mut mint_decimals)
+            } else {
+                vec![]
+            };
+
+            let log_messages = Self::collect_log_messages(log_collector);
+            let inner_instructions =
+                Self::compile_recorded_instructions(instruction_recorders, tx.message());
+
+            if process_result.is_ok() {
+                self.update_executors(executors);
+            } else {
+                error_counters.instruction_error += 1;
+            }
+
+            num_executed_txs += 1;
+            batch_item.mark_executed(ExecutedTransaction {
+                loaded_tx: loaded_transaction,
+                pre_balances,
+                post_balances,
+                pre_token_balances,
+                post_token_balances,
+                inner_instructions,
+                log_messages,
+                process_result,
+            });
+        }
         execution_time.stop();
 
         debug!(
@@ -3454,7 +3426,7 @@ impl Bank {
             check_time.as_us(),
             load_time.as_us(),
             execution_time.as_us(),
-            sanitized_txs.len(),
+            num_executed_txs,
         );
         timings.check_us = timings.check_us.saturating_add(check_time.as_us());
         timings.load_us = timings.load_us.saturating_add(load_time.as_us());
@@ -3465,19 +3437,20 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
-        for (i, ((r, _nonce_rollback), tx)) in executed.iter().zip(sanitized_txs).enumerate() {
+        for (tx, executed_tx) in batch.executed_txs_iter() {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys_iter() {
                     if debug_keys.contains(key) {
-                        info!("slot: {} result: {:?} tx: {:?}", self.slot, r, tx);
+                        info!(
+                            "slot: {} result: {:?} tx: {:?}",
+                            self.slot, executed_tx.process_result, tx
+                        );
                         break;
                     }
                 }
             }
 
-            if Self::can_commit(r) // Skip log collection for unprocessed transactions
-                && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
-            {
+            if transaction_log_collector_config.filter != TransactionLogCollectorFilter::None {
                 let mut transaction_log_collector = self.transaction_log_collector.write().unwrap();
                 let transaction_log_index = transaction_log_collector.logs.len();
 
@@ -3510,10 +3483,10 @@ impl Bank {
                 };
 
                 if store {
-                    if let Some(log_messages) = transaction_log_messages.get(i).cloned().flatten() {
+                    if let Some(log_messages) = executed_tx.log_messages.clone() {
                         transaction_log_collector.logs.push(TransactionLogInfo {
                             signature: *tx.signature(),
-                            result: r.clone(),
+                            result: executed_tx.process_result.clone(),
                             is_vote,
                             log_messages,
                         });
@@ -3521,15 +3494,16 @@ impl Bank {
                 }
             }
 
-            if r.is_ok() {
+            if executed_tx.process_result.is_ok() {
                 tx_count += 1;
             } else {
                 if *err_count == 0 {
-                    debug!("tx error: {:?} {:?}", r, tx);
+                    debug!("tx error: {:?} {:?}", executed_tx.process_result, tx);
                 }
                 *err_count += 1;
             }
         }
+
         if *err_count > 0 {
             debug!(
                 "{} errors of {} txs",
@@ -3537,67 +3511,64 @@ impl Bank {
                 *err_count as u64 + tx_count
             );
         }
+
         Self::update_error_counters(&error_counters);
-        (
-            loaded_txs,
-            executed,
-            inner_instructions,
-            transaction_log_messages,
-            retryable_txs,
-            tx_count,
-            signature_count,
-        )
     }
 
     fn filter_program_errors_and_collect_fee(
         &self,
-        txs: &[SanitizedTransaction],
-        executed: &[TransactionExecutionResult],
-    ) -> Vec<Result<()>> {
+        txs: &TransactionBatch,
+        executed_txs: &mut [Option<ExecutedTransaction>],
+    ) -> Vec<Option<u64>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let mut fees = 0;
 
         let results = txs
-            .iter()
-            .zip(executed)
-            .map(|(tx, (res, nonce_rollback))| {
-                let (fee_calculator, is_durable_nonce) = nonce_rollback
-                    .as_ref()
-                    .map(|nonce_rollback| nonce_rollback.fee_calculator())
-                    .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
-                    .unwrap_or_else(|| {
-                        (
-                            #[allow(deprecated)]
-                            hash_queue
-                                .get_fee_calculator(tx.message().recent_blockhash())
-                                .cloned(),
-                            false,
-                        )
-                    });
+            .sanitized_txs_iter()
+            .zip(executed_txs.iter_mut())
+            .map(|(tx, executed_tx)| {
+                executed_tx.as_mut().and_then(|executed_tx| {
+                    let (fee_calculator, is_durable_nonce) = executed_tx
+                        .loaded_tx
+                        .nonce_rollback
+                        .as_ref()
+                        .map(|nonce_rollback| nonce_rollback.fee_calculator())
+                        .map(|maybe_fee_calculator| (maybe_fee_calculator, true))
+                        .unwrap_or_else(|| {
+                            (
+                                #[allow(deprecated)]
+                                hash_queue
+                                    .get_fee_calculator(tx.message().recent_blockhash())
+                                    .cloned(),
+                                false,
+                            )
+                        });
 
-                let fee_calculator = fee_calculator.ok_or(TransactionError::BlockhashNotFound)?;
-                let fee = tx.message().calculate_fee(&fee_calculator);
-
-                match *res {
-                    Err(TransactionError::InstructionError(_, _)) => {
-                        // credit the transaction fee even in case of InstructionError
-                        // necessary to withdraw from account[0] here because previous
-                        // work of doing so (in accounts.load()) is ignored by store_account()
-                        //
-                        // ...except nonce accounts, which will have their post-load,
-                        // pre-execute account state stored
-                        if !is_durable_nonce {
-                            self.withdraw(tx.message().fee_payer(), fee)?;
+                    let fee_calculator = fee_calculator
+                        .ok_or(TransactionError::BlockhashNotFound)
+                        .ok()?;
+                    let fee = tx.message().calculate_fee(&fee_calculator);
+                    let res = &executed_tx.process_result;
+                    match res {
+                        Err(_) => {
+                            // credit the transaction fee even in case of InstructionError
+                            // necessary to withdraw from account[0] here because previous
+                            // work of doing so (in accounts.load()) is ignored by store_account()
+                            //
+                            // ...except nonce accounts, which will have their post-load,
+                            // pre-execute account state stored
+                            if !is_durable_nonce {
+                                self.withdraw(tx.message().fee_payer(), fee).ok()?;
+                            }
+                            fees += fee;
+                            Some(fee)
                         }
-                        fees += fee;
-                        Ok(())
+                        Ok(()) => {
+                            fees += fee;
+                            Some(fee)
+                        }
                     }
-                    Ok(()) => {
-                        fees += fee;
-                        Ok(())
-                    }
-                    _ => res.clone(),
-                }
+                })
             })
             .collect();
 
@@ -3607,9 +3578,8 @@ impl Bank {
 
     pub fn commit_transactions(
         &self,
-        sanitized_txs: &[SanitizedTransaction],
-        loaded_txs: &mut [TransactionLoadResult],
-        executed: &[TransactionExecutionResult],
+        txs: &TransactionBatch,
+        executed_txs: &mut [Option<ExecutedTransaction>],
         tx_count: u64,
         signature_count: u64,
         timings: &mut ExecuteTimings,
@@ -3625,20 +3595,14 @@ impl Bank {
         inc_new_counter_info!("bank-process_transactions-txs", tx_count as usize);
         inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
-        if !sanitized_txs.is_empty() {
-            let processed_tx_count = sanitized_txs.len() as u64;
+        let processed_tx_count = executed_txs.iter().filter(|e| e.is_some()).count() as u64;
+        if processed_tx_count > 0 {
             let failed_tx_count = processed_tx_count.saturating_sub(tx_count);
             self.transaction_error_count
                 .fetch_add(failed_tx_count, Relaxed);
             self.transaction_entries_count.fetch_add(1, Relaxed);
             self.transactions_per_entry_max
                 .fetch_max(processed_tx_count, Relaxed);
-        }
-
-        if executed
-            .iter()
-            .any(|(res, _nonce_rollback)| Self::can_commit(res))
-        {
             self.is_delta.store(true, Relaxed);
         }
 
@@ -3646,35 +3610,29 @@ impl Bank {
         #[allow(deprecated)]
         self.rc.accounts.store_cached(
             self.slot(),
-            sanitized_txs,
-            executed,
-            loaded_txs,
+            txs,
+            executed_txs,
             &self.rent_collector,
             &self.last_blockhash_with_fee_calculator(),
             self.rent_for_sysvars(),
             self.merge_nonce_error_into_system_error(),
             self.demote_program_write_locks(),
         );
-        let rent_debits = self.collect_rent(executed, loaded_txs);
-
-        let overwritten_vote_accounts =
-            self.update_cached_accounts(sanitized_txs, executed, loaded_txs);
+        let rent_debits = self.collect_rent(executed_txs);
+        let overwritten_vote_accounts = self.update_cached_accounts(txs, executed_txs);
 
         // once committed there is no way to unroll
         write_time.stop();
-        debug!(
-            "store: {}us txs_len={}",
-            write_time.as_us(),
-            sanitized_txs.len()
-        );
+        debug!("store: {}us txs_len={}", write_time.as_us(), tx_count,);
         timings.store_us = timings.store_us.saturating_add(write_time.as_us());
-        self.update_transaction_statuses(sanitized_txs, executed);
-        let fee_collection_results =
-            self.filter_program_errors_and_collect_fee(sanitized_txs, executed);
+        self.update_transaction_statuses(txs, executed_txs);
+        let fee_collection_results = self.filter_program_errors_and_collect_fee(txs, executed_txs);
+        // todo
+        let execution_results = vec![];
 
         TransactionResults {
             fee_collection_results,
-            execution_results: executed.to_vec(),
+            execution_results,
             overwritten_vote_accounts,
             rent_debits,
         }
@@ -3837,26 +3795,20 @@ impl Bank {
         self.distribute_rent_to_validators(&self.vote_accounts(), rent_to_be_distributed);
     }
 
-    fn collect_rent(
-        &self,
-        res: &[TransactionExecutionResult],
-        loaded_txs: &mut [TransactionLoadResult],
-    ) -> Vec<RentDebits> {
+    fn collect_rent(&self, executed_txs: &mut [Option<ExecutedTransaction>]) -> Vec<RentDebits> {
         let mut collected_rent: u64 = 0;
-        let mut rent_debits: Vec<RentDebits> = Vec::with_capacity(loaded_txs.len());
-        for (i, (raccs, _nonce_rollback)) in loaded_txs.iter_mut().enumerate() {
-            let (res, _nonce_rollback) = &res[i];
-            if res.is_err() || raccs.is_err() {
-                rent_debits.push(RentDebits::default());
-                continue;
-            }
-
-            let loaded_transaction = raccs.as_mut().unwrap();
-
-            collected_rent += loaded_transaction.rent;
-            rent_debits.push(mem::take(&mut loaded_transaction.rent_debits));
-        }
-
+        let rent_debits = executed_txs
+            .iter_mut()
+            .map(|executed_tx| {
+                if let Some(executed_tx) = executed_tx.as_mut() {
+                    let loaded_transaction = &mut executed_tx.loaded_tx;
+                    collected_rent += loaded_transaction.rent;
+                    mem::take(&mut loaded_transaction.rent_debits)
+                } else {
+                    RentDebits::default()
+                }
+            })
+            .collect();
         self.collected_rent.fetch_add(collected_rent, Relaxed);
         rent_debits
     }
@@ -4275,61 +4227,26 @@ impl Bank {
 
     /// Process a batch of transactions.
     #[must_use]
-    pub fn load_execute_and_commit_transactions(
+    pub fn load_execute_and_commit_transactions<'a>(
         &self,
-        batch: &TransactionBatch,
+        batch: &'a mut TransactionBatch,
         max_age: usize,
-        collect_balances: bool,
-        enable_cpi_recording: bool,
-        enable_log_recording: bool,
+        enable_cpi_log_and_balance_recording: bool,
         timings: &mut ExecuteTimings,
-    ) -> (
-        TransactionResults,
-        TransactionBalancesSet,
-        Vec<Option<InnerInstructionsList>>,
-        Vec<Option<TransactionLogMessages>>,
-    ) {
-        let pre_balances = if collect_balances {
-            self.collect_balances(batch)
-        } else {
-            vec![]
-        };
-
-        let (
-            mut loaded_txs,
-            executed,
-            inner_instructions,
-            transaction_logs,
-            _,
-            tx_count,
-            signature_count,
-        ) = self.load_and_execute_transactions(
+    ) -> (TransactionResults, Vec<Option<ExecutedTransaction>>) {
+        let mut executed_txs = self.load_and_execute_transactions(
             batch,
             max_age,
-            enable_cpi_recording,
-            enable_log_recording,
+            enable_cpi_log_and_balance_recording,
             timings,
         );
 
-        let results = self.commit_transactions(
-            batch.sanitized_transactions(),
-            &mut loaded_txs,
-            &executed,
-            tx_count,
-            signature_count,
-            timings,
-        );
-        let post_balances = if collect_balances {
-            self.collect_balances(batch)
-        } else {
-            vec![]
-        };
-        (
-            results,
-            TransactionBalancesSet::new(pre_balances, post_balances),
-            inner_instructions,
-            transaction_logs,
-        )
+        let tx_count = 0;
+        let signature_count = 0;
+        let tx_results =
+            self.commit_transactions(batch, &mut executed_txs, tx_count, signature_count, timings);
+
+        (tx_results, executed_txs)
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector
@@ -4382,22 +4299,23 @@ impl Bank {
         &self,
         txs: Vec<VersionedTransaction>,
     ) -> Result<Vec<Result<()>>> {
-        let batch = self.prepare_entry_batch(txs)?;
-        Ok(self.process_transaction_batch(&batch))
+        let mut batch = self.prepare_entry_batch(txs)?;
+        Ok(self.process_transaction_batch(&mut batch))
     }
 
     #[must_use]
-    fn process_transaction_batch(&self, batch: &TransactionBatch) -> Vec<Result<()>> {
+    fn process_transaction_batch(&self, batch: &mut TransactionBatch) -> Vec<Result<()>> {
         self.load_execute_and_commit_transactions(
             batch,
             MAX_PROCESSING_AGE,
             false,
-            false,
-            false,
             &mut ExecuteTimings::default(),
         )
         .0
-        .fee_collection_results
+        .execution_results
+        .into_iter()
+        .map(|res| res.map(|_| ()))
+        .collect()
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -5149,41 +5067,44 @@ impl Bank {
     /// a bank-level cache of vote accounts
     fn update_cached_accounts(
         &self,
-        txs: &[SanitizedTransaction],
-        res: &[TransactionExecutionResult],
-        loaded_txs: &[TransactionLoadResult],
+        txs: &TransactionBatch,
+        executed_txs: &[Option<ExecutedTransaction>],
     ) -> Vec<OverwrittenVoteAccount> {
-        let mut overwritten_vote_accounts = vec![];
-        for (i, ((raccs, _load_nonce_rollback), tx)) in loaded_txs.iter().zip(txs).enumerate() {
-            let (res, _res_nonce_rollback) = &res[i];
-            if res.is_err() || raccs.is_err() {
-                continue;
-            }
-
-            let message = tx.message();
-            let loaded_transaction = raccs.as_ref().unwrap();
-
-            for (_i, (pubkey, account)) in (0..message.account_keys_len())
-                .zip(loaded_transaction.accounts.iter())
-                .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
-            {
-                if let Some(old_vote_account) = self.stakes.write().unwrap().store(
-                    pubkey,
-                    account,
-                    self.check_init_vote_data_enabled(),
-                    self.stakes_remove_delegation_if_inactive_enabled(),
-                ) {
-                    // TODO: one of the indices is redundant.
-                    overwritten_vote_accounts.push(OverwrittenVoteAccount {
-                        account: old_vote_account,
-                        transaction_index: i,
-                        transaction_result_index: i,
-                    });
-                }
-            }
-        }
-
-        overwritten_vote_accounts
+        txs.sanitized_txs_iter()
+            .zip(executed_txs.iter())
+            .enumerate()
+            .filter_map(|(i, (tx, executed_tx))| {
+                executed_tx
+                    .as_ref()
+                    .map(|executed_tx| (i, (tx, executed_tx)))
+            })
+            .flat_map(|(i, (tx, executed_tx))| {
+                let message = tx.message();
+                executed_tx
+                    .loaded_tx
+                    .accounts
+                    .iter()
+                    .take(message.account_keys_len())
+                    .filter(|(_pubkey, account)| Stakes::is_stake(account))
+                    .filter_map(move |(pubkey, account)| {
+                        if let Some(old_vote_account) = self.stakes.write().unwrap().store(
+                            pubkey,
+                            account,
+                            self.check_init_vote_data_enabled(),
+                            self.stakes_remove_delegation_if_inactive_enabled(),
+                        ) {
+                            // TODO: one of the indices is redundant.
+                            Some(OverwrittenVoteAccount {
+                                account: old_vote_account,
+                                transaction_index: i,
+                                transaction_result_index: i,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect()
     }
 
     /// current stake delegations for this bank
@@ -8636,7 +8557,7 @@ pub(crate) mod tests {
         let txs = vec![tx];
 
         let batch0 = bank.prepare_batch(txs).unwrap();
-        assert!(batch0.lock_results()[0].is_ok());
+        assert!(batch0.processing_results()[0].is_ok());
 
         // Try locking accounts, locking a previously read-only account as writable
         // should fail
@@ -8654,7 +8575,7 @@ pub(crate) mod tests {
         let txs = vec![tx];
 
         let batch1 = bank.prepare_batch(txs).unwrap();
-        assert!(batch1.lock_results()[0].is_err());
+        assert!(batch1.processing_results()[0].is_err());
 
         // Try locking a previously read-only account a 2nd time; should succeed
         let message = Message {
@@ -8671,7 +8592,7 @@ pub(crate) mod tests {
         let txs = vec![tx];
 
         let batch2 = bank.prepare_batch(txs).unwrap();
-        assert!(batch2.lock_results()[0].is_ok());
+        assert!(batch2.processing_results()[0].is_ok());
     }
 
     #[test]

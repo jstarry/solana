@@ -6,13 +6,12 @@ use crate::{
     },
     accounts_index::{AccountSecondaryIndexes, IndexKey, ScanResult},
     ancestors::Ancestors,
-    bank::{
-        NonceRollbackFull, NonceRollbackInfo, RentDebits, TransactionCheckResult,
-        TransactionExecutionResult,
-    },
+    bank::{ExecutedTransaction, NonceRollbackFull, NonceRollbackInfo, RentDebits},
     blockhash_queue::BlockhashQueue,
     rent_collector::RentCollector,
     system_instruction_processor::{get_system_account_kind, SystemAccountKind},
+    transaction_balances::TransactionTokenBalance,
+    transaction_batch::TransactionBatch,
 };
 use dashmap::{
     mapref::entry::Entry::{Occupied, Vacant},
@@ -34,7 +33,7 @@ use solana_sdk::{
     nonce::NONCED_TX_MARKER_IX_INDEX,
     pubkey::Pubkey,
     system_program, sysvar,
-    transaction::{Result, SanitizedTransaction, TransactionError},
+    transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
 };
 use std::{
     cmp::Reverse,
@@ -105,13 +104,14 @@ pub type TransactionProgramIndices = Vec<Vec<usize>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: TransactionAccounts,
+    pub pre_balances: Vec<u64>,
+    pub pre_token_balances: Vec<TransactionTokenBalance>,
     pub program_indices: TransactionProgramIndices,
+    pub compute_fee: u64,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+    pub nonce_rollback: Option<NonceRollbackFull>,
 }
-
-pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceRollbackFull>);
-
 pub enum AccountAddressFilter {
     Exclude, // exclude all addresses matching the filter
     Include, // only include addresses matching the filter
@@ -216,6 +216,84 @@ impl Accounts {
         })
     }
 
+    fn collect_transaction_token_balances(
+        &self,
+        tx: &SanitizedTransaction,
+        mut mint_decimals: &mut HashMap<Pubkey, u8>,
+        demote_program_write_locks: bool,
+    ) -> Vec<TransactionTokenBalance> {
+        let has_token_program = tx
+            .message()
+            .account_keys_iter()
+            .any(|address| address == &spl_token_id_v2_0());
+
+        if has_token_program {
+            tx.message()
+                .account_keys_iter()
+                .enumerate()
+                .filter_map(|(index, account_id)| {
+                    if !tx.message().is_writable(index, demote_program_write_locks) {
+                        return None;
+                    }
+
+                    self.collect_token_balance_from_account(account_id, &mut mint_decimals)
+                        .map(|(mint, ui_token_amount)| TransactionTokenBalance {
+                            account_index: index as u8,
+                            mint,
+                            ui_token_amount,
+                        })
+                })
+                .collect()
+        } else {
+            vec![]
+        }
+    }
+
+    fn get_mint_decimals(&self, mint: &Pubkey) -> Option<u8> {
+        if mint == &spl_token_v2_0_native_mint() {
+            Some(spl_token_v2_0::native_mint::DECIMALS)
+        } else {
+            let mint_account = self.get_account(mint)?;
+
+            let decimals = Mint::unpack(mint_account.data())
+                .map(|mint| mint.decimals)
+                .ok()?;
+
+            Some(decimals)
+        }
+    }
+
+    fn collect_token_balance_from_account(
+        &self,
+        account_id: &Pubkey,
+        mint_decimals: &mut HashMap<Pubkey, u8>,
+    ) -> Option<(String, UiTokenAmount)> {
+        let account = self.get_account(account_id)?;
+
+        let token_account = TokenAccount::unpack(account.data()).ok()?;
+        let mint_string = &token_account.mint.to_string();
+        let mint = &Pubkey::from_str(mint_string).unwrap_or_default();
+
+        let decimals = mint_decimals.get(mint).cloned().or_else(|| {
+            let decimals = self.get_mint_decimals(mint)?;
+            mint_decimals.insert(*mint, decimals);
+            Some(decimals)
+        })?;
+
+        Some((
+            mint_string.to_string(),
+            token_amount_to_ui_amount(token_account.amount, decimals),
+        ))
+    }
+
+    fn collect_transaction_account_balances(&self, tx: &SanitizedTransaction) -> Vec<u64> {
+        tx.message()
+            .account_keys_iter()
+            .map(|account_key| self.get_balance(account_key))
+            .collect()
+    }
+
+
     fn load_transaction(
         &self,
         ancestors: &Ancestors,
@@ -224,6 +302,8 @@ impl Accounts {
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
+        mint_decimals: &mut HashMap<Pubkey, u8>,
+        enable_cpi_log_and_balance_recording: bool,
     ) -> Result<LoadedTransaction> {
         // Copy all the accounts
         let message = tx.message();
@@ -242,6 +322,18 @@ impl Accounts {
             let demote_program_write_locks =
                 feature_set.is_active(&feature_set::demote_program_write_locks::id());
             let is_upgradeable_loader_present = is_upgradeable_loader_present(message);
+
+            let pre_balances = if enable_cpi_log_and_balance_recording {
+                self.collect_transaction_account_balances(tx)
+            } else {
+                vec![]
+            };
+
+            let pre_token_balances = if enable_cpi_log_and_balance_recording {
+                self.collect_transaction_token_balances(tx, &mut mint_decimals)
+            } else {
+                vec![]
+            };
 
             for (i, key) in message.account_keys_iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
@@ -375,8 +467,10 @@ impl Accounts {
                 Ok(LoadedTransaction {
                     accounts,
                     program_indices,
+                    compute_fee: fee,
                     rent: tx_rent,
                     rent_debits,
+                    nonce_rollback: None,
                 })
             } else {
                 error_counters.account_not_found += 1;
@@ -461,63 +555,73 @@ impl Accounts {
     pub fn load_accounts(
         &self,
         ancestors: &Ancestors,
-        txs: &[SanitizedTransaction],
-        lock_results: Vec<TransactionCheckResult>,
+        batch: &mut TransactionBatch,
         hash_queue: &BlockhashQueue,
         error_counters: &mut ErrorCounters,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
-    ) -> Vec<TransactionLoadResult> {
-        txs.iter()
-            .zip(lock_results)
-            .map(|etx| match etx {
-                (tx, (Ok(()), nonce_rollback)) => {
-                    let fee_calculator = nonce_rollback
-                        .as_ref()
-                        .map(|nonce_rollback| nonce_rollback.fee_calculator())
-                        .unwrap_or_else(|| {
-                            #[allow(deprecated)]
-                            hash_queue
-                                .get_fee_calculator(tx.message().recent_blockhash())
-                                .cloned()
-                        });
-                    let fee = if let Some(fee_calculator) = fee_calculator {
-                        tx.message().calculate_fee(&fee_calculator)
-                    } else {
-                        return (Err(TransactionError::BlockhashNotFound), None);
-                    };
+        enable_cpi_log_and_balance_recording: bool,
+    ) {
+        for batch_item in batch.items_mut() {
+            if !batch_item.is_ready() {
+                continue;
+            }
 
-                    let loaded_transaction = match self.load_transaction(
-                        ancestors,
-                        tx,
-                        fee,
-                        error_counters,
-                        rent_collector,
-                        feature_set,
-                    ) {
-                        Ok(loaded_transaction) => loaded_transaction,
-                        Err(e) => return (Err(e), None),
-                    };
+            let tx: &SanitizedTransaction = &batch_item.tx;
+            let fee_calculator = batch_item
+                .nonce_rollback
+                .as_ref()
+                .map(|nonce_rollback| nonce_rollback.fee_calculator())
+                .unwrap_or_else(|| {
+                    #[allow(deprecated)]
+                    hash_queue
+                        .get_fee_calculator(tx.message().recent_blockhash())
+                        .cloned()
+                });
 
-                    // Update nonce_rollback with fee-subtracted accounts
-                    let nonce_rollback = if let Some(nonce_rollback) = nonce_rollback {
-                        match NonceRollbackFull::from_partial(
-                            nonce_rollback,
-                            tx.message(),
-                            &loaded_transaction.accounts,
-                        ) {
-                            Ok(nonce_rollback) => Some(nonce_rollback),
-                            Err(e) => return (Err(e), None),
-                        }
-                    } else {
-                        None
-                    };
+            let fee = if let Some(fee_calculator) = fee_calculator {
+                tx.message().calculate_fee(&fee_calculator)
+            } else {
+                batch_item.mark_discarded(TransactionError::BlockhashNotFound);
+                continue;
+            };
 
-                    (Ok(loaded_transaction), nonce_rollback)
+            let mut loaded_transaction = match self.load_transaction(
+                ancestors,
+                tx,
+                fee,
+                error_counters,
+                rent_collector,
+                feature_set,
+                enable_cpi_log_and_balance_recording,
+            ) {
+                Ok(loaded_transaction) => loaded_transaction,
+                Err(e) => {
+                    batch_item.mark_discarded(e);
+                    continue;
                 }
-                (_, (Err(e), _nonce_rollback)) => (Err(e), None),
-            })
-            .collect()
+            };
+
+            // Update nonce_rollback with fee-subtracted accounts
+            loaded_transaction.nonce_rollback =
+                if let Some(nonce_rollback) = batch_item.nonce_rollback.take() {
+                    match NonceRollbackFull::from_partial(
+                        nonce_rollback,
+                        tx.message(),
+                        &loaded_transaction.accounts,
+                    ) {
+                        Ok(nonce_rollback) => Some(nonce_rollback),
+                        Err(e) => {
+                            batch_item.mark_discarded(e);
+                            continue;
+                        }
+                    }
+                } else {
+                    None
+                };
+
+            batch_item.mark_loaded(loaded_transaction);
+        }
     }
 
     fn filter_zero_lamport_account(
@@ -930,25 +1034,19 @@ impl Accounts {
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
     #[allow(clippy::needless_collect)]
-    pub fn unlock_accounts<'a>(
-        &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: &[Result<()>],
-        demote_program_write_locks: bool,
-    ) {
-        let keys: Vec<_> = txs
-            .zip(results)
-            .filter_map(|(tx, res)| match res {
-                Err(TransactionError::AccountInUse) => None,
-                Err(TransactionError::SanitizeFailure) => None,
-                Err(TransactionError::AccountLoadedTwice) => None,
-                _ => Some(tx.get_account_locks(demote_program_write_locks)),
-            })
-            .collect();
+    pub fn unlock_tx_account_locks(&self, tx_account_locks: Vec<TransactionAccountLocks>) {
+        if tx_account_locks.is_empty() {
+            return;
+        }
+
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
-        keys.into_iter().for_each(|keys| {
-            self.unlock_account(&mut account_locks, keys.writable, keys.readonly);
+        tx_account_locks.into_iter().for_each(|tx_account_locks| {
+            self.unlock_account(
+                &mut account_locks,
+                tx_account_locks.writable,
+                tx_account_locks.readonly,
+            );
         });
     }
 
@@ -958,9 +1056,8 @@ impl Accounts {
     pub fn store_cached<'a>(
         &self,
         slot: Slot,
-        txs: &'a [SanitizedTransaction],
-        res: &'a [TransactionExecutionResult],
-        loaded: &'a mut [TransactionLoadResult],
+        txs: &TransactionBatch,
+        executed_txs: &'a mut [Option<ExecutedTransaction>],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         rent_for_sysvars: bool,
@@ -969,8 +1066,7 @@ impl Accounts {
     ) {
         let accounts_to_store = self.collect_accounts_to_store(
             txs,
-            res,
-            loaded,
+            executed_txs,
             rent_collector,
             last_blockhash_with_fee_calculator,
             rent_for_sysvars,
@@ -994,95 +1090,97 @@ impl Accounts {
 
     fn collect_accounts_to_store<'a>(
         &self,
-        txs: &'a [SanitizedTransaction],
-        res: &'a [TransactionExecutionResult],
-        loaded: &'a mut [TransactionLoadResult],
+        txs: &TransactionBatch,
+        executed_txs: &'a mut [Option<ExecutedTransaction>],
         rent_collector: &RentCollector,
         last_blockhash_with_fee_calculator: &(Hash, FeeCalculator),
         rent_for_sysvars: bool,
         merge_nonce_error_into_system_error: bool,
         demote_program_write_locks: bool,
     ) -> Vec<(&'a Pubkey, &'a AccountSharedData)> {
-        let mut accounts = Vec::with_capacity(loaded.len());
-        for (i, ((raccs, _nonce_rollback), tx)) in loaded.iter_mut().zip(txs).enumerate() {
-            if raccs.is_err() {
-                continue;
-            }
-            let (res, nonce_rollback) = &res[i];
-            let maybe_nonce_rollback = match (res, nonce_rollback) {
-                (Ok(_), Some(nonce_rollback)) => {
-                    let pubkey = nonce_rollback.nonce_address();
-                    let acc = nonce_rollback.nonce_account();
-                    let maybe_fee_account = nonce_rollback.fee_account();
-                    Some((pubkey, acc, maybe_fee_account, true))
-                }
-                (Err(TransactionError::InstructionError(index, _)), Some(nonce_rollback)) => {
-                    let nonce_marker_ix_failed = if merge_nonce_error_into_system_error {
-                        // Don't advance stored blockhash when the nonce marker ix fails
-                        *index == NONCED_TX_MARKER_IX_INDEX
-                    } else {
-                        false
-                    };
-                    let pubkey = nonce_rollback.nonce_address();
-                    let acc = nonce_rollback.nonce_account();
-                    let maybe_fee_account = nonce_rollback.fee_account();
-                    Some((pubkey, acc, maybe_fee_account, !nonce_marker_ix_failed))
-                }
-                (Ok(_), _nonce_rollback) => None,
-                (Err(_), _nonce_rollback) => continue,
-            };
+        txs.sanitized_txs_iter()
+            .zip(executed_txs.iter_mut().filter_map(|res| res.as_mut()))
+            .flat_map(|(tx, executed_tx)| {
+                let res = &executed_tx.process_result;
+                let loaded_transaction = &mut executed_tx.loaded_tx;
+                let nonce_rollback = &loaded_transaction.nonce_rollback;
+                let maybe_nonce_rollback = match (res, nonce_rollback) {
+                    (Ok(_), Some(nonce_rollback)) => {
+                        let pubkey = nonce_rollback.nonce_address();
+                        let acc = nonce_rollback.nonce_account();
+                        let maybe_fee_account = nonce_rollback.fee_account();
+                        Some((pubkey, acc, maybe_fee_account, true))
+                    }
+                    (Err(TransactionError::InstructionError(index, _)), Some(nonce_rollback)) => {
+                        let nonce_marker_ix_failed = if merge_nonce_error_into_system_error {
+                            // Don't advance stored blockhash when the nonce marker ix fails
+                            *index == NONCED_TX_MARKER_IX_INDEX
+                        } else {
+                            false
+                        };
+                        let pubkey = nonce_rollback.nonce_address();
+                        let acc = nonce_rollback.nonce_account();
+                        let maybe_fee_account = nonce_rollback.fee_account();
+                        Some((pubkey, acc, maybe_fee_account, !nonce_marker_ix_failed))
+                    }
+                    (Ok(_), _nonce_rollback) => None,
+                    (Err(_), _nonce_rollback) => return vec![],
+                };
 
-            let message = tx.message();
-            let loaded_transaction = raccs.as_mut().unwrap();
-            let mut fee_payer_index = None;
-            for (i, (key, account)) in (0..message.account_keys_len())
-                .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|(i, _account)| message.is_non_loader_key(*i))
-            {
-                let is_nonce_account = prepare_if_nonce_account(
-                    account,
-                    key,
-                    res,
-                    maybe_nonce_rollback,
-                    last_blockhash_with_fee_calculator,
-                );
-                if fee_payer_index.is_none() {
-                    fee_payer_index = Some(i);
-                }
-                let is_fee_payer = Some(i) == fee_payer_index;
-                if message.is_writable(i, demote_program_write_locks)
-                    && (res.is_ok()
-                        || (maybe_nonce_rollback.is_some() && (is_nonce_account || is_fee_payer)))
-                {
-                    if res.is_err() {
-                        match (is_nonce_account, is_fee_payer, maybe_nonce_rollback) {
-                            // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, true, Some((_, _, None, _))) => (),
-                            // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
-                            (true, false, Some((_, _, Some(_), _))) => (),
-                            // not nonce, but fee-payer. rollback to cached state
-                            (false, true, Some((_, _, Some(fee_payer_account), _))) => {
-                                *account = fee_payer_account.clone();
-                            }
-                            _ => panic!("unexpected nonce_rollback condition"),
-                        }
-                    }
-                    if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                        let rent = rent_collector.collect_from_created_account(
-                            key,
+                let message = tx.message();
+                let mut fee_payer_index = None;
+                let accounts = &mut loaded_transaction.accounts;
+                let tx_rent = &mut loaded_transaction.rent;
+                let rent_debits = &mut loaded_transaction.rent_debits;
+                (0..message.account_keys_len())
+                    .zip(accounts.iter_mut())
+                    .filter(|(i, _account)| message.is_non_loader_key(*i))
+                    .filter_map(|(i, (key, account))| {
+                        let is_nonce_account = prepare_if_nonce_account(
                             account,
-                            rent_for_sysvars,
+                            key,
+                            res,
+                            maybe_nonce_rollback,
+                            last_blockhash_with_fee_calculator,
                         );
-                        loaded_transaction.rent += rent;
-                        loaded_transaction
-                            .rent_debits
-                            .push(key, rent, account.lamports());
-                    }
-                    accounts.push((&*key, &*account));
-                }
-            }
-        }
-        accounts
+                        if fee_payer_index.is_none() {
+                            fee_payer_index = Some(i);
+                        }
+                        let is_fee_payer = Some(i) == fee_payer_index;
+                        if message.is_writable(i, demote_program_write_locks)
+                            && (res.is_ok()
+                                || (maybe_nonce_rollback.is_some()
+                                    && (is_nonce_account || is_fee_payer)))
+                        {
+                            if res.is_err() {
+                                match (is_nonce_account, is_fee_payer, maybe_nonce_rollback) {
+                                    // nonce is fee-payer, state updated in `prepare_if_nonce_account()`
+                                    (true, true, Some((_, _, None, _))) => (),
+                                    // nonce not fee-payer, state updated in `prepare_if_nonce_account()`
+                                    (true, false, Some((_, _, Some(_), _))) => (),
+                                    // not nonce, but fee-payer. rollback to cached state
+                                    (false, true, Some((_, _, Some(fee_payer_account), _))) => {
+                                        *account = fee_payer_account.clone();
+                                    }
+                                    _ => panic!("unexpected nonce_rollback condition"),
+                                }
+                            }
+                            if account.rent_epoch() == INITIAL_RENT_EPOCH {
+                                let account_rent = rent_collector.collect_from_created_account(
+                                    key,
+                                    account,
+                                    rent_for_sysvars,
+                                );
+                                *tx_rent += account_rent;
+                                rent_debits.push(key, account_rent, account.lamports());
+                            }
+                            return Some((&*key, &*account));
+                        }
+                        None
+                    })
+                    .collect()
+            })
+            .collect()
     }
 }
 
@@ -1203,7 +1301,7 @@ mod tests {
         fee_calculator: &FeeCalculator,
         rent_collector: &RentCollector,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionLoadResult> {
+    ) -> Vec<LoadedTransaction> {
         let mut hash_queue = BlockhashQueue::new(100);
         hash_queue.register_hash(&tx.message().recent_blockhash, fee_calculator);
         let accounts = Accounts::new_with_config_for_tests(
@@ -1235,7 +1333,7 @@ mod tests {
         ka: &[(Pubkey, AccountSharedData)],
         fee_calculator: &FeeCalculator,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionLoadResult> {
+    ) -> Vec<LoadedTransaction> {
         let rent_collector = RentCollector::default();
         load_accounts_with_fee_and_rent(tx, ka, fee_calculator, &rent_collector, error_counters)
     }
@@ -1244,7 +1342,7 @@ mod tests {
         tx: Transaction,
         ka: &[(Pubkey, AccountSharedData)],
         error_counters: &mut ErrorCounters,
-    ) -> Vec<TransactionLoadResult> {
+    ) -> Vec<LoadedTransaction> {
         let fee_calculator = FeeCalculator::default();
         load_accounts_with_fee(tx, ka, &fee_calculator, error_counters)
     }
@@ -2139,8 +2237,8 @@ mod tests {
             2
         );
 
-        accounts.unlock_accounts([tx].iter(), &results0, demote_program_write_locks);
-        accounts.unlock_accounts(txs.iter(), &results1, demote_program_write_locks);
+        accounts.unlock_tx_account_locks([tx].iter(), &results0, demote_program_write_locks);
+        accounts.unlock_tx_account_locks(txs.iter(), &results1, demote_program_write_locks);
         let instructions = vec![CompiledInstruction::new(2, &(), vec![0, 1])];
         let message = Message::new_with_compiled_instructions(
             1,
@@ -2230,7 +2328,11 @@ mod tests {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
                     }
                 }
-                accounts_clone.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
+                accounts_clone.unlock_tx_account_locks(
+                    txs.iter(),
+                    &results,
+                    demote_program_write_locks,
+                );
                 if exit_clone.clone().load(Ordering::Relaxed) {
                     break;
                 }
@@ -2247,7 +2349,7 @@ mod tests {
                 thread::sleep(time::Duration::from_millis(50));
                 assert_eq!(counter_value, counter_clone.clone().load(Ordering::SeqCst));
             }
-            accounts_arc.unlock_accounts(txs.iter(), &results, demote_program_write_locks);
+            accounts_arc.unlock_tx_account_locks(txs.iter(), &results, demote_program_write_locks);
             thread::sleep(time::Duration::from_millis(50));
         }
         exit.store(true, Ordering::Relaxed);
@@ -2457,7 +2559,7 @@ mod tests {
         accounts.accounts_db.clean_accounts(None, false, None);
     }
 
-    fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<TransactionLoadResult> {
+    fn load_accounts_no_store(accounts: &Accounts, tx: Transaction) -> Vec<LoadedTransaction> {
         let tx = SanitizedTransaction::try_from(tx).unwrap();
         let rent_collector = RentCollector::default();
         let fee_calculator = FeeCalculator::new(10);

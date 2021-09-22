@@ -1,6 +1,7 @@
 use {
     crate::{StoredExtendedRewards, StoredTransactionStatusMeta},
     solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount},
+    solana_runtime::transaction_balances::TransactionTokenBalance,
     solana_sdk::{
         hash::Hash,
         instruction::CompiledInstruction,
@@ -13,7 +14,7 @@ use {
     },
     solana_transaction_status::{
         ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
-        TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
+        TransactionStatusMeta, TransactionWithStatusMeta,
     },
     std::{
         convert::{TryFrom, TryInto},

@@ -1,9 +1,10 @@
 use crate::{
     bank::{Bank, TransactionResults},
     genesis_utils::{self, GenesisConfigInfo, ValidatorVoteKeypairs},
+    transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
 };
-use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::SanitizedTransaction};
+use solana_sdk::{pubkey::Pubkey, signature::Signer};
 use solana_vote_program::vote_transaction;
 
 pub fn setup_bank_and_vote_pubkeys_for_tests(
@@ -30,21 +31,23 @@ pub fn setup_bank_and_vote_pubkeys_for_tests(
 }
 
 pub fn find_and_send_votes(
-    sanitized_txs: &[SanitizedTransaction],
+    txs: &TransactionBatch,
     tx_results: &TransactionResults,
     vote_sender: Option<&ReplayVoteSender>,
 ) {
     let TransactionResults {
-        execution_results,
         overwritten_vote_accounts,
         ..
     } = tx_results;
     if let Some(vote_sender) = vote_sender {
         for old_account in overwritten_vote_accounts {
-            assert!(execution_results[old_account.transaction_result_index]
-                .0
-                .is_ok());
-            let tx = &sanitized_txs[old_account.transaction_index];
+            let (tx, execution_result) =
+                match txs.get_executed_tx(old_account.transaction_result_index) {
+                    Some(executed_tx) => executed_tx,
+                    None => continue,
+                };
+
+            assert!(execution_result.process_result.is_ok());
             if let Some(parsed_vote) = vote_transaction::parse_sanitized_vote_transaction(tx) {
                 if parsed_vote.1.slots.last().is_some() {
                     let _ = vote_sender.send(parsed_vote);

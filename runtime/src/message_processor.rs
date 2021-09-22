@@ -608,34 +608,32 @@ impl MessageProcessor {
         ancestors: &Ancestors,
         blockhash: Hash,
         fee_calculator: FeeCalculator,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<(), (u8, InstructionError)> {
         for (instruction_index, instruction) in message.instructions.iter().enumerate() {
             let mut time = Measure::start("execute_instruction");
             let pre_remaining_units = compute_meter.borrow().get_remaining();
             let instruction_recorder = instruction_recorders
                 .as_ref()
                 .map(|recorders| recorders[instruction_index].clone());
-            let err = self
-                .execute_instruction(
-                    message,
-                    instruction,
-                    &program_indices[instruction_index],
-                    accounts,
-                    rent_collector,
-                    log_collector.clone(),
-                    executors.clone(),
-                    instruction_recorder,
-                    instruction_index,
-                    feature_set.clone(),
-                    compute_budget,
-                    compute_meter.clone(),
-                    timings,
-                    account_db.clone(),
-                    ancestors,
-                    &blockhash,
-                    &fee_calculator,
-                )
-                .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err));
+            let err = self.execute_instruction(
+                message,
+                instruction,
+                &program_indices[instruction_index],
+                accounts,
+                rent_collector,
+                log_collector.clone(),
+                executors.clone(),
+                instruction_recorder,
+                instruction_index,
+                feature_set.clone(),
+                compute_budget,
+                compute_meter.clone(),
+                timings,
+                account_db.clone(),
+                ancestors,
+                &blockhash,
+                &fee_calculator,
+            );
             time.stop();
             let post_remaining_units = compute_meter.borrow().get_remaining();
 

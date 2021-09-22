@@ -20,10 +20,7 @@ use solana_perf::{
 use solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder};
 use solana_runtime::{
     accounts_db::ErrorCounters,
-    bank::{
-        Bank, ExecuteTimings, TransactionBalancesSet, TransactionCheckResult,
-        TransactionExecutionResult,
-    },
+    bank::{Bank, ExecuteTimings, TransactionCheckResult},
     bank_utils,
     transaction_batch::TransactionBatch,
     vote_sender_types::ReplayVoteSender,
@@ -40,9 +37,6 @@ use solana_sdk::{
     signature::Signature,
     timing::{duration_as_ms, timestamp, AtomicInterval},
     transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
-};
-use solana_transaction_status::token_balances::{
-    collect_token_balances, TransactionTokenBalancesSet,
 };
 use std::{
     cmp,
@@ -262,6 +256,12 @@ pub enum BufferedPacketsDecision {
     Forward,
     ForwardAndHold,
     Hold,
+}
+
+pub enum TransactionOutcome {
+    Recorded,
+    Retryable,
+    Discard,
 }
 
 impl BankingStage {
@@ -776,25 +776,9 @@ impl BankingStage {
     #[allow(clippy::match_wild_err_arm)]
     fn record_transactions(
         bank_slot: Slot,
-        txs: &[SanitizedTransaction],
-        results: &[TransactionExecutionResult],
+        processed_transactions: Vec<VersionedTransaction>,
         recorder: &TransactionRecorder,
-    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
-        let mut processed_generation = Measure::start("record::process_generation");
-        let (processed_transactions, processed_transactions_indexes): (Vec<_>, Vec<_>) = results
-            .iter()
-            .zip(txs)
-            .enumerate()
-            .filter_map(|(i, ((r, _n), tx))| {
-                if Bank::can_commit(r) {
-                    Some((tx.to_versioned_transaction(), i))
-                } else {
-                    None
-                }
-            })
-            .unzip();
-
-        processed_generation.stop();
+    ) -> Result<(), PohRecorderError> {
         let num_to_commit = processed_transactions.len();
         debug!("num_to_commit: {} ", num_to_commit);
         // unlock all the accounts with errors which are filtered by the above `filter_map`
@@ -819,58 +803,31 @@ impl BankingStage {
                     );
                     // If record errors, add all the committable transactions (the ones
                     // we just attempted to record) as retryable
-                    return (
-                        Err(PohRecorderError::MaxHeightReached),
-                        processed_transactions_indexes,
-                    );
+                    return Err(PohRecorderError::MaxHeightReached);
                 }
                 Err(e) => panic!("Poh recorder returned unexpected error: {:?}", e),
             }
             poh_record.stop();
         }
-        (Ok(num_to_commit), vec![])
+        Ok(())
     }
 
     fn process_and_record_transactions_locked(
         bank: &Arc<Bank>,
         poh: &TransactionRecorder,
-        batch: &TransactionBatch,
+        batch: &mut TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
-        let mut load_execute_time = Measure::start("load_execute_time");
-        // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
-        // the likelihood of any single thread getting starved and processing old ids.
-        // TODO: Banking stage threads should be prioritized to complete faster then this queue
-        // expires.
-        let pre_balances = if transaction_status_sender.is_some() {
-            bank.collect_balances(batch)
-        } else {
-            vec![]
-        };
-
-        let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
-
-        let pre_token_balances = if transaction_status_sender.is_some() {
-            collect_token_balances(bank, batch, &mut mint_decimals)
-        } else {
-            vec![]
-        };
-
+    ) -> (Result<usize, PohRecorderError>, Vec<TransactionOutcome>) {
         let mut execute_timings = ExecuteTimings::default();
-
-        let (
-            mut loaded_accounts,
-            results,
-            inner_instructions,
-            transaction_logs,
-            mut retryable_txs,
-            tx_count,
-            signature_count,
-        ) = bank.load_and_execute_transactions(
+        let mut load_execute_time = Measure::start("load_execute_time");
+        bank.load_and_execute_transactions(
             batch,
+            // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
+            // the likelihood of any single thread getting starved and processing old ids.
+            // TODO: Banking stage threads should be prioritized to complete faster then this queue
+            // expires.
             MAX_PROCESSING_AGE,
-            transaction_status_sender.is_some(),
             transaction_status_sender.is_some(),
             &mut execute_timings,
         );
@@ -879,49 +836,40 @@ impl BankingStage {
         let freeze_lock = bank.freeze_lock();
 
         let mut record_time = Measure::start("record_time");
-        let (num_to_commit, retryable_record_txs) =
-            Self::record_transactions(bank.slot(), batch.sanitized_transactions(), &results, poh);
-        inc_new_counter_info!(
-            "banking_stage-record_transactions_num_to_commit",
-            *num_to_commit.as_ref().unwrap_or(&0)
-        );
-        inc_new_counter_info!(
-            "banking_stage-record_transactions_retryable_record_txs",
-            retryable_record_txs.len()
-        );
-        retryable_txs.extend(retryable_record_txs);
-        if num_to_commit.is_err() {
-            return (num_to_commit, retryable_txs);
-        }
+        let transactions: Vec<_> = batch
+            .sanitized_txs_iter()
+            .zip(executed_txs.iter())
+            .filter_map(|(tx, executed_tx)| executed_tx.map(|_| tx.to_versioned_transaction()))
+            .collect();
+        let num_to_commit = transactions.len();
+        let record_result = Self::record_transactions(bank.slot(), transactions, poh);
         record_time.stop();
 
         let mut commit_time = Measure::start("commit_time");
-        let sanitized_txs = batch.sanitized_transactions();
-        let num_to_commit = num_to_commit.unwrap();
-        if num_to_commit != 0 {
+        if record_result.is_ok() && num_to_commit > 0 {
+            // todo
+            let tx_count = num_to_commit;
+            let signature_count = 0;
             let tx_results = bank.commit_transactions(
-                sanitized_txs,
-                &mut loaded_accounts,
-                &results,
+                batch,
+                &mut executed_txs,
                 tx_count,
                 signature_count,
                 &mut execute_timings,
             );
 
-            bank_utils::find_and_send_votes(sanitized_txs, &tx_results, Some(gossip_vote_sender));
+            bank_utils::find_and_send_votes(
+                batch,
+                &executed_txs,
+                &tx_results,
+                Some(gossip_vote_sender),
+            );
+
             if let Some(transaction_status_sender) = transaction_status_sender {
-                let txs = batch.sanitized_transactions().to_vec();
-                let post_balances = bank.collect_balances(batch);
-                let post_token_balances = collect_token_balances(bank, batch, &mut mint_decimals);
                 transaction_status_sender.send_transaction_status_batch(
                     bank.clone(),
-                    txs,
-                    tx_results.execution_results,
-                    TransactionBalancesSet::new(pre_balances, post_balances),
-                    TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
-                    inner_instructions,
-                    transaction_logs,
-                    tx_results.rent_debits,
+                    batch,
+                    tx_results,
                 );
             }
         }
@@ -935,7 +883,7 @@ impl BankingStage {
             load_execute_time.as_us(),
             record_time.as_us(),
             commit_time.as_us(),
-            sanitized_txs.len(),
+            num_to_commit,
         );
 
         debug!(
@@ -943,31 +891,29 @@ impl BankingStage {
             execute_timings
         );
 
-        (Ok(num_to_commit), retryable_txs)
+        (Ok(num_to_commit), vec![])
     }
 
     pub fn process_and_record_transactions(
         bank: &Arc<Bank>,
         txs: &[SanitizedTransaction],
         poh: &TransactionRecorder,
-        chunk_offset: usize,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-    ) -> (Result<usize, PohRecorderError>, Vec<usize>) {
+    ) -> (Result<usize, PohRecorderError>, Vec<TransactionOutcome>) {
         let mut lock_time = Measure::start("lock_time");
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let batch = bank.prepare_sanitized_batch(txs);
+        let mut batch = bank.prepare_sanitized_batch(txs);
         lock_time.stop();
 
-        let (result, mut retryable_txs) = Self::process_and_record_transactions_locked(
+        let (result, tx_outcomes) = Self::process_and_record_transactions_locked(
             bank,
             poh,
-            &batch,
+            &mut batch,
             transaction_status_sender,
             gossip_vote_sender,
         );
-        retryable_txs.iter_mut().for_each(|x| *x += chunk_offset);
 
         let mut unlock_time = Measure::start("unlock_time");
         // Once the accounts are new transactions can enter the pipeline to process them
@@ -982,7 +928,7 @@ impl BankingStage {
             txs.len(),
         );
 
-        (result, retryable_txs)
+        (result, tx_outcomes)
     }
 
     /// Sends transactions to the bank.
@@ -996,53 +942,45 @@ impl BankingStage {
         poh: &TransactionRecorder,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-    ) -> (usize, Vec<usize>) {
-        let mut chunk_start = 0;
-        let mut unprocessed_txs = vec![];
-
-        while chunk_start != transactions.len() {
-            let chunk_end = std::cmp::min(
-                transactions.len(),
-                chunk_start + MAX_NUM_TRANSACTIONS_PER_BATCH,
-            );
-            let (result, retryable_txs_in_chunk) = Self::process_and_record_transactions(
-                bank,
-                &transactions[chunk_start..chunk_end],
-                poh,
-                chunk_start,
-                transaction_status_sender.clone(),
-                gossip_vote_sender,
-            );
-            trace!("process_transactions result: {:?}", result);
-
-            // Add the retryable txs (transactions that errored in a way that warrants a retry)
-            // to the list of unprocessed txs.
-            unprocessed_txs.extend_from_slice(&retryable_txs_in_chunk);
-
-            // If `bank_creation_time` is None, it's a test so ignore the option so
-            // allow processing
-            let should_bank_still_be_processing_txs =
-                Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot);
-            match (result, should_bank_still_be_processing_txs) {
-                (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
-                    info!(
-                        "process transactions: max height reached slot: {} height: {}",
-                        bank.slot(),
-                        bank.tick_height()
-                    );
-                    // process_and_record_transactions has returned all retryable errors in
-                    // transactions[chunk_start..chunk_end], so we just need to push the remaining
-                    // transactions into the unprocessed queue.
-                    unprocessed_txs.extend(chunk_end..transactions.len());
-                    break;
+    ) -> Vec<TransactionOutcome> {
+        let mut stop_processing = false;
+        transactions
+            .chunks(MAX_NUM_TRANSACTIONS_PER_BATCH)
+            .flat_map(|txs| {
+                if stop_processing {
+                    return vec![TransactionOutcome::Retryable; txs.len()];
                 }
-                _ => (),
-            }
-            // Don't exit early on any other type of error, continue processing...
-            chunk_start = chunk_end;
-        }
 
-        (chunk_start, unprocessed_txs)
+                let (result, tx_outcomes) = Self::process_and_record_transactions(
+                    bank,
+                    txs,
+                    poh,
+                    transaction_status_sender.clone(),
+                    gossip_vote_sender,
+                );
+
+                // If `bank_creation_time` is None, it's a test so ignore the option so
+                // allow processing
+                let should_bank_still_be_processing_txs =
+                    Bank::should_bank_still_be_processing_txs(bank_creation_time, bank.ns_per_slot);
+                match (result, should_bank_still_be_processing_txs) {
+                    (Err(PohRecorderError::MaxHeightReached), _) | (_, false) => {
+                        info!(
+                            "process transactions: max height reached slot: {} height: {}",
+                            bank.slot(),
+                            bank.tick_height()
+                        );
+                        // process_and_record_transactions has returned all retryable errors in
+                        // transactions[chunk_start..chunk_end], so we just need to push the remaining
+                        // transactions into the unprocessed queue.
+                        stop_processing = true;
+                    }
+                    _ => (),
+                }
+
+                tx_outcomes
+            })
+            .collect()
     }
 
     // This function creates a filter of transaction results with Ok() for every pending
@@ -1160,32 +1098,34 @@ impl BankingStage {
         transaction_to_packet_indexes: &[usize],
         pending_indexes: &[usize],
     ) -> Vec<usize> {
-        let filter =
-            Self::prepare_filter_for_pending_transactions(transactions.len(), pending_indexes);
+        // let filter =
+        //     // Self::prepare_filter_for_pending_transactions(transactions.len(), pending_indexes);
 
-        let mut error_counters = ErrorCounters::default();
+        // let mut error_counters = ErrorCounters::default();
         // The following code also checks if the blockhash for a transaction is too old
         // The check accounts for
         //  1. Transaction forwarding delay
         //  2. The slot at which the next leader will actually process the transaction
         // Drop the transaction if it will expire by the time the next node receives and processes it
-        let api = perf_libs::api();
-        let max_tx_fwd_delay = if api.is_none() {
-            MAX_TRANSACTION_FORWARDING_DELAY
-        } else {
-            MAX_TRANSACTION_FORWARDING_DELAY_GPU
-        };
+        // let api = perf_libs::api();
+        // let max_tx_fwd_delay = if api.is_none() {
+        //     MAX_TRANSACTION_FORWARDING_DELAY
+        // } else {
+        //     MAX_TRANSACTION_FORWARDING_DELAY_GPU
+        // };
 
-        let results = bank.check_transactions(
-            transactions,
-            &filter,
-            (MAX_PROCESSING_AGE)
-                .saturating_sub(max_tx_fwd_delay)
-                .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
-            &mut error_counters,
-        );
+        vec![]
 
-        Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
+        // let results = bank.check_transactions(
+        //     transactions,
+        //     &filter,
+        //     (MAX_PROCESSING_AGE)
+        //         .saturating_sub(max_tx_fwd_delay)
+        //         .saturating_sub(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET as usize),
+        //     &mut error_counters,
+        // );
+
+        // Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
     }
 
     #[allow(clippy::too_many_arguments)]

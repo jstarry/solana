@@ -5,6 +5,7 @@ use crate::{
 };
 use chrono_humanize::{Accuracy, HumanTime, Tense};
 use crossbeam_channel::Sender;
+use itertools::izip;
 use itertools::Itertools;
 use log::*;
 use rand::{seq::SliceRandom, thread_rng};
@@ -19,8 +20,8 @@ use solana_runtime::{
     accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
     accounts_index::AccountSecondaryIndexes,
     bank::{
-        Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionBalancesSet,
-        TransactionExecutionResult, TransactionLogMessages, TransactionResults,
+        Bank, ExecuteTimings, InnerInstructionsList, RentDebits, TransactionLogMessages,
+        TransactionResults,
     },
     bank_forks::BankForks,
     bank_utils,
@@ -28,6 +29,7 @@ use solana_runtime::{
     snapshot_config::SnapshotConfig,
     snapshot_package::{AccountsPackageSender, SnapshotType},
     snapshot_utils::{self, BankFromArchiveTimings},
+    transaction_balances::{TransactionBalancesSet, TransactionTokenBalancesSet},
     transaction_batch::TransactionBatch,
     vote_account::VoteAccount,
     vote_sender_types::ReplayVoteSender,
@@ -38,12 +40,9 @@ use solana_sdk::{
     genesis_config::GenesisConfig,
     hash::Hash,
     pubkey::Pubkey,
-    signature::{Keypair, Signature},
+    signature::Keypair,
     timing,
     transaction::{Result, SanitizedTransaction, TransactionError, VersionedTransaction},
-};
-use solana_transaction_status::token_balances::{
-    collect_token_balances, TransactionTokenBalancesSet,
 };
 use std::{
     cell::RefCell,
@@ -105,37 +104,6 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
     Ok(())
 }
 
-// Includes transaction signature for unit-testing
-fn get_first_error(
-    batch: &TransactionBatch,
-    fee_collection_results: Vec<Result<()>>,
-) -> Option<(Result<()>, Signature)> {
-    let mut first_err = None;
-    for (result, transaction) in fee_collection_results
-        .iter()
-        .zip(batch.sanitized_transactions())
-    {
-        if let Err(ref err) = result {
-            if first_err.is_none() {
-                first_err = Some((result.clone(), *transaction.signature()));
-            }
-            warn!(
-                "Unexpected validator error: {:?}, transaction: {:?}",
-                err, transaction
-            );
-            datapoint_error!(
-                "validator_process_entry_error",
-                (
-                    "error",
-                    format!("error: {:?}, transaction: {:?}", err, transaction),
-                    String
-                )
-            );
-        }
-    }
-    first_err
-}
-
 fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
     let mut execute_cost_units: u64 = 0;
     for (program_id, timing) in &execute_timings.details.per_program_timings {
@@ -149,34 +117,21 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
 }
 
 fn execute_batch(
-    batch: &TransactionBatch,
+    batch: &mut TransactionBatch,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
 ) -> Result<()> {
-    let record_token_balances = transaction_status_sender.is_some();
-
-    let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
-
-    let pre_token_balances = if record_token_balances {
-        collect_token_balances(bank, batch, &mut mint_decimals)
-    } else {
-        vec![]
-    };
-
     let pre_process_units: u64 = aggregate_total_execution_units(timings);
 
-    let (tx_results, balances, inner_instructions, transaction_logs) =
-        batch.bank().load_execute_and_commit_transactions(
-            batch,
-            MAX_PROCESSING_AGE,
-            transaction_status_sender.is_some(),
-            transaction_status_sender.is_some(),
-            transaction_status_sender.is_some(),
-            timings,
-        );
+    let (tx_results, executed_txs) = bank.load_execute_and_commit_transactions(
+        batch,
+        MAX_PROCESSING_AGE,
+        transaction_status_sender.is_some(),
+        timings,
+    );
 
     if bank
         .feature_set
@@ -191,7 +146,7 @@ fn execute_batch(
         debug!(
             "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
             bank.slot(),
-            batch.sanitized_transactions().len(),
+            executed_txs.len(),
             execution_cost_units,
             remaining_block_cost_cap,
         );
@@ -201,49 +156,24 @@ fn execute_batch(
         }
     }
 
-    bank_utils::find_and_send_votes(
-        batch.sanitized_transactions(),
-        &tx_results,
-        replay_vote_sender,
-    );
-
-    let TransactionResults {
-        fee_collection_results,
-        execution_results,
-        rent_debits,
-        ..
-    } = tx_results;
+    bank_utils::find_and_send_votes(batch, &executed_txs, &tx_results, replay_vote_sender);
 
     if let Some(transaction_status_sender) = transaction_status_sender {
-        let transactions = batch.sanitized_transactions().to_vec();
-        let post_token_balances = if record_token_balances {
-            collect_token_balances(bank, batch, &mut mint_decimals)
-        } else {
-            vec![]
-        };
-
-        let token_balances =
-            TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
-
         transaction_status_sender.send_transaction_status_batch(
             bank.clone(),
-            transactions,
-            execution_results,
-            balances,
-            token_balances,
-            inner_instructions,
-            transaction_logs,
-            rent_debits,
+            batch,
+            executed_txs,
+            tx_results,
         );
     }
 
-    let first_err = get_first_error(batch, fee_collection_results);
-    first_err.map(|(result, _)| result).unwrap_or(Ok(()))
+    Ok(())
+    // fee_collection_results.into_iter().collect().map(|_fee| ())
 }
 
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &mut [TransactionBatch],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -255,7 +185,7 @@ fn execute_batches(
         PAR_THREAD_POOL.with(|thread_pool| {
             thread_pool.borrow().install(|| {
                 batches
-                    .into_par_iter()
+                    .par_iter_mut()
                     .map(|batch| {
                         let mut timings = ExecuteTimings::default();
                         let result = execute_batch(
@@ -346,7 +276,7 @@ fn process_entries_with_callback(
                     // execute the group and register the tick
                     execute_batches(
                         bank,
-                        &batches,
+                        &mut batches,
                         entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
@@ -368,10 +298,10 @@ fn process_entries_with_callback(
                 loop {
                     // try to lock the accounts
                     let batch = bank.prepare_sanitized_batch(transactions);
-                    let first_lock_err = first_err(batch.lock_results());
+                    let all_locked = batch.items().iter().all(|item| item.is_locked());
 
                     // if locking worked
-                    if first_lock_err.is_ok() {
+                    if all_locked {
                         batches.push(batch);
                         // done with this entry
                         break;
@@ -392,13 +322,13 @@ fn process_entries_with_callback(
                             )
                         );
                         // bail
-                        first_lock_err?;
+                        return Err(TransactionError::AccountInUse);
                     } else {
                         // else we have an entry that conflicts with a prior entry
                         // execute the current queue and try to process this entry again
                         execute_batches(
                             bank,
-                            &batches,
+                            &mut batches,
                             entry_callback,
                             transaction_status_sender,
                             replay_vote_sender,
@@ -413,7 +343,7 @@ fn process_entries_with_callback(
     }
     execute_batches(
         bank,
-        &batches,
+        &mut batches,
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
@@ -1357,13 +1287,12 @@ pub enum TransactionStatusMessage {
 
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
-    pub transactions: Vec<SanitizedTransaction>,
-    pub statuses: Vec<TransactionExecutionResult>,
-    pub balances: TransactionBalancesSet,
-    pub token_balances: TransactionTokenBalancesSet,
-    pub inner_instructions: Option<Vec<Option<InnerInstructionsList>>>,
-    pub transaction_logs: Option<Vec<Option<TransactionLogMessages>>>,
-    pub rent_debits: Vec<RentDebits>,
+    pub items: Vec<TransactionStatusBatchItem>,
+}
+
+pub struct TransactionStatusBatchItem {
+    pub transaction: SanitizedTransaction,
+    pub meta: TransactionStatusMeta,
 }
 
 #[derive(Clone)]
@@ -1376,31 +1305,63 @@ impl TransactionStatusSender {
     pub fn send_transaction_status_batch(
         &self,
         bank: Arc<Bank>,
-        transactions: Vec<SanitizedTransaction>,
-        statuses: Vec<TransactionExecutionResult>,
-        balances: TransactionBalancesSet,
-        token_balances: TransactionTokenBalancesSet,
-        inner_instructions: Vec<Option<InnerInstructionsList>>,
-        transaction_logs: Vec<Option<TransactionLogMessages>>,
-        rent_debits: Vec<RentDebits>,
+        batch: &TransactionBatch,
+        tx_results: TransactionResults,
     ) {
         let slot = bank.slot();
-        let (inner_instructions, transaction_logs) = if !self.enable_cpi_and_log_storage {
-            (None, None)
-        } else {
-            (Some(inner_instructions), Some(transaction_logs))
-        };
+        let items = batch
+            .executed_txs_iter()
+            .map(|(tx, executed_tx)| {
+                let inner_instructions = executed_tx.inner_instructions.map(|inner_instructions| {
+                    inner_instructions
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, instructions)| InnerInstructions {
+                            index: index as u8,
+                            instructions,
+                        })
+                        .filter(|i| !i.instructions.is_empty())
+                        .collect()
+                });
+
+                let rewards = Some(
+                    executed_tx
+                        .loaded_tx
+                        .rent_debits
+                        .0
+                        .into_iter()
+                        .map(|(pubkey, reward_info)| Reward {
+                            pubkey: pubkey.to_string(),
+                            lamports: reward_info.lamports,
+                            post_balance: reward_info.post_balance,
+                            reward_type: Some(reward_info.reward_type),
+                            commission: reward_info.commission,
+                        })
+                        .collect(),
+                );
+
+                TransactionStatusBatchItem {
+                    transaction: tx.clone(),
+                    meta: TransactionStatusMeta {
+                        status: executed_tx.process_result,
+                        fee: executed_tx.loaded_tx.compute_fee,
+                        pre_balances: executed_tx.pre_balances,
+                        post_balances: executed_tx.post_balances,
+                        pre_token_balances: executed_tx.pre_token_balances,
+                        post_token_balances: executed_tx.post_token_balances,
+                        inner_instructions,
+                        transaction_logs: executed_tx.log_messages,
+                        rewards,
+                    },
+                }
+            })
+            .collect();
+
         if let Err(e) = self
             .sender
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
-                transactions,
-                statuses,
-                balances,
-                token_balances,
-                inner_instructions,
-                transaction_logs,
-                rent_debits,
+                items,
             }))
         {
             trace!(
@@ -2548,13 +2509,13 @@ pub mod tests {
         let txs1 = entry_1_to_mint.transactions;
         let txs2 = entry_2_to_3_mint_to_1.transactions;
         let batch1 = bank.prepare_entry_batch(txs1).unwrap();
-        for result in batch1.lock_results() {
+        for result in batch1.processing_results() {
             assert!(result.is_ok());
         }
         // txs1 and txs2 have accounts that conflict, so we must drop txs1 first
         drop(batch1);
         let batch2 = bank.prepare_entry_batch(txs2).unwrap();
-        for result in batch2.lock_results() {
+        for result in batch2.processing_results() {
             assert!(result.is_ok());
         }
     }
@@ -3436,7 +3397,7 @@ pub mod tests {
             _balances,
             _inner_instructions,
             _log_messages,
-        ) = batch.bank().load_execute_and_commit_transactions(
+        ) = bank.load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,
             false,
@@ -3444,9 +3405,8 @@ pub mod tests {
             false,
             &mut ExecuteTimings::default(),
         );
-        let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
+        let err: Result<_, TransactionError> = fee_collection_results.into_iter().collect();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
-        assert_eq!(signature, account_not_found_sig);
     }
 
     #[test]

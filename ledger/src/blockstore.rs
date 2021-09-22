@@ -4042,7 +4042,10 @@ pub mod tests {
     use rand::{seq::SliceRandom, thread_rng};
     use solana_account_decoder::parse_token::UiTokenAmount;
     use solana_entry::entry::{next_entry, next_entry_mut};
-    use solana_runtime::bank::{Bank, RewardType};
+    use solana_runtime::{
+        bank::{Bank, RewardType},
+        transaction_balances::TransactionTokenBalance,
+    };
     use solana_sdk::{
         hash::{self, hash, Hash},
         instruction::CompiledInstruction,
@@ -4052,7 +4055,7 @@ pub mod tests {
         transaction::{Transaction, TransactionError},
     };
     use solana_storage_proto::convert::generated;
-    use solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance};
+    use solana_transaction_status::{InnerInstructions, Reward, Rewards};
     use std::{sync::mpsc::channel, thread::Builder, time::Duration};
 
     // used for tests only

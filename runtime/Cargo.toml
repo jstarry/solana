@@ -32,6 +32,7 @@ rayon = "1.5.1"
 regex = "1.5.4"
 serde = { version = "1.0.130", features = ["rc"] }
 serde_derive = "1.0.103"
+solana-account-decoder = { path = "../account-decoder", version = "=1.8.0" }
 solana-config-program = { path = "../programs/config", version = "=1.8.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.8.0" }
 solana-ed25519-program = { path = "../programs/ed25519", version = "=1.8.0" }
@@ -47,6 +48,7 @@ solana-sdk = { path = "../sdk", version = "=1.8.0" }
 solana-secp256k1-program = { path = "../programs/secp256k1", version = "=1.8.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.8.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.8.0" }
+spl-token-v2-0 = { package = "spl-token", version = "=3.2.0", features = ["no-entrypoint"] }
 symlink = "0.1.0"
 tar = "0.4.37"
 tempfile = "3.2.0"

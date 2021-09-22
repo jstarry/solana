@@ -16,6 +16,7 @@ use {
         builtins::Builtin,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
+        transaction_batch::TransactionBatch,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -430,11 +431,10 @@ fn setup_fee_calculator(bank: Bank) -> Bank {
     // initialized with a non-zero fee.
     assert_eq!(bank.signature_count(), 0);
     bank.commit_transactions(
-        &[],     // transactions
-        &mut [], // loaded accounts
-        &[],     // transaction execution results
-        0,       // tx count
-        1,       // signature count
+        &TransactionBatch::new(&bank, vec![]), // transaction execution results
+        &mut [],                               // loaded accounts
+        0,                                     // tx count
+        1,                                     // signature count
         &mut ExecuteTimings::default(),
     );
     assert_eq!(bank.signature_count(), 1);

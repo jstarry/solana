@@ -4,10 +4,9 @@ use {
         parse_token::{real_number_string_trimmed, UiTokenAmount},
         StringAmount,
     },
+    solana_runtime::transaction_balances::TransactionTokenBalance,
     solana_sdk::{deserialize_utils::default_on_eof, transaction::Result},
-    solana_transaction_status::{
-        InnerInstructions, Reward, RewardType, TransactionStatusMeta, TransactionTokenBalance,
-    },
+    solana_transaction_status::{InnerInstructions, Reward, RewardType, TransactionStatusMeta},
     std::str::FromStr,
 };
 

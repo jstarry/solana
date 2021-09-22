@@ -13,7 +13,6 @@ pub mod parse_stake;
 pub mod parse_system;
 pub mod parse_token;
 pub mod parse_vote;
-pub mod token_balances;
 
 pub use crate::extract_memos::extract_and_fmt_memos;
 use crate::{
@@ -22,6 +21,7 @@ use crate::{
 };
 use solana_account_decoder::parse_token::UiTokenAmount;
 pub use solana_runtime::bank::RewardType;
+use solana_runtime::transaction_balances::TransactionTokenBalance;
 use solana_sdk::{
     clock::{Slot, UnixTimestamp},
     commitment_config::CommitmentConfig,
@@ -119,13 +119,6 @@ pub struct UiInnerInstructions {
     pub index: u8,
     /// List of inner instructions
     pub instructions: Vec<UiInstruction>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TransactionTokenBalance {
-    pub account_index: u8,
-    pub mint: String,
-    pub ui_token_amount: UiTokenAmount,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

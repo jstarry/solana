@@ -48,7 +48,7 @@ use solana_sdk::{
     transaction::{Transaction, TransactionError},
 };
 use solana_transaction_status::{
-    token_balances::collect_token_balances, ConfirmedTransaction, InnerInstructions,
+    ConfirmedTransaction, InnerInstructions,
     TransactionStatusMeta, TransactionWithStatusMeta, UiTransactionEncoding,
 };
 use std::{
@@ -322,7 +322,7 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
     let batch = bank.prepare_batch(txs.clone()).unwrap();
     let mut timings = ExecuteTimings::default();
     let mut mint_decimals = HashMap::new();
-    let tx_pre_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
+    let tx_pre_token_balances = bank.collect_token_balances(&batch, &mut mint_decimals);
     let (
         TransactionResults {
             execution_results, ..
@@ -342,7 +342,7 @@ fn execute_transactions(bank: &Bank, txs: Vec<Transaction>) -> Vec<ConfirmedTran
         true,
         &mut timings,
     );
-    let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
+    let tx_post_token_balances = bank.collect_token_balances(&batch, &mut mint_decimals);
 
     izip!(
         txs.iter(),

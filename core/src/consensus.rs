@@ -220,19 +220,18 @@ impl Tower {
                 continue;
             }
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
-            let mut vote_state = match account.vote_state().as_ref() {
-                Err(_) => {
-                    datapoint_warn!(
-                        "tower_warn",
-                        (
-                            "warn",
-                            format!("Unable to get vote_state from account {}", key),
-                            String
-                        ),
-                    );
-                    continue;
-                }
-                Ok(vote_state) => vote_state.clone(),
+            let mut vote_state = if let Some(vote_state) = account.vote_state().as_ref() {
+                vote_state.clone()
+            } else {
+                datapoint_warn!(
+                    "tower_warn",
+                    (
+                        "warn",
+                        format!("Unable to get vote_state from account {}", key),
+                        String
+                    ),
+                );
+                continue;
             };
             for vote in &vote_state.votes {
                 lockout_intervals
@@ -388,7 +387,7 @@ impl Tower {
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
-        let slot = vote_account.vote_state().as_ref().ok()?.last_voted_slot();
+        let slot = vote_account.vote_state().as_ref()?.last_voted_slot();
         slot
     }
 

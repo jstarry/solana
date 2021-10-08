@@ -2695,7 +2695,7 @@ impl Bank {
         let vote_accounts = self.vote_accounts();
         let recent_timestamps = vote_accounts.iter().filter_map(|(pubkey, (_, account))| {
             let vote_state = account.vote_state();
-            let vote_state = vote_state.as_ref().ok()?;
+            let vote_state = vote_state.as_ref()?;
             let slot_delta = self.slot().checked_sub(vote_state.last_timestamp.slot)?;
             (slot_delta <= slots_per_epoch).then(|| {
                 (
@@ -4184,7 +4184,7 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    let node_pubkey = account.vote_state().as_ref().ok()?.node_pubkey;
+                    let node_pubkey = account.vote_state().as_ref()?.node_pubkey;
                     Some((node_pubkey, *staked))
                 }
             })
@@ -9822,15 +9822,13 @@ pub(crate) mod tests {
                 accounts
                     .iter()
                     .filter_map(|(pubkey, (stake, account))| {
-                        if let Ok(vote_state) = account.vote_state().as_ref() {
+                        account.vote_state().as_ref().and_then(|vote_state| {
                             if vote_state.node_pubkey == leader_pubkey {
                                 Some((*pubkey, *stake))
                             } else {
                                 None
                             }
-                        } else {
-                            None
-                        }
+                        })
                     })
                     .collect()
             })

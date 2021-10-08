@@ -1729,14 +1729,14 @@ impl ReplayStage {
         };
         let vote_state = vote_account.vote_state();
         let vote_state = match vote_state.as_ref() {
-            Err(_) => {
+            None => {
                 warn!(
                     "Vote account {} is unreadable.  Unable to vote",
                     vote_account_pubkey,
                 );
                 return None;
             }
-            Ok(vote_state) => vote_state,
+            Some(vote_state) => vote_state,
         };
 
         if vote_state.node_pubkey != node_keypair.pubkey() {

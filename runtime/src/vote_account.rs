@@ -2,9 +2,7 @@ use {
     itertools::Itertools,
     serde::de::{Deserialize, Deserializer},
     serde::ser::{Serialize, Serializer},
-    solana_sdk::{
-        account::Account, account::AccountSharedData, instruction::InstructionError, pubkey::Pubkey,
-    },
+    solana_sdk::{account::Account, account::AccountSharedData, pubkey::Pubkey},
     solana_vote_program::vote_state::VoteState,
     std::{
         cmp::Ordering,
@@ -14,18 +12,13 @@ use {
     },
 };
 
-// The value here does not matter. It will be overwritten
-// at the first call to VoteAccount::vote_state().
-const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
-    Err(InstructionError::InvalidAccountData);
-
 #[derive(Clone, Debug, Default, PartialEq, AbiExample)]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, AbiExample)]
 struct VoteAccountInner {
     account: Account,
-    vote_state: RwLock<Result<VoteState, InstructionError>>,
+    vote_state: RwLock<Option<VoteState>>,
     vote_state_once: Once,
 }
 
@@ -56,10 +49,10 @@ impl VoteAccount {
         self.account().lamports
     }
 
-    pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, InstructionError>> {
+    pub fn vote_state(&self) -> RwLockReadGuard<Option<VoteState>> {
         let inner = &self.0;
         inner.vote_state_once.call_once(|| {
-            let vote_state = VoteState::deserialize(&inner.account.data);
+            let vote_state = VoteState::deserialize(&inner.account.data).ok();
             *inner.vote_state.write().unwrap() = vote_state;
         });
         inner.vote_state.read().unwrap()
@@ -67,7 +60,7 @@ impl VoteAccount {
 
     /// VoteState.node_pubkey of this vote-account.
     fn node_pubkey(&self) -> Option<Pubkey> {
-        Some(self.vote_state().as_ref().ok()?.node_pubkey)
+        Some(self.vote_state().as_ref()?.node_pubkey)
     }
 }
 
@@ -214,7 +207,7 @@ impl From<Account> for VoteAccountInner {
     fn from(account: Account) -> Self {
         Self {
             account,
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
+            vote_state: RwLock::new(None),
             vote_state_once: Once::new(),
         }
     }
@@ -224,7 +217,7 @@ impl Default for VoteAccountInner {
     fn default() -> Self {
         Self {
             account: Account::default(),
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
+            vote_state: RwLock::new(None),
             vote_state_once: Once::new(),
         }
     }

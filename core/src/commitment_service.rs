@@ -187,7 +187,7 @@ impl AggregateCommitmentService {
             if *lamports == 0 {
                 continue;
             }
-            if let Ok(vote_state) = account.vote_state().as_ref() {
+            if let Some(vote_state) = account.vote_state().as_ref() {
                 Self::aggregate_commitment_for_vote_account(
                     &mut commitment,
                     &mut rooted_stake,

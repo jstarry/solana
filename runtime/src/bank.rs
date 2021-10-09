@@ -2694,8 +2694,7 @@ impl Bank {
         let slots_per_epoch = self.epoch_schedule().slots_per_epoch;
         let vote_accounts = self.vote_accounts();
         let recent_timestamps = vote_accounts.iter().filter_map(|(pubkey, (_, account))| {
-            let vote_state = account.vote_state();
-            let vote_state = vote_state.as_ref()?;
+            let vote_state = account.vote_state()?;
             let slot_delta = self.slot().checked_sub(vote_state.last_timestamp.slot)?;
             (slot_delta <= slots_per_epoch).then(|| {
                 (
@@ -4123,8 +4122,11 @@ impl Bank {
         );
         let rent_debits = self.collect_rent(executed, loaded_txs);
 
-        let overwritten_vote_accounts =
-            self.update_cached_accounts(sanitized_txs, executed, loaded_txs);
+        let overwritten_vote_accounts = self.update_stakes_cache_with_executed_transactions(
+            sanitized_txs,
+            executed,
+            loaded_txs,
+        );
 
         // once committed there is no way to unroll
         write_time.stop();
@@ -4184,7 +4186,7 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    let node_pubkey = account.vote_state().as_ref()?.node_pubkey;
+                    let node_pubkey = account.vote_state()?.node_pubkey;
                     Some((node_pubkey, *staked))
                 }
             })
@@ -4909,14 +4911,7 @@ impl Bank {
         self.rc
             .accounts
             .store_slow_cached(self.slot(), pubkey, account);
-
-        if Stakes::is_stake(account) {
-            self.stakes.write().unwrap().store(
-                pubkey,
-                account,
-                self.stakes_remove_delegation_if_inactive_enabled(),
-            );
-        }
+        self.update_stakes_cache_with_updated_account(pubkey, account);
     }
 
     pub fn force_flush_accounts_cache(&self) {
@@ -5645,13 +5640,16 @@ impl Bank {
     }
 
     /// a bank-level cache of vote accounts
-    fn update_cached_accounts(
+    fn update_stakes_cache_with_executed_transactions(
         &self,
         txs: &[SanitizedTransaction],
         res: &[TransactionExecutionResult],
         loaded_txs: &[TransactionLoadResult],
     ) -> Vec<OverwrittenVoteAccount> {
         let mut overwritten_vote_accounts = vec![];
+        let demote_program_write_locks = self
+            .feature_set
+            .is_active(&feature_set::demote_program_write_locks::id());
         for (i, ((raccs, _load_nonce_rollback), tx)) in loaded_txs.iter().zip(txs).enumerate() {
             let (res, _res_nonce_rollback) = &res[i];
             if res.is_err() || raccs.is_err() {
@@ -5661,15 +5659,17 @@ impl Bank {
             let message = tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
 
-            for (_i, (pubkey, account)) in (0..message.account_keys_len())
+            for (pubkey, account) in (0..message.account_keys_len())
                 .zip(loaded_transaction.accounts.iter())
-                .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
+                .filter_map(|(i, loaded_account)| {
+                    message
+                        .is_writable(i, demote_program_write_locks)
+                        .then(|| loaded_account)
+                })
             {
-                if let Some(old_vote_account) = self.stakes.write().unwrap().store(
-                    pubkey,
-                    account,
-                    self.stakes_remove_delegation_if_inactive_enabled(),
-                ) {
+                if let Some(old_vote_account) =
+                    self.update_stakes_cache_with_updated_account(pubkey, account)
+                {
                     // TODO: one of the indices is redundant.
                     overwritten_vote_accounts.push(OverwrittenVoteAccount {
                         account: old_vote_account,
@@ -5681,6 +5681,31 @@ impl Bank {
         }
 
         overwritten_vote_accounts
+    }
+
+    pub fn update_stakes_cache_with_updated_account(
+        &self,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+    ) -> Option<VoteAccount> {
+        let mut old_vote_account = None;
+        if solana_vote_program::check_id(account.owner()) {
+            let vote_state = VoteState::deserialize(account.data()).ok();
+            old_vote_account = self
+                .stakes
+                .write()
+                .unwrap()
+                .update_cached_vote_account(pubkey, account, vote_state);
+        } else if solana_stake_program::check_id(account.owner()) {
+            let delegation = stake_state::delegation_from(account);
+            self.stakes.write().unwrap().update_cached_stake_delegation(
+                pubkey,
+                account,
+                delegation,
+                self.stakes_remove_delegation_if_inactive_enabled(),
+            );
+        }
+        old_vote_account
     }
 
     /// current stake delegations for this bank
@@ -9822,7 +9847,7 @@ pub(crate) mod tests {
                 accounts
                     .iter()
                     .filter_map(|(pubkey, (stake, account))| {
-                        account.vote_state().as_ref().and_then(|vote_state| {
+                        account.vote_state().and_then(|vote_state| {
                             if vote_state.node_pubkey == leader_pubkey {
                                 Some((*pubkey, *stake))
                             } else {

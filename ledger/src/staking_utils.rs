@@ -112,12 +112,15 @@ pub(crate) mod tests {
         let vote_accounts = stakes.into_iter().map(|(stake, vote_state)| {
             let account = AccountSharedData::new_data(
                 rng.gen(), // lamports
-                &VoteStateVersions::new_current(vote_state),
+                &VoteStateVersions::new_current(vote_state.clone()),
                 &Pubkey::new_unique(), // owner
             )
             .unwrap();
             let vote_pubkey = Pubkey::new_unique();
-            (vote_pubkey, (stake, VoteAccount::from(account)))
+            (
+                vote_pubkey,
+                (stake, VoteAccount::new(account.into(), Some(vote_state))),
+            )
         });
         let result = vote_accounts.collect::<VoteAccounts>().staked_nodes();
         assert_eq!(result.len(), 2);

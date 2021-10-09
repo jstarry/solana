@@ -71,8 +71,7 @@ impl EpochStakes {
         let epoch_authorized_voters = epoch_vote_accounts
             .iter()
             .filter_map(|(key, (stake, account))| {
-                let vote_state = account.vote_state();
-                let vote_state = match vote_state.as_ref() {
+                let vote_state = match account.vote_state() {
                     None => {
                         datapoint_warn!(
                             "parse_epoch_vote_accounts",
@@ -119,14 +118,39 @@ impl EpochStakes {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use solana_sdk::account::AccountSharedData;
-    use solana_vote_program::vote_state::create_account_with_authorized;
+    use solana_sdk::{account::AccountSharedData, sysvar::clock::Clock};
+    use solana_vote_program::vote_state::{VoteInit, VoteState, VoteStateVersions};
     use std::iter;
 
     struct VoteAccountInfo {
-        vote_account: Pubkey,
-        account: AccountSharedData,
+        pubkey: Pubkey,
+        account: VoteAccount,
         authorized_voter: Pubkey,
+    }
+
+    fn create_random_vote_account_info(node_pubkey: Pubkey) -> VoteAccountInfo {
+        let authorized_voter = Pubkey::new_unique();
+        let mut vote_account =
+            AccountSharedData::new(100, VoteState::size_of(), &solana_vote_program::id());
+
+        let vote_state = VoteState::new(
+            &VoteInit {
+                node_pubkey,
+                authorized_voter,
+                authorized_withdrawer: node_pubkey,
+                commission: 0,
+            },
+            &Clock::default(),
+        );
+
+        let versioned = VoteStateVersions::new_current(vote_state.clone());
+        VoteState::to(&versioned, &mut vote_account).unwrap();
+
+        VoteAccountInfo {
+            pubkey: Pubkey::new_unique(),
+            account: VoteAccount::new(vote_account.into(), Some(vote_state)),
+            authorized_voter,
+        }
     }
 
     #[test]
@@ -136,25 +160,12 @@ pub(crate) mod tests {
         // Create some vote accounts for each pubkey
         let vote_accounts_map: HashMap<Pubkey, Vec<VoteAccountInfo>> = (0..10)
             .map(|_| {
-                let node_id = solana_sdk::pubkey::new_rand();
+                let node_id = Pubkey::new_unique();
                 (
                     node_id,
-                    iter::repeat_with(|| {
-                        let authorized_voter = solana_sdk::pubkey::new_rand();
-                        VoteAccountInfo {
-                            vote_account: solana_sdk::pubkey::new_rand(),
-                            account: create_account_with_authorized(
-                                &node_id,
-                                &authorized_voter,
-                                &node_id,
-                                0,
-                                100,
-                            ),
-                            authorized_voter,
-                        }
-                    })
-                    .take(num_vote_accounts_per_node)
-                    .collect(),
+                    iter::repeat_with(|| create_random_vote_account_info(node_id))
+                        .take(num_vote_accounts_per_node)
+                        .collect(),
                 )
             })
             .collect();
@@ -162,19 +173,15 @@ pub(crate) mod tests {
         let expected_authorized_voters: HashMap<_, _> = vote_accounts_map
             .iter()
             .flat_map(|(_, vote_accounts)| {
-                vote_accounts
-                    .iter()
-                    .map(|v| (v.vote_account, v.authorized_voter))
+                vote_accounts.iter().map(|v| (v.pubkey, v.authorized_voter))
             })
             .collect();
 
         let expected_node_id_to_vote_accounts: HashMap<_, _> = vote_accounts_map
             .iter()
             .map(|(node_pubkey, vote_accounts)| {
-                let mut vote_accounts = vote_accounts
-                    .iter()
-                    .map(|v| (v.vote_account))
-                    .collect::<Vec<_>>();
+                let mut vote_accounts =
+                    vote_accounts.iter().map(|v| (v.pubkey)).collect::<Vec<_>>();
                 vote_accounts.sort();
                 let node_vote_accounts = NodeVoteAccounts {
                     vote_accounts,
@@ -188,12 +195,9 @@ pub(crate) mod tests {
         let epoch_vote_accounts: HashMap<_, _> = vote_accounts_map
             .iter()
             .flat_map(|(_, vote_accounts)| {
-                vote_accounts.iter().map(|v| {
-                    (
-                        v.vote_account,
-                        (stake_per_account, VoteAccount::from(v.account.clone())),
-                    )
-                })
+                vote_accounts
+                    .iter()
+                    .map(|v| (v.pubkey, (stake_per_account, v.account.clone())))
             })
             .collect();
 

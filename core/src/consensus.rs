@@ -220,7 +220,7 @@ impl Tower {
                 continue;
             }
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
-            let mut vote_state = if let Some(vote_state) = account.vote_state().as_ref() {
+            let mut vote_state = if let Some(vote_state) = account.vote_state() {
                 vote_state.clone()
             } else {
                 datapoint_warn!(
@@ -387,7 +387,7 @@ impl Tower {
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
         let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
-        let slot = vote_account.vote_state().as_ref()?.last_voted_slot();
+        let slot = vote_account.vote_state()?.last_voted_slot();
         slot
     }
 
@@ -1141,7 +1141,6 @@ impl Tower {
         if let Some((_stake, vote_account)) = bank.get_vote_account(vote_account_pubkey) {
             self.vote_state = vote_account
                 .vote_state()
-                .as_ref()
                 .expect("vote_account isn't a VoteState?")
                 .clone();
             self.initialize_root(root);
@@ -1311,13 +1310,16 @@ pub mod test {
                     vote_state.process_slot_vote_unchecked(*slot);
                 }
                 VoteState::serialize(
-                    &VoteStateVersions::new_current(vote_state),
+                    &VoteStateVersions::new_current(vote_state.clone()),
                     account.data_as_mut_slice(),
                 )
                 .expect("serialize state");
                 (
                     solana_sdk::pubkey::new_rand(),
-                    (*lamports, VoteAccount::from(account)),
+                    (
+                        *lamports,
+                        VoteAccount::new(account.into(), Some(vote_state)),
+                    ),
                 )
             })
             .collect()

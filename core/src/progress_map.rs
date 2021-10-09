@@ -506,6 +506,7 @@ impl ProgressMap {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_sdk::account::Account;
 
     #[test]
     fn test_add_vote_pubkey() {
@@ -540,7 +541,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, VoteAccount::default())))
+            .map(|pubkey| (*pubkey, (1, VoteAccount::new(Account::default(), None))))
             .collect();
 
         let mut stats = PropagatedStats::default();
@@ -582,7 +583,7 @@ mod test {
         let epoch_vote_accounts: HashMap<_, _> = vote_account_pubkeys
             .iter()
             .skip(num_vote_accounts - staked_vote_accounts)
-            .map(|pubkey| (*pubkey, (1, VoteAccount::default())))
+            .map(|pubkey| (*pubkey, (1, VoteAccount::new(Account::default(), None))))
             .collect();
         stats.add_node_pubkey_internal(&node_pubkey, &vote_account_pubkeys, &epoch_vote_accounts);
         assert!(stats.propagated_node_ids.contains(&node_pubkey));

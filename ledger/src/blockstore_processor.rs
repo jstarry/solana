@@ -1299,7 +1299,7 @@ fn supermajority_root_from_vote_accounts(
                 return None;
             }
 
-            match account.vote_state().as_ref() {
+            match account.vote_state() {
                 None => {
                     warn!(
                         "Unable to get vote_state from account {} in bank: {}",
@@ -1482,7 +1482,7 @@ pub mod tests {
         self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
     };
     use solana_sdk::{
-        account::{AccountSharedData, WritableAccount},
+        account::AccountSharedData,
         epoch_schedule::EpochSchedule,
         hash::Hash,
         pubkey::Pubkey,
@@ -3740,16 +3740,15 @@ pub mod tests {
                     .map(|(root, stake)| {
                         let mut vote_state = VoteState::default();
                         vote_state.root_slot = Some(root);
-                        let mut vote_account = AccountSharedData::new(
+                        let account = AccountSharedData::new_data(
                             1,
-                            VoteState::size_of(),
+                            &VoteStateVersions::new_current(vote_state.clone()),
                             &solana_vote_program::id(),
-                        );
-                        let versioned = VoteStateVersions::new_current(vote_state);
-                        VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
+                        )
+                        .unwrap();
                         (
                             solana_sdk::pubkey::new_rand(),
-                            (stake, VoteAccount::from(vote_account)),
+                            (stake, VoteAccount::new(account.into(), Some(vote_state))),
                         )
                     })
                     .collect()

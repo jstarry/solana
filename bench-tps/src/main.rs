@@ -65,6 +65,7 @@ fn main() {
         let path = Path::new(&client_ids_and_stake_file);
         let mut file = File::create(path).unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
+        info!("Finished writing");
         return;
     }
 

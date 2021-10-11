@@ -30,10 +30,13 @@ impl GenKeys {
     }
 
     pub fn gen_n_keypairs(&mut self, n: u64) -> Vec<Keypair> {
+        self.gen_n_keypairs_par_iter(n).collect()
+    }
+
+    pub fn gen_n_keypairs_par_iter(&mut self, n: u64) -> impl ParallelIterator<Item = Keypair> {
         self.gen_n_seeds(n)
             .into_par_iter()
             .map(|seed| Keypair::generate(&mut ChaChaRng::from_seed(seed)))
-            .collect()
     }
 }
 

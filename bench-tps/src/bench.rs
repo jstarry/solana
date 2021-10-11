@@ -879,6 +879,25 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u
     (rnd.gen_n_keypairs(total_keys), extra)
 }
 
+pub fn generate_keypairs_par_iter(
+    seed_keypair: &Keypair,
+    count: u64,
+) -> (impl ParallelIterator<Item = Keypair>, u64, u64) {
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
+    let mut rnd = GenKeys::new(seed);
+
+    let mut total_keys = 0;
+    let mut extra = 0; // This variable tracks the number of keypairs needing extra transaction fees funded
+    let mut delta = 1;
+    while total_keys < count {
+        extra += delta;
+        delta *= MAX_SPENDS_PER_TX;
+        total_keys += delta;
+    }
+    (rnd.gen_n_keypairs_par_iter(total_keys), total_keys, extra)
+}
+
 pub fn generate_and_fund_keypairs<T: 'static + Client + Send + Sync>(
     client: Arc<T>,
     faucet_addr: Option<SocketAddr>,

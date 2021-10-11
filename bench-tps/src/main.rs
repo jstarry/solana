@@ -1,6 +1,9 @@
 #![allow(clippy::integer_arithmetic)]
 use log::*;
-use solana_bench_tps::bench::{do_bench_tps, generate_and_fund_keypairs, generate_keypairs};
+use rayon::prelude::*;
+use solana_bench_tps::bench::{
+    do_bench_tps, generate_and_fund_keypairs, generate_keypairs_par_iter,
+};
 use solana_bench_tps::cli;
 use solana_genesis::Base64Account;
 use solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client};
@@ -40,31 +43,29 @@ fn main() {
     let keypair_count = *tx_count * keypair_multiplier;
     if *write_to_client_file {
         info!("Generating {} keypairs", keypair_count);
-        let (keypairs, _) = generate_keypairs(id, keypair_count as u64);
-        let num_accounts = keypairs.len() as u64;
+        let (keypair_iter, num_accounts, _) = generate_keypairs_par_iter(id, keypair_count as u64);
         let max_fee =
             FeeRateGovernor::new(*target_lamports_per_signature, 0).max_lamports_per_signature;
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
             + num_lamports_per_account;
-        let mut accounts = HashMap::new();
-        keypairs.iter().for_each(|keypair| {
-            accounts.insert(
-                serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-                Base64Account {
-                    balance: num_lamports_per_account,
-                    executable: false,
-                    owner: system_program::id().to_string(),
-                    data: String::new(),
-                },
-            );
-        });
+        let serialized_account = bincode::serialize(&Base64Account {
+            balance: num_lamports_per_account,
+            executable: false,
+            owner: system_program::id().to_string(),
+            data: String::new(),
+        }).unwrap();
+
+
+        let accounts: Vec<u8> = keypair_iter
+            .map(|keypair| bincode::serialize(&(keypair.to_bytes().as_ref(), &serialized_account)))
+            .flatten_iter()
+            .collect();
 
         info!("Writing {}", client_ids_and_stake_file);
-        let serialized = serde_yaml::to_string(&accounts).unwrap();
         let path = Path::new(&client_ids_and_stake_file);
         let mut file = File::create(path).unwrap();
-        file.write_all(&serialized.into_bytes()).unwrap();
+        file.write(&accounts).unwrap();
         info!("Finished writing");
         return;
     }

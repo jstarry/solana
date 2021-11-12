@@ -2185,7 +2185,7 @@ impl Bank {
                         None => return,
                     };
 
-                    // fetch vote account from stakes cache if it hasn't been cached locally
+                    // fetch vote account from accounts db if it hasn't been cached locally
                     let fetched_vote_account = if !accounts.contains_key(vote_pubkey) {
                         let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
                             Some(vote_account) => vote_account,
@@ -4140,13 +4140,23 @@ impl Bank {
         let mut total_rent = 0;
         let mut rent_debits = RentDebits::default();
         for (pubkey, mut account) in accounts {
-            let rent = self.rent_collector.collect_from_existing_account(
+            let (rent, delinquent_account) = self.rent_collector.collect_from_existing_account(
                 &pubkey,
                 &mut account,
                 rent_for_sysvars,
                 self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
             );
             total_rent += rent;
+
+            if self.stakes_remove_rent_delinquent_accounts_enabled() {
+                if let Some(delinquent_account) = delinquent_account {
+                    self.stakes
+                        .write()
+                        .unwrap()
+                        .remove_rent_delinquent_account(&delinquent_account);
+                }
+            }
+
             // Store all of them unconditionally to purge old AppendVec,
             // even if collected rent is 0 (= not updated).
             // Also, there's another subtle side-effect from this: this
@@ -5454,9 +5464,27 @@ impl Bank {
             let message = tx.message();
             let loaded_transaction = raccs.as_ref().unwrap();
 
+            // First clear any vote accounts which were loaded but ran out of funds
+            //   to pay rent for the current epoch. These are cleared first in case
+            //   the transaction happened to re-initialize the vote account.
+            for rent_delinquent_account in &loaded_transaction.rent_delinquent_accounts {
+                // Don't grab stakes cache write lock unless necessary
+                if self.stakes_remove_rent_delinquent_accounts_enabled()
+                    && Stakes::is_rent_delinquent_stake(rent_delinquent_account)
+                {
+                    self.stakes
+                        .write()
+                        .unwrap()
+                        .remove_rent_delinquent_account(rent_delinquent_account);
+                }
+            }
+
             for (_i, (pubkey, account)) in (0..message.account_keys_len())
                 .zip(loaded_transaction.accounts.iter())
-                .filter(|(_i, (_pubkey, account))| (Stakes::is_stake(account)))
+                .filter(|(_i, (_pubkey, account))| {
+                    // Don't grab stakes cache write lock unless necessary
+                    Stakes::is_stake(account)
+                })
             {
                 self.stakes.write().unwrap().store(
                     pubkey,
@@ -5729,6 +5757,11 @@ impl Bank {
     pub fn stakes_remove_delegation_if_inactive_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::stakes_remove_delegation_if_inactive::id())
+    }
+
+    pub fn stakes_remove_rent_delinquent_accounts_enabled(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::stakes_remove_rent_delinquent_accounts::id())
     }
 
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {

@@ -2,6 +2,7 @@
 //! node stakes
 use {
     crate::{
+        accounts::RentDelinquentAccount,
         stake_delegations::StakeDelegations,
         stake_history::StakeHistory,
         vote_account::{VoteAccount, VoteAccounts, VoteAccountsHashMap},
@@ -148,6 +149,29 @@ impl Stakes {
         solana_vote_program::check_id(account.owner())
             || stake::program::check_id(account.owner())
                 && account.data().len() >= std::mem::size_of::<StakeState>()
+    }
+
+    pub fn is_rent_delinquent_stake(account: &RentDelinquentAccount) -> bool {
+        solana_vote_program::check_id(&account.cleared_owner)
+            || stake::program::check_id(&account.cleared_owner)
+                && account.cleared_data_len >= std::mem::size_of::<StakeState>()
+    }
+
+    pub fn remove_rent_delinquent_account(&mut self, delinquent_account: &RentDelinquentAccount) {
+        if solana_vote_program::check_id(&delinquent_account.cleared_owner) {
+            self.vote_accounts.remove(&delinquent_account.key);
+        } else if stake::program::check_id(&delinquent_account.cleared_owner) {
+            // It's only necessary to have special handling for rent delinquent stake accounts
+            // until the `stakes_remove_delegation_if_inactive` feature switch is enabled because
+            // after that's enabled, it won't be possible to store rent delinquent accounts in the
+            // stakes cache.
+            if let Some(removed_delegation) = self.stake_delegations.remove(&delinquent_account.key)
+            {
+                let removed_stake = removed_delegation.stake(self.epoch, Some(&self.stake_history));
+                self.vote_accounts
+                    .sub_stake(&removed_delegation.voter_pubkey, removed_stake);
+            }
+        }
     }
 
     pub fn store(

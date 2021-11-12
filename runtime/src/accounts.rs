@@ -108,12 +108,22 @@ pub struct Accounts {
 pub type TransactionAccounts = Vec<(Pubkey, AccountSharedData)>;
 pub type TransactionRent = u64;
 pub type TransactionProgramIndices = Vec<Vec<usize>>;
+
+// Account that was cleared due to rent delinquency
 #[derive(PartialEq, Debug, Clone)]
+pub struct RentDelinquentAccount {
+    pub key: Pubkey,
+    pub cleared_owner: Pubkey,
+    pub cleared_data_len: usize,
+}
+
+#[derive(PartialEq, Debug, Default, Clone)]
 pub struct LoadedTransaction {
     pub accounts: TransactionAccounts,
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+    pub rent_delinquent_accounts: Vec<RentDelinquentAccount>,
 }
 
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
@@ -246,6 +256,7 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(message.account_keys_len());
             let mut account_deps = Vec::with_capacity(message.account_keys_len());
             let mut rent_debits = RentDebits::default();
+            let mut rent_delinquent_accounts = Vec::new();
             let rent_for_sysvars = feature_set.is_active(&feature_set::rent_for_sysvars::id());
             let demote_program_write_locks =
                 feature_set.is_active(&feature_set::demote_program_write_locks::id());
@@ -272,12 +283,18 @@ impl Accounts {
                             .load_with_fixed_root(ancestors, key)
                             .map(|(mut account, _)| {
                                 if message.is_writable(i, demote_program_write_locks) {
-                                    let rent_due = rent_collector.collect_from_existing_account(
-                                        key,
-                                        &mut account,
-                                        rent_for_sysvars,
-                                        self.accounts_db.filler_account_suffix.as_ref(),
-                                    );
+                                    let (rent_due, delinquent_account) = rent_collector
+                                        .collect_from_existing_account(
+                                            key,
+                                            &mut account,
+                                            rent_for_sysvars,
+                                            self.accounts_db.filler_account_suffix.as_ref(),
+                                        );
+
+                                    if let Some(delinquent_account) = delinquent_account {
+                                        rent_delinquent_accounts.push(delinquent_account);
+                                    }
+
                                     (account, rent_due)
                                 } else {
                                     (account, 0)
@@ -385,6 +402,7 @@ impl Accounts {
                     program_indices,
                     rent: tx_rent,
                     rent_debits,
+                    rent_delinquent_accounts,
                 })
             } else {
                 error_counters.account_not_found += 1;
@@ -1127,11 +1145,10 @@ impl Accounts {
 
                     if execution_result.is_ok() || is_nonce_account || is_fee_payer {
                         if account.rent_epoch() == INITIAL_RENT_EPOCH {
-                            let rent = rent_collector.collect_from_created_account(
-                                address,
-                                account,
-                                rent_for_sysvars,
-                            );
+                            // Rent delinquent created accounts are ephemeral so their state
+                            // can safely be ignored.
+                            let (rent, _delinquent_account) = rent_collector
+                                .collect_from_created_account(address, account, rent_for_sysvars);
                             loaded_transaction.rent += rent;
                             loaded_transaction.rent_debits.insert(
                                 address,
@@ -2547,6 +2564,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                rent_delinquent_accounts: vec![],
             }),
             None,
         );
@@ -2557,6 +2575,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                rent_delinquent_accounts: vec![],
             }),
             None,
         );
@@ -2984,9 +3003,7 @@ mod tests {
         let loaded = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts,
-                program_indices: vec![],
-                rent: 0,
-                rent_debits: RentDebits::default(),
+                ..LoadedTransaction::default()
             }),
             nonce.clone(),
         );
@@ -3095,9 +3112,7 @@ mod tests {
         let loaded = (
             Ok(LoadedTransaction {
                 accounts: transaction_accounts,
-                program_indices: vec![],
-                rent: 0,
-                rent_debits: RentDebits::default(),
+                ..LoadedTransaction::default()
             }),
             nonce.clone(),
         );

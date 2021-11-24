@@ -3,7 +3,7 @@ import {Buffer} from 'buffer';
 import fetch from 'cross-fetch';
 import type {Response} from 'cross-fetch';
 import {
-  type as pick,
+  type as pick /* yo*/,
   number,
   string,
   array,

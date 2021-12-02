@@ -11,10 +11,10 @@ DROP TABLE transaction;
 
 DROP TYPE "TransactionError" CASCADE;
 DROP TYPE "TransactionErrorCode" CASCADE;
-DROP TYPE "MappedMessage" CASCADE;
-DROP TYPE "MappedAddresses" CASCADE;
+DROP TYPE "LoadedMessageV0" CASCADE;
+DROP TYPE "LoadedAddresses" CASCADE;
+DROP TYPE "AddressTableLookup" CASCADE;
 DROP TYPE "TransactionMessageV0" CASCADE;
-DROP TYPE "AddressMapIndexes" CASCADE;
 DROP TYPE "TransactionMessage" CASCADE;
 DROP TYPE "TransactionMessageHeader" CASCADE;
 DROP TYPE "TransactionStatusMeta" CASCADE;

@@ -7,19 +7,23 @@ use crate::{
     short_vec,
 };
 
-/// Indexes that are mapped to addresses using an on-chain address map for
-/// succinctly loading readonly and writable accounts.
+mod loaded;
+
+pub use loaded::*;
+
+/// Indexes that are used to lookup addresses from an on-chain address lookup table
+/// for succinctly loading many more readonly and writable accounts in a single tx.
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
-pub struct AddressMapIndexes {
+pub struct AddressTableLookup {
     #[serde(with = "short_vec")]
-    pub writable: Vec<u8>,
+    pub writable_indexes: Vec<u8>,
     #[serde(with = "short_vec")]
-    pub readonly: Vec<u8>,
+    pub readonly_indexes: Vec<u8>,
 }
 
 /// Transaction message format which supports succinct account loading with
-/// indexes for on-chain address maps.
+/// indexes for on-chain address lookup tables.
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
@@ -37,11 +41,12 @@ pub struct Message {
     /// and committed in one atomic transaction if all succeed.
     ///
     /// # Notes
-    ///
+    /// 
     /// Account and program indexes will index into the list of addresses
-    /// constructed from the concatenation of `account_keys`, flattened list of
-    /// `writable` address map indexes, and the flattened `readonly` address
-    /// map indexes.
+    /// constructed from the concatenation of three key lists:
+    ///   1) message `account_keys`
+    ///   2) ordered list of keys loaded from `writable` lookup table indexes
+    ///   3) ordered list of keys loaded from `readable` lookup table indexes
     #[serde(with = "short_vec")]
     pub instructions: Vec<CompiledInstruction>,
 
@@ -50,10 +55,10 @@ pub struct Message {
     ///
     /// # Notes
     ///
-    /// The last `address_map_indexes.len()` accounts of the read-only unsigned
-    /// accounts are loaded as address maps.
+    /// The last `address_table_lookups.len()` accounts of the read-only unsigned
+    /// account keys are loaded as address lookup tables.
     #[serde(with = "short_vec")]
-    pub address_map_indexes: Vec<AddressMapIndexes>,
+    pub address_table_lookups: Vec<AddressTableLookup>,
 }
 
 impl Sanitize for Message {
@@ -73,18 +78,18 @@ impl Sanitize for Message {
         }
 
         // there cannot be more address maps than read-only unsigned accounts.
-        let num_address_map_indexes = self.address_map_indexes.len();
-        if num_address_map_indexes > usize::from(self.header.num_readonly_unsigned_accounts) {
+        let num_address_table_lookups = self.address_table_lookups.len();
+        if num_address_table_lookups > usize::from(self.header.num_readonly_unsigned_accounts) {
             return Err(SanitizeError::IndexOutOfBounds);
         }
 
         // each map must load at least one entry
         let mut num_loaded_accounts = self.account_keys.len();
-        for indexes in &self.address_map_indexes {
+        for indexes in &self.address_table_lookups {
             let num_loaded_map_entries = indexes
-                .writable
+                .writable_indexes
                 .len()
-                .saturating_add(indexes.readonly.len());
+                .saturating_add(indexes.readonly_indexes.len());
 
             if num_loaded_map_entries == 0 {
                 return Err(SanitizeError::InvalidValue);
@@ -138,9 +143,9 @@ mod tests {
                 num_readonly_unsigned_accounts: 1,
             },
             account_keys: vec![Pubkey::new_unique(), Pubkey::new_unique()],
-            address_map_indexes: vec![AddressMapIndexes {
-                writable: vec![],
-                readonly: vec![0],
+            address_table_lookups: vec![AddressTableLookup {
+                writable_indexes: vec![],
+                readonly_indexes: vec![0],
             }],
             ..Message::default()
         }
@@ -158,14 +163,14 @@ mod tests {
                 Pubkey::new_unique(),
                 Pubkey::new_unique(),
             ],
-            address_map_indexes: vec![
-                AddressMapIndexes {
-                    writable: vec![1],
-                    readonly: vec![0],
+            address_table_lookups: vec![
+                AddressTableLookup {
+                    writable_indexes: vec![1],
+                    readonly_indexes: vec![0],
                 },
-                AddressMapIndexes {
-                    writable: vec![0],
-                    readonly: vec![1],
+                AddressTableLookup {
+                    writable_indexes: vec![0],
+                    readonly_indexes: vec![1],
                 },
             ],
             ..Message::default()
@@ -176,7 +181,7 @@ mod tests {
     fn test_sanitize_account_indices() {
         assert!(Message {
             account_keys: (0..=u8::MAX).map(|_| Pubkey::new_unique()).collect(),
-            address_map_indexes: vec![],
+            address_table_lookups: vec![],
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
                 accounts: vec![u8::MAX],
@@ -189,7 +194,7 @@ mod tests {
 
         assert!(Message {
             account_keys: (0..u8::MAX).map(|_| Pubkey::new_unique()).collect(),
-            address_map_indexes: vec![],
+            address_table_lookups: vec![],
             instructions: vec![CompiledInstruction {
                 program_id_index: 1,
                 accounts: vec![u8::MAX],
@@ -225,14 +230,14 @@ mod tests {
         .is_err());
 
         assert!(Message {
-            address_map_indexes: vec![
-                AddressMapIndexes {
-                    writable: (0..200).step_by(2).collect(),
-                    readonly: (1..200).step_by(2).collect(),
+            address_table_lookups: vec![
+                AddressTableLookup {
+                    writable_indexes: (0..200).step_by(2).collect(),
+                    readonly_indexes: (1..200).step_by(2).collect(),
                 },
-                AddressMapIndexes {
-                    writable: (0..53).step_by(2).collect(),
-                    readonly: (1..53).step_by(2).collect(),
+                AddressTableLookup {
+                    writable_indexes: (0..53).step_by(2).collect(),
+                    readonly_indexes: (1..53).step_by(2).collect(),
                 },
             ],
             instructions: vec![CompiledInstruction {
@@ -246,14 +251,14 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_map_indexes: vec![
-                AddressMapIndexes {
-                    writable: (0..200).step_by(2).collect(),
-                    readonly: (1..200).step_by(2).collect(),
+            address_table_lookups: vec![
+                AddressTableLookup {
+                    writable_indexes: (0..200).step_by(2).collect(),
+                    readonly_indexes: (1..200).step_by(2).collect(),
                 },
-                AddressMapIndexes {
-                    writable: (0..52).step_by(2).collect(),
-                    readonly: (1..52).step_by(2).collect(),
+                AddressTableLookup {
+                    writable_indexes: (0..52).step_by(2).collect(),
+                    readonly_indexes: (1..52).step_by(2).collect(),
                 },
             ],
             instructions: vec![CompiledInstruction {
@@ -271,7 +276,7 @@ mod tests {
     fn test_sanitize_excessive_loaded_accounts() {
         assert!(Message {
             account_keys: (0..=u8::MAX).map(|_| Pubkey::new_unique()).collect(),
-            address_map_indexes: vec![],
+            address_table_lookups: vec![],
             ..simple_message()
         }
         .sanitize()
@@ -279,7 +284,7 @@ mod tests {
 
         assert!(Message {
             account_keys: (0..257).map(|_| Pubkey::new_unique()).collect(),
-            address_map_indexes: vec![],
+            address_table_lookups: vec![],
             ..simple_message()
         }
         .sanitize()
@@ -300,14 +305,14 @@ mod tests {
         .is_err());
 
         assert!(Message {
-            address_map_indexes: vec![
-                AddressMapIndexes {
-                    writable: (0..200).step_by(2).collect(),
-                    readonly: (1..200).step_by(2).collect(),
+            address_table_lookups: vec![
+                AddressTableLookup {
+                    writable_indexes: (0..200).step_by(2).collect(),
+                    readonly_indexes: (1..200).step_by(2).collect(),
                 },
-                AddressMapIndexes {
-                    writable: (0..53).step_by(2).collect(),
-                    readonly: (1..53).step_by(2).collect(),
+                AddressTableLookup {
+                    writable_indexes: (0..53).step_by(2).collect(),
+                    readonly_indexes: (1..53).step_by(2).collect(),
                 }
             ],
             ..two_map_message()
@@ -316,14 +321,14 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_map_indexes: vec![
-                AddressMapIndexes {
-                    writable: (0..200).step_by(2).collect(),
-                    readonly: (1..200).step_by(2).collect(),
+            address_table_lookups: vec![
+                AddressTableLookup {
+                    writable_indexes: (0..200).step_by(2).collect(),
+                    readonly_indexes: (1..200).step_by(2).collect(),
                 },
-                AddressMapIndexes {
-                    writable: (0..200).step_by(2).collect(),
-                    readonly: (1..200).step_by(2).collect(),
+                AddressTableLookup {
+                    writable_indexes: (0..200).step_by(2).collect(),
+                    readonly_indexes: (1..200).step_by(2).collect(),
                 }
             ],
             ..two_map_message()
@@ -358,9 +363,9 @@ mod tests {
     #[test]
     fn test_sanitize_address_map() {
         assert!(Message {
-            address_map_indexes: vec![AddressMapIndexes {
-                writable: vec![0],
-                readonly: vec![],
+            address_table_lookups: vec![AddressTableLookup {
+                writable_indexes: vec![0],
+                readonly_indexes: vec![],
             }],
             ..simple_message()
         }
@@ -368,9 +373,9 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_map_indexes: vec![AddressMapIndexes {
-                writable: vec![],
-                readonly: vec![0],
+            address_table_lookups: vec![AddressTableLookup {
+                writable_indexes: vec![],
+                readonly_indexes: vec![0],
             }],
             ..simple_message()
         }
@@ -378,9 +383,9 @@ mod tests {
         .is_ok());
 
         assert!(Message {
-            address_map_indexes: vec![AddressMapIndexes {
-                writable: vec![],
-                readonly: vec![],
+            address_table_lookups: vec![AddressTableLookup {
+                writable_indexes: vec![],
+                readonly_indexes: vec![],
             }],
             ..simple_message()
         }

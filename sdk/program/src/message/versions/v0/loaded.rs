@@ -5,37 +5,44 @@ use {
         pubkey::Pubkey,
         sysvar,
     },
-    std::{collections::HashSet, convert::TryFrom},
+    std::{collections::HashSet, ops::Deref, convert::TryFrom},
 };
 
-/// Combination of a version #0 message and its mapped addresses
+/// Combination of a version #0 message and its loaded addresses
 #[derive(Debug, Clone)]
-pub struct MappedMessage {
-    /// Message which loaded a collection of mapped addresses
+pub struct LoadedMessage {
+    /// Message which loaded a collection of lookup table addresses
     pub message: v0::Message,
-    /// Collection of mapped addresses loaded by this message
-    pub mapped_addresses: MappedAddresses,
+    /// Addresses loaded with on-chain address lookup tables
+    pub loaded_addresses: LoadedAddresses,
 }
 
-/// Collection of mapped addresses loaded succinctly by a transaction using
-/// on-chain address map accounts.
+impl Deref for LoadedMessage {
+    type Target = v0::Message;
+    fn deref(&self) -> &Self::Target {
+        &self.message
+    }
+}
+
+/// Collection of addresses loaded from on-chain lookup tables, split
+/// by readonly and writable.
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
-pub struct MappedAddresses {
+pub struct LoadedAddresses {
     /// List of addresses for writable loaded accounts
     pub writable: Vec<Pubkey>,
     /// List of addresses for read-only loaded accounts
     pub readonly: Vec<Pubkey>,
 }
 
-impl MappedMessage {
+impl LoadedMessage {
     /// Returns an iterator of account key segments. The ordering of segments
     /// affects how account indexes from compiled instructions are resolved and
     /// so should not be changed.
     fn account_keys_segment_iter(&self) -> impl Iterator<Item = &Vec<Pubkey>> {
         vec![
             &self.message.account_keys,
-            &self.mapped_addresses.writable,
-            &self.mapped_addresses.readonly,
+            &self.loaded_addresses.writable,
+            &self.loaded_addresses.readonly,
         ]
         .into_iter()
     }
@@ -82,7 +89,7 @@ impl MappedMessage {
         let num_signed_accounts = usize::from(header.num_required_signatures);
         if key_index >= num_account_keys {
             let mapped_addresses_index = key_index.saturating_sub(num_account_keys);
-            mapped_addresses_index < self.mapped_addresses.writable.len()
+            mapped_addresses_index < self.loaded_addresses.writable.len()
         } else if key_index >= num_signed_accounts {
             let num_unsigned_accounts = num_account_keys.saturating_sub(num_signed_accounts);
             let num_writable_unsigned_accounts = num_unsigned_accounts
@@ -135,7 +142,7 @@ mod tests {
     use crate::{instruction::CompiledInstruction, message::MessageHeader, system_program, sysvar};
     use itertools::Itertools;
 
-    fn create_test_mapped_message() -> (MappedMessage, [Pubkey; 6]) {
+    fn check_test_loaded_message() -> (LoadedMessage, [Pubkey; 6]) {
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
@@ -143,7 +150,7 @@ mod tests {
         let key4 = Pubkey::new_unique();
         let key5 = Pubkey::new_unique();
 
-        let message = MappedMessage {
+        let message = LoadedMessage {
             message: v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 2,
@@ -153,7 +160,7 @@ mod tests {
                 account_keys: vec![key0, key1, key2, key3],
                 ..v0::Message::default()
             },
-            mapped_addresses: MappedAddresses {
+            loaded_addresses: LoadedAddresses {
                 writable: vec![key4],
                 readonly: vec![key5],
             },
@@ -164,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_account_keys_segment_iter() {
-        let (message, keys) = create_test_mapped_message();
+        let (message, keys) = check_test_loaded_message();
 
         let expected_segments = vec![
             vec![keys[0], keys[1], keys[2], keys[3]],
@@ -180,14 +187,14 @@ mod tests {
 
     #[test]
     fn test_account_keys_len() {
-        let (message, keys) = create_test_mapped_message();
+        let (message, keys) = check_test_loaded_message();
 
         assert_eq!(message.account_keys_len(), keys.len());
     }
 
     #[test]
     fn test_account_keys_iter() {
-        let (message, keys) = create_test_mapped_message();
+        let (message, keys) = check_test_loaded_message();
 
         let mut iter = message.account_keys_iter();
         for expected_key in keys {
@@ -197,19 +204,19 @@ mod tests {
 
     #[test]
     fn test_has_duplicates() {
-        let message = create_test_mapped_message().0;
+        let message = check_test_loaded_message().0;
 
         assert!(!message.has_duplicates());
     }
 
     #[test]
     fn test_has_duplicates_with_dupe_keys() {
-        let create_message_with_dupe_keys = |mut keys: Vec<Pubkey>| MappedMessage {
+        let create_message_with_dupe_keys = |mut keys: Vec<Pubkey>| LoadedMessage {
             message: v0::Message {
                 account_keys: keys.split_off(2),
                 ..v0::Message::default()
             },
-            mapped_addresses: MappedAddresses {
+            loaded_addresses: LoadedAddresses {
                 writable: keys.split_off(2),
                 readonly: keys,
             },
@@ -231,7 +238,7 @@ mod tests {
 
     #[test]
     fn test_get_account_key() {
-        let (message, keys) = create_test_mapped_message();
+        let (message, keys) = check_test_loaded_message();
 
         assert_eq!(message.get_account_key(0), Some(&keys[0]));
         assert_eq!(message.get_account_key(1), Some(&keys[1]));
@@ -243,7 +250,7 @@ mod tests {
 
     #[test]
     fn test_is_writable_index() {
-        let message = create_test_mapped_message().0;
+        let message = check_test_loaded_message().0;
 
         assert!(message.is_writable_index(0));
         assert!(!message.is_writable_index(1));
@@ -255,15 +262,15 @@ mod tests {
 
     #[test]
     fn test_is_writable() {
-        let mut mapped_msg = create_test_mapped_message().0;
+        let mut message = check_test_loaded_message().0;
 
-        mapped_msg.message.account_keys[0] = sysvar::clock::id();
-        assert!(mapped_msg.is_writable_index(0));
-        assert!(!mapped_msg.is_writable(0, /*demote_program_write_locks=*/ true));
+        message.message.account_keys[0] = sysvar::clock::id();
+        assert!(message.is_writable_index(0));
+        assert!(!message.is_writable(0, /*demote_program_write_locks=*/ true));
 
-        mapped_msg.message.account_keys[0] = system_program::id();
-        assert!(mapped_msg.is_writable_index(0));
-        assert!(!mapped_msg.is_writable(0, /*demote_program_write_locks=*/ true));
+        message.message.account_keys[0] = system_program::id();
+        assert!(message.is_writable_index(0));
+        assert!(!message.is_writable(0, /*demote_program_write_locks=*/ true));
     }
 
     #[test]
@@ -271,7 +278,7 @@ mod tests {
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();
-        let mapped_msg = MappedMessage {
+        let message = LoadedMessage {
             message: v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 1,
@@ -288,13 +295,13 @@ mod tests {
                 ],
                 ..v0::Message::default()
             },
-            mapped_addresses: MappedAddresses {
+            loaded_addresses: LoadedAddresses {
                 writable: vec![key1, key2],
                 readonly: vec![],
             },
         };
 
-        assert!(mapped_msg.is_writable_index(2));
-        assert!(!mapped_msg.is_writable(2, /*demote_program_write_locks=*/ true));
+        assert!(message.is_writable_index(2));
+        assert!(!message.is_writable(2, /*demote_program_write_locks=*/ true));
     }
 }

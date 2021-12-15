@@ -193,12 +193,14 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
+            loaded_addresses: vec![],
         }
     }
 }
 
-impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
-    fn from(value: TransactionStatusMeta) -> Self {
+impl TryFrom<TransactionStatusMeta> for StoredTransactionStatusMeta {
+    type Error = bincode::Error;
+    fn try_from(value: TransactionStatusMeta) -> std::result::Result<Self, Self::Error> {
         let TransactionStatusMeta {
             status,
             fee,
@@ -209,20 +211,27 @@ impl From<TransactionStatusMeta> for StoredTransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_addresses,
         } = value;
-        Self {
-            status,
-            fee,
-            pre_balances,
-            post_balances,
-            inner_instructions,
-            log_messages,
-            pre_token_balances: pre_token_balances
-                .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
-            post_token_balances: post_token_balances
-                .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
-            rewards: rewards
-                .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
+        if !loaded_addresses.is_empty() {
+            // Deprecated bincode serialized status metadata doesn't support
+            // loaded addresses.
+            Err(bincode::ErrorKind::Custom("Deprecated".into()).into())
+        } else {
+            Ok(Self {
+                status,
+                fee,
+                pre_balances,
+                post_balances,
+                inner_instructions,
+                log_messages,
+                pre_token_balances: pre_token_balances
+                    .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
+                post_token_balances: post_token_balances
+                    .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
+                rewards: rewards
+                    .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
+            })
         }
     }
 }

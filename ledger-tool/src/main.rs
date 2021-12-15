@@ -55,9 +55,9 @@ use {
         shred_version::compute_shred_version,
         stake::{self, state::StakeState},
         system_program,
-        transaction::{SanitizedTransaction, TransactionError},
     },
     solana_stake_program::stake_state::{self, PointValue},
+    solana_transaction_status::{SanitizedTransactionWithStatusMeta, TransactionWithStatusMeta},
     solana_vote_program::{
         self,
         vote_state::{self, VoteState},
@@ -143,7 +143,7 @@ fn output_entry(
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
                 println!("    Transaction {}", transactions_index);
                 let tx_signature = transaction.signatures[0];
-                let tx_status = blockstore
+                let meta = blockstore
                     .read_transaction_status((tx_signature, slot))
                     .unwrap_or_else(|err| {
                         eprintln!(
@@ -151,18 +151,26 @@ fn output_entry(
                             transaction.signatures[0], slot, err
                         );
                         None
-                    })
-                    .map(|transaction_status| transaction_status.into());
+                    });
 
-                if let Some(legacy_tx) = transaction.into_legacy_transaction() {
-                    solana_cli_output::display::println_transaction(
-                        &legacy_tx, &tx_status, "      ", None, None,
-                    );
-                } else {
-                    eprintln!(
-                        "Failed to print unsupported transaction for {} at slot {}",
-                        tx_signature, slot
-                    );
+                let transaction_with_meta = TransactionWithStatusMeta { transaction, meta };
+                match transaction_with_meta.try_into() {
+                    Err(err) => {
+                        eprintln!(
+                            "Failed to display transaction details for {} at slot {}: {}",
+                            tx_signature, slot, err
+                        );
+                    }
+                    Ok(SanitizedTransactionWithStatusMeta { transaction, meta }) => {
+                        let tx_status = meta.map(|meta| meta.into());
+                        solana_cli_output::display::println_transaction(
+                            &transaction,
+                            tx_status.as_ref(),
+                            "      ",
+                            None,
+                            None,
+                        );
+                    }
                 }
             }
         }
@@ -230,25 +238,20 @@ fn output_slot(
         for entry in entries {
             transactions += entry.transactions.len();
             num_hashes += entry.num_hashes;
-            for transaction in entry.transactions {
-                let tx_signature = transaction.signatures[0];
-                let sanitize_result =
-                    SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                        Err(TransactionError::UnsupportedVersion)
-                    });
+            let transactions_with_meta = blockstore
+                .map_transactions_to_statuses(slot, entry.transactions.into_iter())
+                .map_err(|err| {
+                    format!("Failed to load statuses for slot entries, err {:?}", err)
+                })?;
+            for transaction_with_meta in transactions_with_meta {
+                let signature = transaction_with_meta.transaction.signatures[0];
+                let SanitizedTransactionWithStatusMeta { transaction, .. } =
+                    transaction_with_meta.try_into().map_err(|err| {
+                        format!("Failed to load transaction {}, err {:?}", signature, err)
+                    })?;
 
-                match sanitize_result {
-                    Ok(transaction) => {
-                        for (program_id, _) in transaction.message().program_instructions_iter() {
-                            *program_ids.entry(*program_id).or_insert(0) += 1;
-                        }
-                    }
-                    Err(err) => {
-                        warn!(
-                            "Failed to analyze unsupported transaction {}: {:?}",
-                            tx_signature, err
-                        );
-                    }
+                for (program_id, _) in transaction.message().program_instructions_iter() {
+                    *program_ids.entry(*program_id).or_insert(0) += 1;
                 }
             }
         }
@@ -785,34 +788,30 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
 
     for entry in entries {
         num_transactions += entry.transactions.len();
-        entry
-            .transactions
-            .into_iter()
-            .filter_map(|transaction| {
-                SanitizedTransaction::try_create(transaction, Hash::default(), None, |_| {
-                    Err(TransactionError::UnsupportedVersion)
-                })
-                .map_err(|err| {
-                    warn!("Failed to compute cost of transaction: {:?}", err);
-                })
-                .ok()
-            })
-            .for_each(|transaction| {
-                num_programs += transaction.message().instructions().len();
+        let transactions_with_meta = blockstore
+            .map_transactions_to_statuses(slot, entry.transactions.into_iter())
+            .map_err(|err| format!(" Failed to load statuses for slot entries, err {:?}", err))?;
+        for transaction_with_meta in transactions_with_meta {
+            let signature = transaction_with_meta.transaction.signatures[0];
+            let SanitizedTransactionWithStatusMeta { transaction, .. } =
+                transaction_with_meta.try_into().map_err(|err| {
+                    format!("Failed to load transaction {}, err {:?}", signature, err)
+                })?;
 
-                let tx_cost = cost_model.calculate_cost(&transaction);
-                let result = cost_tracker.try_add(&transaction, &tx_cost);
-                if result.is_err() {
-                    println!(
-                        "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
-                        slot, transaction, result,
-                    );
-                }
-                for (program_id, _instruction) in transaction.message().program_instructions_iter()
-                {
-                    *program_ids.entry(*program_id).or_insert(0) += 1;
-                }
-            });
+            num_programs += transaction.message().instructions().len();
+
+            let tx_cost = cost_model.calculate_cost(&transaction);
+            let result = cost_tracker.try_add(&transaction, &tx_cost);
+            if result.is_err() {
+                println!(
+                    "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
+                    slot, transaction, result,
+                );
+            }
+            for (program_id, _instruction) in transaction.message().program_instructions_iter() {
+                *program_ids.entry(*program_id).or_insert(0) += 1;
+            }
+        }
     }
 
     println!(

@@ -105,7 +105,10 @@ use {
         inflation::Inflation,
         instruction::CompiledInstruction,
         lamports::LamportsError,
-        message::SanitizedMessage,
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            SanitizedMessage,
+        },
         native_loader,
         native_token::sol_to_lamports,
         nonce, nonce_account,
@@ -3464,6 +3467,20 @@ impl Bank {
         cache.remove(pubkey);
     }
 
+    pub fn load_lookup_table_addresses(
+        &self,
+        address_table_lookups: &[MessageAddressTableLookup],
+    ) -> Result<LoadedAddresses> {
+        address_table_lookups
+            .iter()
+            .map(|lookup| {
+                self.rc
+                    .accounts
+                    .load_lookup_table_addresses(&self.ancestors, lookup)
+            })
+            .collect()
+    }
+
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -3583,31 +3600,26 @@ impl Bank {
                         let (blockhash, lamports_per_signature) =
                             self.last_blockhash_and_lamports_per_signature();
 
-                        if let Some(legacy_message) = tx.message().legacy_message() {
-                            process_result = MessageProcessor::process_message(
-                                &self.builtin_programs.vec,
-                                legacy_message,
-                                &loaded_transaction.program_indices,
-                                &transaction_context,
-                                self.rent_collector.rent,
-                                log_collector.clone(),
-                                executors.clone(),
-                                instruction_recorder.clone(),
-                                feature_set,
-                                compute_budget,
-                                &mut timings.details,
-                                &*self.sysvar_cache.read().unwrap(),
-                                blockhash,
-                                lamports_per_signature,
-                                self.load_accounts_data_len(),
-                            )
-                            .map(|process_result| {
-                                self.store_accounts_data_len(process_result.accounts_data_len)
-                            });
-                        } else {
-                            // TODO: support versioned messages
-                            process_result = Err(TransactionError::UnsupportedVersion);
-                        }
+                        process_result = MessageProcessor::process_message(
+                            &self.builtin_programs.vec,
+                            tx.message(),
+                            &loaded_transaction.program_indices,
+                            &transaction_context,
+                            self.rent_collector.rent,
+                            log_collector.clone(),
+                            executors.clone(),
+                            instruction_recorder.clone(),
+                            feature_set,
+                            compute_budget,
+                            &mut timings.details,
+                            &*self.sysvar_cache.read().unwrap(),
+                            blockhash,
+                            lamports_per_signature,
+                            self.load_accounts_data_len(),
+                        )
+                        .map(|process_result| {
+                            self.store_accounts_data_len(process_result.accounts_data_len)
+                        });
 
                         let log_messages: Option<TransactionLogMessages> =
                             log_collector.and_then(|log_collector| {
@@ -5242,8 +5254,8 @@ impl Bank {
                 tx.message.hash()
             };
 
-            SanitizedTransaction::try_create(tx, message_hash, None, |_| {
-                Err(TransactionError::UnsupportedVersion)
+            SanitizedTransaction::try_create(tx, message_hash, None, |lookups| {
+                self.load_lookup_table_addresses(lookups)
             })
         }?;
 

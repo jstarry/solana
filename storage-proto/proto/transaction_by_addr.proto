@@ -20,7 +20,10 @@ message Memo {
 
 message TransactionError {
     TransactionErrorType transaction_error = 1;
-    InstructionError instruction_error = 2;
+    oneof details {
+        InstructionError instruction_error = 2;
+        uint32 inner_error_code = 3;
+    }
 }
 
 enum TransactionErrorType {
@@ -46,6 +49,7 @@ enum TransactionErrorType {
     INVALID_WRITABLE_ACCOUNT = 19;
     WOULD_EXCEED_MAX_ACCOUNT_COST_LIMIT = 20;
     WOULD_EXCEED_MAX_ACCOUNT_DATA_COST_LIMIT = 21;
+    ADDRESS_LOOKUP_ERROR = 22;
 }
 
 message InstructionError {

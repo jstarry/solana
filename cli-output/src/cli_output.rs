@@ -28,7 +28,7 @@ use {
         signature::Signature,
         stake::state::{Authorized, Lockup},
         stake_history::StakeHistoryEntry,
-        transaction::{Transaction, TransactionError},
+        transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedTransaction, TransactionConfirmationStatus,
@@ -2216,7 +2216,7 @@ pub enum CliSignatureVerificationStatus {
 }
 
 impl CliSignatureVerificationStatus {
-    pub fn verify_transaction(tx: &Transaction) -> Vec<Self> {
+    pub fn verify_transaction(tx: &VersionedTransaction) -> Vec<Self> {
         tx.verify_with_results()
             .iter()
             .zip(&tx.signatures)
@@ -2331,8 +2331,10 @@ impl fmt::Display for CliBlock {
             writeln!(f, "Transaction {}:", index)?;
             writeln_transaction(
                 f,
-                &transaction_with_meta.transaction.decode().unwrap(),
-                &transaction_with_meta.meta,
+                &CliDisplayTransaction::Sanitized(
+                    transaction_with_meta.decode_transaction().unwrap(),
+                ),
+                transaction_with_meta.meta.as_ref(),
                 "  ",
                 None,
                 None,
@@ -2342,31 +2344,36 @@ impl fmt::Display for CliBlock {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+pub enum CliDisplayTransaction<'a> {
+    Raw(&'a VersionedTransaction),
+    Sanitized(SanitizedTransaction),
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CliTransaction {
+pub struct CliTransaction<'a> {
     pub transaction: EncodedTransaction,
     pub meta: Option<UiTransactionStatusMeta>,
     pub block_time: Option<UnixTimestamp>,
     #[serde(skip_serializing)]
     pub slot: Option<Slot>,
     #[serde(skip_serializing)]
-    pub decoded_transaction: Transaction,
+    pub display_transaction: CliDisplayTransaction<'a>,
     #[serde(skip_serializing)]
     pub prefix: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub sigverify_status: Vec<CliSignatureVerificationStatus>,
 }
 
-impl QuietDisplay for CliTransaction {}
-impl VerboseDisplay for CliTransaction {}
+impl QuietDisplay for CliTransaction<'_> {}
+impl VerboseDisplay for CliTransaction<'_> {}
 
-impl fmt::Display for CliTransaction {
+impl fmt::Display for CliTransaction<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln_transaction(
             f,
-            &self.decoded_transaction,
-            &self.meta,
+            &self.display_transaction,
+            self.meta.as_ref(),
             &self.prefix,
             if !self.sigverify_status.is_empty() {
                 Some(&self.sigverify_status)
@@ -2378,12 +2385,12 @@ impl fmt::Display for CliTransaction {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliTransactionConfirmation {
     pub confirmation_status: Option<TransactionConfirmationStatus>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    pub transaction: Option<CliTransaction>,
+    pub transaction: Option<CliTransaction<'static>>,
     #[serde(skip_serializing)]
     pub get_transaction_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

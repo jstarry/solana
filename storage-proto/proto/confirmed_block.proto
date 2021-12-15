@@ -47,6 +47,7 @@ message TransactionStatusMeta {
     repeated TokenBalance pre_token_balances = 7;
     repeated TokenBalance post_token_balances = 8;
     repeated Reward rewards = 9;
+    repeated bytes loaded_addresses = 12;
 }
 
 message TransactionError {

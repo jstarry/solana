@@ -3,6 +3,7 @@ use {
     crate::rpc_response::RpcSimulateTransactionResult,
     jsonrpc_core::{Error, ErrorCode},
     solana_sdk::clock::Slot,
+    solana_transaction_status::EncodeTransactionError,
     thiserror::Error,
 };
 
@@ -20,6 +21,7 @@ pub const JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE: i64 = -32011;
 pub const JSON_RPC_SCAN_ERROR: i64 = -32012;
 pub const JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_LEN_MISMATCH: i64 = -32013;
 pub const JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET: i64 = -32014;
+pub const JSON_RPC_SERVER_ERROR_REJECTED_VERSIONED_TRANSACTION: i64 = -32015;
 
 #[derive(Error, Debug)]
 pub enum RpcCustomError {
@@ -57,6 +59,8 @@ pub enum RpcCustomError {
     TransactionSignatureLenMismatch,
     #[error("BlockStatusNotAvailableYet")]
     BlockStatusNotAvailableYet { slot: Slot },
+    #[error("EncodeTransactionError")]
+    EncodeTransactionError(EncodeTransactionError),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -168,6 +172,18 @@ impl From<RpcCustomError> for Error {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_BLOCK_STATUS_NOT_AVAILABLE_YET),
                 message: format!("Block status not yet available for slot {}", slot),
                 data: None,
+            },
+            RpcCustomError::EncodeTransactionError(err) => match err {
+                EncodeTransactionError::RejectedVersionedTransaction => Error {
+                    code: ErrorCode::ServerError(
+                        JSON_RPC_SERVER_ERROR_REJECTED_VERSIONED_TRANSACTION,
+                    ),
+                    message:
+                        "Invalid params: Request requires `enable_versioned_transactions` flag"
+                            .to_string(),
+                    data: None,
+                },
+                _ => Error::internal_error(),
             },
         }
     }

@@ -2,6 +2,7 @@ use {
     crate::{
         instruction::InstructionError, message::SanitizeMessageError, sanitize::SanitizeError,
     },
+    num_derive::{FromPrimitive, ToPrimitive},
     serde::Serialize,
     thiserror::Error,
 };
@@ -105,6 +106,10 @@ pub enum TransactionError {
     /// Transaction would exceed max account data limit within the block
     #[error("Transaction would exceed max account data limit within the block")]
     WouldExceedMaxAccountDataCostLimit,
+
+    /// Transaction address table lookup failed
+    #[error("Transaction address table lookup failed")]
+    AddressLookupError(AddressLookupError),
 }
 
 impl From<SanitizeError> for TransactionError {
@@ -121,5 +126,42 @@ impl From<SanitizeMessageError> for TransactionError {
             | SanitizeMessageError::InvalidValue => Self::SanitizeFailure,
             SanitizeMessageError::DuplicateAccountKey => Self::AccountLoadedTwice,
         }
+    }
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Error,
+    PartialEq,
+    Eq,
+    Clone,
+    AbiExample,
+    AbiEnumVisitor,
+    FromPrimitive,
+    ToPrimitive,
+)]
+pub enum AddressLookupError {
+    /// Attempted to lookup addresses from a table that does not exist
+    #[error("Attempted to lookup addresses from a table that does not exist")]
+    LookupTableAccountNotFound,
+
+    /// Address lookup contains an invalid index
+    #[error("Address lookup contains an invalid index")]
+    InvalidLookupIndex,
+
+    /// Attempted to lookup addresses from an invalid account
+    #[error("Attempted to lookup addresses from an invalid account")]
+    InvalidAccountData,
+
+    /// Attempted to lookup addresses from an account owned by the wrong program
+    #[error("Attempted to lookup addresses from an account owned by the wrong program")]
+    InvalidAccountOwner,
+}
+
+impl From<AddressLookupError> for TransactionError {
+    fn from(err: AddressLookupError) -> Self {
+        Self::AddressLookupError(err)
     }
 }

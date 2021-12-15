@@ -14,7 +14,7 @@ use {
 
 /// Sanitized message of a transaction which includes a set of atomic
 /// instructions to be executed on-chain
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SanitizedMessage {
     /// Sanitized legacy message
     Legacy(LegacyMessage),

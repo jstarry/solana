@@ -1,7 +1,9 @@
 use {
     serde::{Deserialize, Serialize},
     solana_frozen_abi_macro::{AbiEnumVisitor, AbiExample},
-    solana_sdk::{clock::Slot, instruction::InstructionError, pubkey::Pubkey},
+    solana_sdk::{
+        clock::Slot, instruction::InstructionError, pubkey::Pubkey, transaction::AddressLookupError,
+    },
     std::borrow::Cow,
 };
 
@@ -83,6 +85,30 @@ impl<'a> AddressLookupTable<'a> {
         bincode::serialize_into(meta_data, &ProgramState::LookupTable(lookup_table_meta))
             .map_err(|_| InstructionError::GenericError)?;
         Ok(())
+    }
+
+    /// Lookup addresses
+    pub fn lookup(
+        &self,
+        current_slot: Slot,
+        indexes: &[u8],
+    ) -> Result<Vec<Pubkey>, AddressLookupError> {
+        let active_addresses_len = if current_slot == self.meta.last_extended_slot {
+            self.meta.last_extended_slot_start_index as usize
+        } else {
+            self.addresses.len()
+        };
+
+        let active_addresses = &self.addresses[0..active_addresses_len];
+        indexes
+            .into_iter()
+            .map(|idx| {
+                active_addresses
+                    .get(*idx as usize)
+                    .cloned()
+                    .ok_or(AddressLookupError::InvalidLookupIndex)
+            })
+            .collect::<Result<_, _>>()
     }
 
     /// Serialize an address table including its addresses
@@ -204,5 +230,51 @@ mod tests {
         for case in [0, 1, 10, 255, 256] {
             test_case(case);
         }
+    }
+
+    #[test]
+    fn test_lookup() {
+        let mut lookup_table = AddressLookupTable {
+            meta: LookupTableMeta::default(),
+            addresses: Cow::Owned(vec![]),
+        };
+
+        let current_slot = lookup_table.meta.last_extended_slot;
+        assert_eq!(lookup_table.lookup(current_slot, &[]), Ok(vec![]));
+        assert_eq!(lookup_table.lookup(current_slot + 1, &[]), Ok(vec![]));
+        assert_eq!(
+            lookup_table.lookup(current_slot, &[1]),
+            Err(AddressLookupError::InvalidLookupIndex)
+        );
+        assert_eq!(
+            lookup_table.lookup(current_slot + 1, &[1]),
+            Err(AddressLookupError::InvalidLookupIndex)
+        );
+
+        let mut addresses = Vec::with_capacity(10);
+        addresses.resize_with(10, Pubkey::new_unique);
+        lookup_table.addresses = Cow::Owned(addresses.clone());
+        assert_eq!(
+            lookup_table.lookup(current_slot, &[0, 3, 1, 5]),
+            Err(AddressLookupError::InvalidLookupIndex)
+        );
+        assert_eq!(
+            lookup_table.lookup(current_slot + 1, &[0, 3, 1, 5, 10]),
+            Err(AddressLookupError::InvalidLookupIndex)
+        );
+        assert_eq!(
+            lookup_table.lookup(current_slot + 1, &[0, 3, 1, 5]),
+            Ok(vec![addresses[0], addresses[3], addresses[1], addresses[5]])
+        );
+
+        lookup_table.meta.last_extended_slot_start_index += 1;
+        assert_eq!(
+            lookup_table.lookup(current_slot, &[0, 1]),
+            Err(AddressLookupError::InvalidLookupIndex)
+        );
+        assert_eq!(
+            lookup_table.lookup(current_slot, &[0]),
+            Ok(vec![addresses[0],])
+        );
     }
 }

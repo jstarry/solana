@@ -22,6 +22,7 @@ use {
     },
     log::*,
     rand::{thread_rng, Rng},
+    solana_address_lookup_table_program::state::AddressLookupTable,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -30,13 +31,16 @@ use {
         feature_set::{self, FeatureSet},
         genesis_config::ClusterType,
         hash::Hash,
-        message::SanitizedMessage,
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            SanitizedMessage,
+        },
         native_loader,
         nonce::{state::Versions as NonceVersions, State as NonceState},
         pubkey::Pubkey,
         system_program,
         sysvar::{self, instructions::construct_instructions_data},
-        transaction::{Result, SanitizedTransaction, TransactionError},
+        transaction::{AddressLookupError, Result, SanitizedTransaction, TransactionError},
         transaction_context::TransactionAccount,
     },
     std::{
@@ -221,6 +225,42 @@ impl Accounts {
             owner,
             ..Account::default()
         })
+    }
+
+    pub fn load_lookup_table_addresses(
+        &self,
+        ancestors: &Ancestors,
+        address_table_lookup: &MessageAddressTableLookup,
+    ) -> Result<LoadedAddresses> {
+        let num_writable_addresses = address_table_lookup.writable_indexes.len();
+        let num_readonly_addresses = address_table_lookup.readonly_indexes.len();
+
+        let mut loaded_addresses = LoadedAddresses {
+            writable: Vec::with_capacity(num_writable_addresses),
+            readonly: Vec::with_capacity(num_readonly_addresses),
+        };
+
+        let current_slot = ancestors.max_slot();
+        let table_account = self
+            .accounts_db
+            .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
+            .map(|(account, _rent)| account)
+            .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
+
+        if table_account.owner() == &solana_address_lookup_table_program::id() {
+            let lookup_table = AddressLookupTable::deserialize(table_account.data())
+                .map_err(|_ix_err| AddressLookupError::InvalidAccountData)?;
+            loaded_addresses
+                .writable
+                .extend(lookup_table.lookup(current_slot, &address_table_lookup.writable_indexes)?);
+            loaded_addresses
+                .readonly
+                .extend(lookup_table.lookup(current_slot, &address_table_lookup.readonly_indexes)?);
+        } else {
+            return Err(AddressLookupError::InvalidAccountOwner.into());
+        }
+
+        Ok(loaded_addresses)
     }
 
     fn load_transaction(

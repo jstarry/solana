@@ -32,7 +32,7 @@ use {
         hash::{Hasher, HASH_BYTES},
         instruction::{AccountMeta, Instruction, InstructionError},
         keccak,
-        message::Message,
+        message::{Message, SanitizedMessage},
         native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
@@ -2383,10 +2383,11 @@ fn call<'a, 'b: 'a>(
     }
 
     // Process instruction
+    let message = SanitizedMessage::Legacy(message);
     invoke_context
         .process_instruction(
             &message,
-            &message.instructions[0],
+            &message.instructions()[0],
             &program_indices,
             &account_indices,
             &caller_write_privileges,

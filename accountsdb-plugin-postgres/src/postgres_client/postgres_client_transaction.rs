@@ -331,6 +331,7 @@ pub enum DbTransactionErrorCode {
     UnsupportedVersion,
     InvalidWritableAccount,
     WouldExceedMaxAccountDataCostLimit,
+    AddressLookupError,
 }
 
 impl From<&TransactionError> for DbTransactionErrorCode {
@@ -362,6 +363,7 @@ impl From<&TransactionError> for DbTransactionErrorCode {
             TransactionError::WouldExceedMaxAccountDataCostLimit => {
                 Self::WouldExceedMaxAccountDataCostLimit
             }
+            TransactionError::AddressLookupError(_) => Self::AddressLookupError,
         }
     }
 }
@@ -379,24 +381,24 @@ fn get_transaction_error(result: &Result<(), TransactionError>) -> Option<DbTran
     }
 
     let error = result.as_ref().err().unwrap();
+    let error_detail = match error {
+        TransactionError::InstructionError(idx, instruction_error) => Some(format!(
+            "InstructionError: idx ({}), error: ({})",
+            idx, instruction_error
+        )),
+        TransactionError::AddressLookupError(lookup_err) => Some(lookup_err.to_string()),
+        _ => None,
+    };
+
     Some(DbTransactionError {
         error_code: DbTransactionErrorCode::from(error),
-        error_detail: {
-            if let TransactionError::InstructionError(idx, instruction_error) = error {
-                let mut error_detail = format!(
-                    "InstructionError: idx ({}), error: ({})",
-                    idx, instruction_error
-                );
-                if error_detail.len() > MAX_TRANSACTION_STATUS_LEN {
-                    error_detail = error_detail
-                        .to_string()
-                        .split_off(MAX_TRANSACTION_STATUS_LEN);
-                }
-                Some(error_detail)
+        error_detail: error_detail.map(|detail| {
+            if detail.len() > MAX_TRANSACTION_STATUS_LEN {
+                detail.to_string().split_off(MAX_TRANSACTION_STATUS_LEN)
             } else {
-                None
+                detail
             }
-        },
+        }),
     })
 }
 

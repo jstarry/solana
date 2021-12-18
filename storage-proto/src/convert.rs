@@ -1,13 +1,14 @@
 use {
     crate::{StoredExtendedRewards, StoredTransactionStatusMeta},
+    num_traits::{FromPrimitive, ToPrimitive},
     solana_account_decoder::parse_token::{real_number_string_trimmed, UiTokenAmount},
     solana_sdk::{
         hash::Hash,
         instruction::{CompiledInstruction, InstructionError},
-        message::{Message, MessageHeader},
+        message::{legacy::Message, MessageHeader},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{Transaction, TransactionError},
+        transaction::{AddressLookupError, Transaction, TransactionError},
     },
     solana_transaction_status::{
         ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
@@ -478,7 +479,10 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
 
     fn try_from(transaction_error: tx_by_addr::TransactionError) -> Result<Self, Self::Error> {
         if transaction_error.transaction_error == 8 {
-            if let Some(instruction_error) = transaction_error.instruction_error {
+            if let Some(tx_by_addr::transaction_error::Details::InstructionError(
+                instruction_error,
+            )) = transaction_error.details
+            {
                 if let Some(custom) = instruction_error.custom {
                     return Ok(TransactionError::InstructionError(
                         instruction_error.index as u8,
@@ -568,6 +572,17 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             19 => TransactionError::InvalidWritableAccount,
             20 => TransactionError::WouldExceedMaxAccountCostLimit,
             21 => TransactionError::WouldExceedMaxAccountDataCostLimit,
+            22 => TransactionError::AddressLookupError(
+                transaction_error
+                    .details
+                    .and_then(|details| match details {
+                        tx_by_addr::transaction_error::Details::InnerErrorCode(
+                            inner_error_code,
+                        ) => AddressLookupError::from_u32(inner_error_code),
+                        _ => None,
+                    })
+                    .ok_or("Invalid AddressLookupError")?,
+            ),
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -641,168 +656,180 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 TransactionError::WouldExceedMaxAccountDataCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxAccountDataCostLimit
                 }
+                TransactionError::AddressLookupError(_) => {
+                    tx_by_addr::TransactionErrorType::AddressLookupError
+                }
             } as i32,
-            instruction_error: match transaction_error {
+            details: match transaction_error {
+                TransactionError::AddressLookupError(inner_error) => {
+                    Some(tx_by_addr::transaction_error::Details::InnerErrorCode(
+                        inner_error.to_u32().unwrap_or_default(),
+                    ))
+                }
                 TransactionError::InstructionError(index, ref instruction_error) => {
-                    Some(tx_by_addr::InstructionError {
-                        index: index as u32,
-                        error: match instruction_error {
-                            InstructionError::GenericError => {
-                                tx_by_addr::InstructionErrorType::GenericError
-                            }
-                            InstructionError::InvalidArgument => {
-                                tx_by_addr::InstructionErrorType::InvalidArgument
-                            }
-                            InstructionError::InvalidInstructionData => {
-                                tx_by_addr::InstructionErrorType::InvalidInstructionData
-                            }
-                            InstructionError::InvalidAccountData => {
-                                tx_by_addr::InstructionErrorType::InvalidAccountData
-                            }
-                            InstructionError::AccountDataTooSmall => {
-                                tx_by_addr::InstructionErrorType::AccountDataTooSmall
-                            }
-                            InstructionError::InsufficientFunds => {
-                                tx_by_addr::InstructionErrorType::InsufficientFunds
-                            }
-                            InstructionError::IncorrectProgramId => {
-                                tx_by_addr::InstructionErrorType::IncorrectProgramId
-                            }
-                            InstructionError::MissingRequiredSignature => {
-                                tx_by_addr::InstructionErrorType::MissingRequiredSignature
-                            }
-                            InstructionError::AccountAlreadyInitialized => {
-                                tx_by_addr::InstructionErrorType::AccountAlreadyInitialized
-                            }
-                            InstructionError::UninitializedAccount => {
-                                tx_by_addr::InstructionErrorType::UninitializedAccount
-                            }
-                            InstructionError::UnbalancedInstruction => {
-                                tx_by_addr::InstructionErrorType::UnbalancedInstruction
-                            }
-                            InstructionError::ModifiedProgramId => {
-                                tx_by_addr::InstructionErrorType::ModifiedProgramId
-                            }
-                            InstructionError::ExternalAccountLamportSpend => {
-                                tx_by_addr::InstructionErrorType::ExternalAccountLamportSpend
-                            }
-                            InstructionError::ExternalAccountDataModified => {
-                                tx_by_addr::InstructionErrorType::ExternalAccountDataModified
-                            }
-                            InstructionError::ReadonlyLamportChange => {
-                                tx_by_addr::InstructionErrorType::ReadonlyLamportChange
-                            }
-                            InstructionError::ReadonlyDataModified => {
-                                tx_by_addr::InstructionErrorType::ReadonlyDataModified
-                            }
-                            InstructionError::DuplicateAccountIndex => {
-                                tx_by_addr::InstructionErrorType::DuplicateAccountIndex
-                            }
-                            InstructionError::ExecutableModified => {
-                                tx_by_addr::InstructionErrorType::ExecutableModified
-                            }
-                            InstructionError::RentEpochModified => {
-                                tx_by_addr::InstructionErrorType::RentEpochModified
-                            }
-                            InstructionError::NotEnoughAccountKeys => {
-                                tx_by_addr::InstructionErrorType::NotEnoughAccountKeys
-                            }
-                            InstructionError::AccountDataSizeChanged => {
-                                tx_by_addr::InstructionErrorType::AccountDataSizeChanged
-                            }
-                            InstructionError::AccountNotExecutable => {
-                                tx_by_addr::InstructionErrorType::AccountNotExecutable
-                            }
-                            InstructionError::AccountBorrowFailed => {
-                                tx_by_addr::InstructionErrorType::AccountBorrowFailed
-                            }
-                            InstructionError::AccountBorrowOutstanding => {
-                                tx_by_addr::InstructionErrorType::AccountBorrowOutstanding
-                            }
-                            InstructionError::DuplicateAccountOutOfSync => {
-                                tx_by_addr::InstructionErrorType::DuplicateAccountOutOfSync
-                            }
-                            InstructionError::Custom(_) => tx_by_addr::InstructionErrorType::Custom,
-                            InstructionError::InvalidError => {
-                                tx_by_addr::InstructionErrorType::InvalidError
-                            }
-                            InstructionError::ExecutableDataModified => {
-                                tx_by_addr::InstructionErrorType::ExecutableDataModified
-                            }
-                            InstructionError::ExecutableLamportChange => {
-                                tx_by_addr::InstructionErrorType::ExecutableLamportChange
-                            }
-                            InstructionError::ExecutableAccountNotRentExempt => {
-                                tx_by_addr::InstructionErrorType::ExecutableAccountNotRentExempt
-                            }
-                            InstructionError::UnsupportedProgramId => {
-                                tx_by_addr::InstructionErrorType::UnsupportedProgramId
-                            }
-                            InstructionError::CallDepth => {
-                                tx_by_addr::InstructionErrorType::CallDepth
-                            }
-                            InstructionError::MissingAccount => {
-                                tx_by_addr::InstructionErrorType::MissingAccount
-                            }
-                            InstructionError::ReentrancyNotAllowed => {
-                                tx_by_addr::InstructionErrorType::ReentrancyNotAllowed
-                            }
-                            InstructionError::MaxSeedLengthExceeded => {
-                                tx_by_addr::InstructionErrorType::MaxSeedLengthExceeded
-                            }
-                            InstructionError::InvalidSeeds => {
-                                tx_by_addr::InstructionErrorType::InvalidSeeds
-                            }
-                            InstructionError::InvalidRealloc => {
-                                tx_by_addr::InstructionErrorType::InvalidRealloc
-                            }
-                            InstructionError::ComputationalBudgetExceeded => {
-                                tx_by_addr::InstructionErrorType::ComputationalBudgetExceeded
-                            }
-                            InstructionError::PrivilegeEscalation => {
-                                tx_by_addr::InstructionErrorType::PrivilegeEscalation
-                            }
-                            InstructionError::ProgramEnvironmentSetupFailure => {
-                                tx_by_addr::InstructionErrorType::ProgramEnvironmentSetupFailure
-                            }
-                            InstructionError::ProgramFailedToComplete => {
-                                tx_by_addr::InstructionErrorType::ProgramFailedToComplete
-                            }
-                            InstructionError::ProgramFailedToCompile => {
-                                tx_by_addr::InstructionErrorType::ProgramFailedToCompile
-                            }
-                            InstructionError::Immutable => {
-                                tx_by_addr::InstructionErrorType::Immutable
-                            }
-                            InstructionError::IncorrectAuthority => {
-                                tx_by_addr::InstructionErrorType::IncorrectAuthority
-                            }
-                            InstructionError::BorshIoError(_) => {
-                                tx_by_addr::InstructionErrorType::BorshIoError
-                            }
-                            InstructionError::AccountNotRentExempt => {
-                                tx_by_addr::InstructionErrorType::AccountNotRentExempt
-                            }
-                            InstructionError::InvalidAccountOwner => {
-                                tx_by_addr::InstructionErrorType::InvalidAccountOwner
-                            }
-                            InstructionError::ArithmeticOverflow => {
-                                tx_by_addr::InstructionErrorType::ArithmeticOverflow
-                            }
-                            InstructionError::UnsupportedSysvar => {
-                                tx_by_addr::InstructionErrorType::UnsupportedSysvar
-                            }
-                            InstructionError::IllegalOwner => {
-                                tx_by_addr::InstructionErrorType::IllegalOwner
-                            }
-                        } as i32,
-                        custom: match instruction_error {
-                            InstructionError::Custom(custom) => {
-                                Some(tx_by_addr::CustomError { custom: *custom })
-                            }
-                            _ => None,
+                    Some(tx_by_addr::transaction_error::Details::InstructionError(
+                        tx_by_addr::InstructionError {
+                            index: index as u32,
+                            error: match instruction_error {
+                                InstructionError::GenericError => {
+                                    tx_by_addr::InstructionErrorType::GenericError
+                                }
+                                InstructionError::InvalidArgument => {
+                                    tx_by_addr::InstructionErrorType::InvalidArgument
+                                }
+                                InstructionError::InvalidInstructionData => {
+                                    tx_by_addr::InstructionErrorType::InvalidInstructionData
+                                }
+                                InstructionError::InvalidAccountData => {
+                                    tx_by_addr::InstructionErrorType::InvalidAccountData
+                                }
+                                InstructionError::AccountDataTooSmall => {
+                                    tx_by_addr::InstructionErrorType::AccountDataTooSmall
+                                }
+                                InstructionError::InsufficientFunds => {
+                                    tx_by_addr::InstructionErrorType::InsufficientFunds
+                                }
+                                InstructionError::IncorrectProgramId => {
+                                    tx_by_addr::InstructionErrorType::IncorrectProgramId
+                                }
+                                InstructionError::MissingRequiredSignature => {
+                                    tx_by_addr::InstructionErrorType::MissingRequiredSignature
+                                }
+                                InstructionError::AccountAlreadyInitialized => {
+                                    tx_by_addr::InstructionErrorType::AccountAlreadyInitialized
+                                }
+                                InstructionError::UninitializedAccount => {
+                                    tx_by_addr::InstructionErrorType::UninitializedAccount
+                                }
+                                InstructionError::UnbalancedInstruction => {
+                                    tx_by_addr::InstructionErrorType::UnbalancedInstruction
+                                }
+                                InstructionError::ModifiedProgramId => {
+                                    tx_by_addr::InstructionErrorType::ModifiedProgramId
+                                }
+                                InstructionError::ExternalAccountLamportSpend => {
+                                    tx_by_addr::InstructionErrorType::ExternalAccountLamportSpend
+                                }
+                                InstructionError::ExternalAccountDataModified => {
+                                    tx_by_addr::InstructionErrorType::ExternalAccountDataModified
+                                }
+                                InstructionError::ReadonlyLamportChange => {
+                                    tx_by_addr::InstructionErrorType::ReadonlyLamportChange
+                                }
+                                InstructionError::ReadonlyDataModified => {
+                                    tx_by_addr::InstructionErrorType::ReadonlyDataModified
+                                }
+                                InstructionError::DuplicateAccountIndex => {
+                                    tx_by_addr::InstructionErrorType::DuplicateAccountIndex
+                                }
+                                InstructionError::ExecutableModified => {
+                                    tx_by_addr::InstructionErrorType::ExecutableModified
+                                }
+                                InstructionError::RentEpochModified => {
+                                    tx_by_addr::InstructionErrorType::RentEpochModified
+                                }
+                                InstructionError::NotEnoughAccountKeys => {
+                                    tx_by_addr::InstructionErrorType::NotEnoughAccountKeys
+                                }
+                                InstructionError::AccountDataSizeChanged => {
+                                    tx_by_addr::InstructionErrorType::AccountDataSizeChanged
+                                }
+                                InstructionError::AccountNotExecutable => {
+                                    tx_by_addr::InstructionErrorType::AccountNotExecutable
+                                }
+                                InstructionError::AccountBorrowFailed => {
+                                    tx_by_addr::InstructionErrorType::AccountBorrowFailed
+                                }
+                                InstructionError::AccountBorrowOutstanding => {
+                                    tx_by_addr::InstructionErrorType::AccountBorrowOutstanding
+                                }
+                                InstructionError::DuplicateAccountOutOfSync => {
+                                    tx_by_addr::InstructionErrorType::DuplicateAccountOutOfSync
+                                }
+                                InstructionError::Custom(_) => {
+                                    tx_by_addr::InstructionErrorType::Custom
+                                }
+                                InstructionError::InvalidError => {
+                                    tx_by_addr::InstructionErrorType::InvalidError
+                                }
+                                InstructionError::ExecutableDataModified => {
+                                    tx_by_addr::InstructionErrorType::ExecutableDataModified
+                                }
+                                InstructionError::ExecutableLamportChange => {
+                                    tx_by_addr::InstructionErrorType::ExecutableLamportChange
+                                }
+                                InstructionError::ExecutableAccountNotRentExempt => {
+                                    tx_by_addr::InstructionErrorType::ExecutableAccountNotRentExempt
+                                }
+                                InstructionError::UnsupportedProgramId => {
+                                    tx_by_addr::InstructionErrorType::UnsupportedProgramId
+                                }
+                                InstructionError::CallDepth => {
+                                    tx_by_addr::InstructionErrorType::CallDepth
+                                }
+                                InstructionError::MissingAccount => {
+                                    tx_by_addr::InstructionErrorType::MissingAccount
+                                }
+                                InstructionError::ReentrancyNotAllowed => {
+                                    tx_by_addr::InstructionErrorType::ReentrancyNotAllowed
+                                }
+                                InstructionError::MaxSeedLengthExceeded => {
+                                    tx_by_addr::InstructionErrorType::MaxSeedLengthExceeded
+                                }
+                                InstructionError::InvalidSeeds => {
+                                    tx_by_addr::InstructionErrorType::InvalidSeeds
+                                }
+                                InstructionError::InvalidRealloc => {
+                                    tx_by_addr::InstructionErrorType::InvalidRealloc
+                                }
+                                InstructionError::ComputationalBudgetExceeded => {
+                                    tx_by_addr::InstructionErrorType::ComputationalBudgetExceeded
+                                }
+                                InstructionError::PrivilegeEscalation => {
+                                    tx_by_addr::InstructionErrorType::PrivilegeEscalation
+                                }
+                                InstructionError::ProgramEnvironmentSetupFailure => {
+                                    tx_by_addr::InstructionErrorType::ProgramEnvironmentSetupFailure
+                                }
+                                InstructionError::ProgramFailedToComplete => {
+                                    tx_by_addr::InstructionErrorType::ProgramFailedToComplete
+                                }
+                                InstructionError::ProgramFailedToCompile => {
+                                    tx_by_addr::InstructionErrorType::ProgramFailedToCompile
+                                }
+                                InstructionError::Immutable => {
+                                    tx_by_addr::InstructionErrorType::Immutable
+                                }
+                                InstructionError::IncorrectAuthority => {
+                                    tx_by_addr::InstructionErrorType::IncorrectAuthority
+                                }
+                                InstructionError::BorshIoError(_) => {
+                                    tx_by_addr::InstructionErrorType::BorshIoError
+                                }
+                                InstructionError::AccountNotRentExempt => {
+                                    tx_by_addr::InstructionErrorType::AccountNotRentExempt
+                                }
+                                InstructionError::InvalidAccountOwner => {
+                                    tx_by_addr::InstructionErrorType::InvalidAccountOwner
+                                }
+                                InstructionError::ArithmeticOverflow => {
+                                    tx_by_addr::InstructionErrorType::ArithmeticOverflow
+                                }
+                                InstructionError::UnsupportedSysvar => {
+                                    tx_by_addr::InstructionErrorType::UnsupportedSysvar
+                                }
+                                InstructionError::IllegalOwner => {
+                                    tx_by_addr::InstructionErrorType::IllegalOwner
+                                }
+                            } as i32,
+                            custom: match instruction_error {
+                                InstructionError::Custom(custom) => {
+                                    Some(tx_by_addr::CustomError { custom: *custom })
+                                }
+                                _ => None,
+                            },
                         },
-                    })
+                    ))
                 }
                 _ => None,
             },

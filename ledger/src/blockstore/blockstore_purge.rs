@@ -336,7 +336,7 @@ impl Blockstore {
                     batch.delete::<cf::TransactionStatus>((0, signature, slot))?;
                     batch.delete::<cf::TransactionStatus>((1, signature, slot))?;
                     // TODO: support purging mapped addresses from versioned transactions
-                    for pubkey in transaction.message.unmapped_keys() {
+                    for pubkey in transaction.message.into_static_account_keys() {
                         batch.delete::<cf::AddressSignatures>((0, pubkey, slot, signature))?;
                         batch.delete::<cf::AddressSignatures>((1, pubkey, slot, signature))?;
                     }

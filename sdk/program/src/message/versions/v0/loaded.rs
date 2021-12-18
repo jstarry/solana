@@ -1,15 +1,15 @@
 use {
     crate::{
         bpf_loader_upgradeable,
-        message::{legacy::BUILTIN_PROGRAMS_KEYS, v0},
+        message::{legacy::BUILTIN_PROGRAMS_KEYS, v0::{self, MessageAddressTableLookup}},
         pubkey::Pubkey,
         sysvar,
     },
-    std::{collections::HashSet, ops::Deref, convert::TryFrom},
+    std::{collections::HashSet, ops::Deref},
 };
 
 /// Combination of a version #0 message and its loaded addresses
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LoadedMessage {
     /// Message which loaded a collection of lookup table addresses
     pub message: v0::Message,
@@ -34,13 +34,63 @@ pub struct LoadedAddresses {
     pub readonly: Vec<Pubkey>,
 }
 
+impl FromIterator<LoadedAddresses> for LoadedAddresses {
+    fn from_iter<T: IntoIterator<Item = LoadedAddresses>>(iter: T) -> Self {
+        let (writable, readonly): (Vec<Vec<Pubkey>>, Vec<Vec<Pubkey>>) = iter
+            .into_iter()
+            .map(|addresses| (addresses.writable, addresses.readonly))
+            .unzip();
+        LoadedAddresses {
+            writable: writable.into_iter().flatten().collect(),
+            readonly: readonly.into_iter().flatten().collect(),
+        }
+    }
+}
+
+impl LoadedAddresses {
+    /// Iterate over loaded addresses in the order that they are used
+    /// as account indexes
+    pub fn iter(&self) -> impl Iterator<Item = &Pubkey> {
+        self.writable.iter().chain(self.readonly.iter())
+    }
+
+    /// Helper for splitting a list of addresses into writable and
+    /// readonly addresses
+    pub fn try_new(lookups: &[MessageAddressTableLookup], mut loaded_addresses: Vec<Pubkey>) -> Option<Self> {
+        let num_writable_addresses: usize = lookups
+            .iter()
+            .map(|lookup| lookup.writable_indexes.len())
+            .sum();
+        let num_readonly_addresses: usize = lookups
+            .iter()
+            .map(|lookup| lookup.readonly_indexes.len())
+            .sum();
+
+        if loaded_addresses.len() != num_readonly_addresses.saturating_add(num_writable_addresses) {
+            return None;
+        }
+
+        // Writable addresses come first so split off readonly addresses from the end
+        let (readonly, writable) = (loaded_addresses.split_off(num_writable_addresses), loaded_addresses);
+        Some(Self {writable, readonly})
+    }
+}
+
 impl LoadedMessage {
     /// Returns an iterator of account key segments. The ordering of segments
     /// affects how account indexes from compiled instructions are resolved and
     /// so should not be changed.
     fn account_keys_segment_iter(&self) -> impl Iterator<Item = &Vec<Pubkey>> {
-        vec![
+        std::iter::once(
             &self.message.account_keys,
+        ).chain(self.loaded_addresses_segment_iter())
+    }
+
+    /// Returns an iterator of loaded address segments. The ordering of segments
+    /// affects how account indexes from compiled instructions are resolved and
+    /// so should not be changed.
+    fn loaded_addresses_segment_iter(&self) -> impl Iterator<Item = &Vec<Pubkey>> {
+        vec![
             &self.loaded_addresses.writable,
             &self.loaded_addresses.readonly,
         ]
@@ -61,6 +111,11 @@ impl LoadedMessage {
         self.account_keys_segment_iter().flatten()
     }
 
+    /// Create a vector of the ordered list of loaded addresses
+    pub fn get_loaded_addresses(&self) -> Vec<Pubkey> {
+        self.loaded_addresses_segment_iter().flatten().cloned().collect()
+    }
+
     /// Returns true if any account keys are duplicates
     pub fn has_duplicates(&self) -> bool {
         let mut uniq = HashSet::new();
@@ -68,7 +123,7 @@ impl LoadedMessage {
     }
 
     /// Returns the address of the account at the specified index of the list of
-    /// message account keys constructed from unmapped keys, followed by mapped
+    /// message account keys constructed from static keys, followed by mapped
     /// writable addresses, and lastly the list of mapped readonly addresses.
     pub fn get_account_key(&self, mut index: usize) -> Option<&Pubkey> {
         for key_segment in self.account_keys_segment_iter() {
@@ -88,8 +143,8 @@ impl LoadedMessage {
         let num_account_keys = self.message.account_keys.len();
         let num_signed_accounts = usize::from(header.num_required_signatures);
         if key_index >= num_account_keys {
-            let mapped_addresses_index = key_index.saturating_sub(num_account_keys);
-            mapped_addresses_index < self.loaded_addresses.writable.len()
+            let loaded_addresses_index = key_index.saturating_sub(num_account_keys);
+            loaded_addresses_index < self.loaded_addresses.writable.len()
         } else if key_index >= num_signed_accounts {
             let num_unsigned_accounts = num_account_keys.saturating_sub(num_signed_accounts);
             let num_writable_unsigned_accounts = num_unsigned_accounts
@@ -115,18 +170,6 @@ impl LoadedMessage {
             }
         }
         false
-    }
-
-    /// Returns true if the account at the specified index is called as a program by an instruction
-    pub fn is_key_called_as_program(&self, key_index: usize) -> bool {
-        if let Ok(key_index) = u8::try_from(key_index) {
-            self.message
-                .instructions
-                .iter()
-                .any(|ix| ix.program_id_index == key_index)
-        } else {
-            false
-        }
     }
 
     /// Returns true if any account is the bpf upgradeable loader

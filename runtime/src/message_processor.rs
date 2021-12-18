@@ -12,7 +12,7 @@ use {
         compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
-        message::Message,
+        message::SanitizedMessage,
         precompiles::is_precompile,
         pubkey::Pubkey,
         rent::Rent,
@@ -50,7 +50,7 @@ impl MessageProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
         builtin_programs: &[BuiltinProgram],
-        message: &Message,
+        message: &SanitizedMessage,
         program_indices: &[Vec<usize>],
         accounts: &[TransactionAccountRefCell],
         rent: Rent,
@@ -77,14 +77,12 @@ impl MessageProcessor {
             lamports_per_signature,
         );
 
-        debug_assert_eq!(program_indices.len(), message.instructions.len());
-        for (instruction_index, (instruction, program_indices)) in message
-            .instructions
-            .iter()
+        debug_assert_eq!(program_indices.len(), message.instructions().len());
+        for (instruction_index, ((program_id, instruction), program_indices)) in message
+            .program_instructions_iter()
             .zip(program_indices.iter())
             .enumerate()
         {
-            let program_id = instruction.program_id(&message.account_keys);
             if invoke_context
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
@@ -96,7 +94,7 @@ impl MessageProcessor {
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
-            for (pubkey, account) in accounts.iter().take(message.account_keys.len()) {
+            for (pubkey, account) in accounts.iter().take(message.account_keys_len()) {
                 if instructions::check_id(pubkey) {
                     let mut mut_account_ref = account.borrow_mut();
                     instructions::store_current_index(
@@ -116,11 +114,7 @@ impl MessageProcessor {
                 .process_instruction(message, instruction, program_indices, &[], &[])
                 .map_err(|err| TransactionError::InstructionError(instruction_index as u8, err))?;
             time.stop();
-            timings.accumulate_program(
-                instruction.program_id(&message.account_keys),
-                time.as_us(),
-                compute_meter_consumption,
-            );
+            timings.accumulate_program(program_id, time.as_us(), compute_meter_consumption);
             timings.accumulate(&invoke_context.timings);
         }
         Ok(ProcessedMessageInfo::default())

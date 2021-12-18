@@ -18,7 +18,7 @@ pub mod token_balances;
 pub use {crate::extract_memos::extract_and_fmt_memos, solana_runtime::bank::RewardType};
 use {
     crate::{
-        parse_accounts::{parse_accounts, ParsedAccount},
+        parse_accounts::{parse_accounts, parse_accounts_versioned, ParsedAccount},
         parse_instruction::{parse, ParsedInstruction},
     },
     solana_account_decoder::parse_token::UiTokenAmount,
@@ -26,14 +26,22 @@ use {
         clock::{Slot, UnixTimestamp},
         commitment_config::CommitmentConfig,
         deserialize_utils::default_on_eof,
+        hash::Hash,
         instruction::CompiledInstruction,
-        message::{Message, MessageHeader},
+        message::{
+            v0::{LoadedAddresses, LoadedMessage, MessageAddressTableLookup},
+            Message, MessageHeader, SanitizedMessage, VersionedMessage,
+        },
         pubkey::Pubkey,
         sanitize::Sanitize,
         signature::Signature,
-        transaction::{Result, Transaction, TransactionError},
+        transaction::{
+            AddressLookupError, Result, SanitizedTransaction, TransactionError,
+            VersionedTransaction,
+        },
     },
-    std::fmt,
+    std::{fmt, str::FromStr},
+    thiserror::Error,
 };
 /// A duplicate representation of an Instruction for pretty JSON serialization
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -58,6 +66,21 @@ impl UiInstruction {
         } else {
             UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
                 UiPartiallyDecodedInstruction::from(instruction, &message.account_keys),
+            ))
+        }
+    }
+
+    fn parse_versioned(
+        program_id: &Pubkey,
+        instruction: &CompiledInstruction,
+        message: &SanitizedMessage,
+    ) -> Self {
+        let account_keys: Vec<Pubkey> = message.account_keys_iter().cloned().collect();
+        if let Ok(parsed_instruction) = parse(program_id, instruction, &account_keys) {
+            UiInstruction::Parsed(UiParsedInstruction::Parsed(parsed_instruction))
+        } else {
+            UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
+                UiPartiallyDecodedInstruction::from(instruction, &account_keys),
             ))
         }
     }
@@ -166,6 +189,21 @@ impl UiInnerInstructions {
                 .collect(),
         }
     }
+    fn parse_versioned(inner_instructions: InnerInstructions, message: &SanitizedMessage) -> Self {
+        Self {
+            index: inner_instructions.index,
+            instructions: inner_instructions
+                .instructions
+                .iter()
+                .map(|ix| {
+                    let program_id = message
+                        .get_account_key(ix.program_id_index as usize)
+                        .expect("invalid program id index");
+                    UiInstruction::parse_versioned(program_id, ix, message)
+                })
+                .collect(),
+        }
+    }
 }
 
 impl From<InnerInstructions> for UiInnerInstructions {
@@ -198,6 +236,8 @@ pub struct TransactionStatusMeta {
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub rewards: Option<Rewards>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub loaded_addresses: Vec<Pubkey>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -212,6 +252,7 @@ impl Default for TransactionStatusMeta {
             pre_token_balances: None,
             post_token_balances: None,
             rewards: None,
+            loaded_addresses: vec![],
         }
     }
 }
@@ -230,6 +271,7 @@ pub struct UiTransactionStatusMeta {
     pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
     pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
     pub rewards: Option<Rewards>,
+    pub loaded_addresses: Vec<String>,
 }
 
 impl UiTransactionStatusMeta {
@@ -253,6 +295,11 @@ impl UiTransactionStatusMeta {
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
             rewards: meta.rewards,
+            loaded_addresses: meta
+                .loaded_addresses
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
         }
     }
 }
@@ -276,6 +323,11 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(|balance| balance.into()).collect()),
             rewards: meta.rewards,
+            loaded_addresses: meta
+                .loaded_addresses
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
         }
     }
 }
@@ -355,8 +407,7 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ConfirmedBlock {
     pub previous_blockhash: String,
     pub blockhash: String,
@@ -368,20 +419,24 @@ pub struct ConfirmedBlock {
 }
 
 impl ConfirmedBlock {
-    pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedBlock {
-        EncodedConfirmedBlock {
+    pub fn encode(
+        self,
+        encoding: UiTransactionEncoding,
+        reject_versioned_transactions: bool,
+    ) -> std::result::Result<EncodedConfirmedBlock, EncodeTransactionError> {
+        Ok(EncodedConfirmedBlock {
             previous_blockhash: self.previous_blockhash,
             blockhash: self.blockhash,
             parent_slot: self.parent_slot,
             transactions: self
                 .transactions
                 .into_iter()
-                .map(|tx| tx.encode(encoding))
-                .collect(),
+                .map(|tx| tx.encode(encoding, reject_versioned_transactions))
+                .collect::<std::result::Result<_, _>>()?,
             rewards: self.rewards,
             block_time: self.block_time,
             block_height: self.block_height,
-        }
+        })
     }
 
     pub fn configure(
@@ -389,14 +444,15 @@ impl ConfirmedBlock {
         encoding: UiTransactionEncoding,
         transaction_details: TransactionDetails,
         show_rewards: bool,
-    ) -> UiConfirmedBlock {
+        reject_versioned_transactions: bool,
+    ) -> std::result::Result<UiConfirmedBlock, EncodeTransactionError> {
         let (transactions, signatures) = match transaction_details {
             TransactionDetails::Full => (
                 Some(
                     self.transactions
                         .into_iter()
-                        .map(|tx| tx.encode(encoding))
-                        .collect(),
+                        .map(|tx| tx.encode(encoding, reject_versioned_transactions))
+                        .collect::<std::result::Result<_, _>>()?,
                 ),
                 None,
             ),
@@ -411,7 +467,7 @@ impl ConfirmedBlock {
             ),
             TransactionDetails::None => (None, None),
         };
-        UiConfirmedBlock {
+        Ok(UiConfirmedBlock {
             previous_blockhash: self.previous_blockhash,
             blockhash: self.blockhash,
             parent_slot: self.parent_slot,
@@ -424,7 +480,7 @@ impl ConfirmedBlock {
             },
             block_time: self.block_time,
             block_height: self.block_height,
-        }
+        })
     }
 }
 
@@ -509,12 +565,18 @@ pub struct ConfirmedTransaction {
 }
 
 impl ConfirmedTransaction {
-    pub fn encode(self, encoding: UiTransactionEncoding) -> EncodedConfirmedTransaction {
-        EncodedConfirmedTransaction {
+    pub fn encode(
+        self,
+        encoding: UiTransactionEncoding,
+        reject_versioned_transactions: bool,
+    ) -> std::result::Result<EncodedConfirmedTransaction, EncodeTransactionError> {
+        Ok(EncodedConfirmedTransaction {
             slot: self.slot,
-            transaction: self.transaction.encode(encoding),
+            transaction: self
+                .transaction
+                .encode(encoding, reject_versioned_transactions)?,
             block_time: self.block_time,
-        }
+        })
     }
 }
 
@@ -539,7 +601,8 @@ pub struct UiTransaction {
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiMessage {
     Parsed(UiParsedMessage),
-    Raw(UiRawMessage),
+    RawLegacy(UiRawMessage),
+    RawVersioned(UiRawVersionedMessage),
 }
 
 /// A duplicate representation of a Message, in raw format, for pretty JSON serialization
@@ -550,6 +613,17 @@ pub struct UiRawMessage {
     pub account_keys: Vec<String>,
     pub recent_blockhash: String,
     pub instructions: Vec<UiCompiledInstruction>,
+}
+
+/// A duplicate representation of a Message, in raw format, for pretty JSON serialization
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiRawVersionedMessage {
+    pub header: MessageHeader,
+    pub account_keys: Vec<String>,
+    pub recent_blockhash: String,
+    pub instructions: Vec<UiCompiledInstruction>,
+    pub address_table_lookups: Vec<MessageAddressTableLookup>,
 }
 
 /// A duplicate representation of a Message, in parsed format, for pretty JSON serialization
@@ -564,18 +638,51 @@ pub struct UiParsedMessage {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionWithStatusMeta {
-    pub transaction: Transaction,
+    pub transaction: VersionedTransaction,
     pub meta: Option<TransactionStatusMeta>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct SanitizedTransactionWithStatusMeta {
+    pub transaction: SanitizedTransaction,
+    pub meta: Option<TransactionStatusMeta>,
+}
+
+impl TryFrom<TransactionWithStatusMeta> for SanitizedTransactionWithStatusMeta {
+    type Error = TransactionError;
+    fn try_from(transaction_with_meta: TransactionWithStatusMeta) -> Result<Self> {
+        let TransactionWithStatusMeta { transaction, meta } = transaction_with_meta;
+
+        let transaction =
+            SanitizedTransaction::try_create(transaction, Hash::default(), None, |lookups| {
+                let loaded_addresses = meta
+                    .as_ref()
+                    .map(|meta| meta.loaded_addresses.clone())
+                    .unwrap_or_default();
+                LoadedAddresses::try_new(&lookups, loaded_addresses).ok_or(
+                    TransactionError::AddressLookupError(AddressLookupError::InvalidLookupIndex),
+                )
+            })?;
+
+        Ok(Self { transaction, meta })
+    }
+}
+
 impl TransactionWithStatusMeta {
-    fn encode(self, encoding: UiTransactionEncoding) -> EncodedTransactionWithStatusMeta {
-        let message = self.transaction.message();
-        let meta = self.meta.map(|meta| meta.encode(encoding, message));
-        EncodedTransactionWithStatusMeta {
-            transaction: EncodedTransaction::encode(self.transaction, encoding),
-            meta,
-        }
+    fn encode(
+        self,
+        encoding: UiTransactionEncoding,
+        reject_versioned_transactions: bool,
+    ) -> std::result::Result<EncodedTransactionWithStatusMeta, EncodeTransactionError> {
+        Ok(EncodedTransactionWithStatusMeta {
+            transaction: EncodedTransaction::encode(
+                self.transaction,
+                encoding,
+                self.meta.as_ref().map(|meta| meta.loaded_addresses.clone()),
+                reject_versioned_transactions,
+            )?,
+            meta: self.meta.map(|meta| meta.into()),
+        })
     }
 }
 
@@ -586,12 +693,24 @@ pub struct EncodedTransactionWithStatusMeta {
     pub meta: Option<UiTransactionStatusMeta>,
 }
 
-impl TransactionStatusMeta {
-    fn encode(self, encoding: UiTransactionEncoding, message: &Message) -> UiTransactionStatusMeta {
-        match encoding {
-            UiTransactionEncoding::JsonParsed => UiTransactionStatusMeta::parse(self, message),
-            _ => self.into(),
-        }
+impl EncodedTransactionWithStatusMeta {
+    pub fn decode_transaction(&self) -> Result<SanitizedTransaction> {
+        let transaction = self.transaction.decode().unwrap();
+        SanitizedTransaction::try_create(transaction, Hash::default(), None, |lookups| {
+            let loaded_addresses = if let Some(meta) = self.meta.as_ref() {
+                meta.loaded_addresses
+                    .iter()
+                    .map(|address| {
+                        Pubkey::from_str(address).map_err(|_| TransactionError::SanitizeFailure)
+                    })
+                    .collect::<Result<_>>()?
+            } else {
+                vec![]
+            };
+            LoadedAddresses::try_new(&lookups, loaded_addresses).ok_or(
+                TransactionError::AddressLookupError(AddressLookupError::InvalidLookupIndex),
+            )
+        })
     }
 }
 
@@ -621,12 +740,34 @@ pub enum EncodedTransaction {
     Json(UiTransaction),
 }
 
+#[derive(Error, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum EncodeTransactionError {
+    #[error("Rejected versioned transaction")]
+    RejectedVersionedTransaction,
+
+    #[error("Missing loaded addresses")]
+    MissingLoadedAddresses,
+
+    #[error("Invalid loaded addresses")]
+    InvalidLoadedAddresses,
+}
+
 impl EncodedTransaction {
-    pub fn encode(transaction: Transaction, encoding: UiTransactionEncoding) -> Self {
-        match encoding {
-            UiTransactionEncoding::Binary => EncodedTransaction::LegacyBinary(
-                bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
-            ),
+    pub fn encode(
+        transaction: VersionedTransaction,
+        encoding: UiTransactionEncoding,
+        loaded_addresses: Option<Vec<Pubkey>>,
+        reject_versioned_transactions: bool,
+    ) -> std::result::Result<Self, EncodeTransactionError> {
+        let encoded_signatures = transaction
+            .signatures
+            .iter()
+            .map(|sig| sig.to_string())
+            .collect();
+        let encoded_tx = match encoding {
+            UiTransactionEncoding::Binary => EncodedTransaction::LegacyBinary({
+                bs58::encode(bincode::serialize(&transaction).unwrap()).into_string()
+            }),
             UiTransactionEncoding::Base58 => EncodedTransaction::Binary(
                 bs58::encode(bincode::serialize(&transaction).unwrap()).into_string(),
                 encoding,
@@ -635,51 +776,107 @@ impl EncodedTransaction {
                 base64::encode(bincode::serialize(&transaction).unwrap()),
                 encoding,
             ),
-            UiTransactionEncoding::Json | UiTransactionEncoding::JsonParsed => {
-                let message = if encoding == UiTransactionEncoding::Json {
-                    UiMessage::Raw(UiRawMessage {
-                        header: transaction.message.header,
-                        account_keys: transaction
-                            .message
+            UiTransactionEncoding::Json => {
+                let encoded_message = match transaction.message {
+                    VersionedMessage::Legacy(message) => UiMessage::RawLegacy(UiRawMessage {
+                        header: message.header,
+                        account_keys: message
                             .account_keys
                             .iter()
                             .map(|pubkey| pubkey.to_string())
                             .collect(),
-                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
-                        instructions: transaction
-                            .message
+                        recent_blockhash: message.recent_blockhash.to_string(),
+                        instructions: message
                             .instructions
                             .iter()
                             .map(|instruction| instruction.into())
                             .collect(),
-                    })
-                } else {
-                    UiMessage::Parsed(UiParsedMessage {
-                        account_keys: parse_accounts(&transaction.message),
-                        recent_blockhash: transaction.message.recent_blockhash.to_string(),
-                        instructions: transaction
-                            .message
-                            .instructions
-                            .iter()
-                            .map(|instruction| {
-                                UiInstruction::parse(instruction, &transaction.message)
-                            })
-                            .collect(),
-                    })
+                    }),
+                    VersionedMessage::V0(message) => {
+                        if reject_versioned_transactions {
+                            return Err(EncodeTransactionError::RejectedVersionedTransaction);
+                        }
+
+                        UiMessage::RawVersioned(UiRawVersionedMessage {
+                            header: message.header,
+                            account_keys: message
+                                .account_keys
+                                .iter()
+                                .map(|pubkey| pubkey.to_string())
+                                .collect(),
+                            recent_blockhash: message.recent_blockhash.to_string(),
+                            instructions: message
+                                .instructions
+                                .iter()
+                                .map(|instruction| instruction.into())
+                                .collect(),
+                            address_table_lookups: message.address_table_lookups,
+                        })
+                    }
                 };
+
                 EncodedTransaction::Json(UiTransaction {
-                    signatures: transaction
-                        .signatures
-                        .iter()
-                        .map(|sig| sig.to_string())
-                        .collect(),
-                    message,
+                    signatures: encoded_signatures,
+                    message: encoded_message,
                 })
             }
-        }
+            UiTransactionEncoding::JsonParsed => {
+                let parsed_message = match transaction.message {
+                    VersionedMessage::Legacy(message) => UiParsedMessage {
+                        account_keys: parse_accounts(&message),
+                        recent_blockhash: message.recent_blockhash.to_string(),
+                        instructions: message
+                            .instructions
+                            .iter()
+                            .map(|instruction| UiInstruction::parse(instruction, &message))
+                            .collect(),
+                    },
+                    VersionedMessage::V0(message) => {
+                        if reject_versioned_transactions {
+                            return Err(EncodeTransactionError::RejectedVersionedTransaction);
+                        }
+
+                        let loaded_addresses = LoadedAddresses::try_new(
+                            &message.address_table_lookups,
+                            loaded_addresses
+                                .ok_or(EncodeTransactionError::MissingLoadedAddresses)?,
+                        )
+                        .ok_or(EncodeTransactionError::InvalidLoadedAddresses)?;
+
+                        let message = SanitizedMessage::V0(LoadedMessage {
+                            message,
+                            loaded_addresses,
+                        });
+
+                        UiParsedMessage {
+                            account_keys: parse_accounts_versioned(&message),
+                            recent_blockhash: message.recent_blockhash().to_string(),
+                            instructions: message
+                                .program_instructions_iter()
+                                .map(|(program_id, instruction)| {
+                                    UiInstruction::parse_versioned(
+                                        program_id,
+                                        instruction,
+                                        &message,
+                                    )
+                                })
+                                .collect(),
+                        }
+                    }
+                };
+
+                EncodedTransaction::Json(UiTransaction {
+                    signatures: encoded_signatures,
+                    message: UiMessage::Parsed(parsed_message),
+                })
+            }
+        };
+
+        Ok(encoded_tx)
     }
-    pub fn decode(&self) -> Option<Transaction> {
-        let transaction: Option<Transaction> = match self {
+
+    pub fn decode(&self) -> Option<VersionedTransaction> {
+        let transaction: Option<VersionedTransaction> = match self {
             EncodedTransaction::Json(_) => None,
             EncodedTransaction::LegacyBinary(blob) => bs58::decode(blob)
                 .into_vec()

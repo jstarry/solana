@@ -538,6 +538,9 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
             },
             transaction_details: config.transaction_details.unwrap_or_default(),
             show_rewards: config.show_rewards.unwrap_or_default(),
+            reject_versioned_transactions: !config
+                .enable_versioned_transactions
+                .unwrap_or_default(),
         };
         self.subscribe(SubscriptionParams::Block(params))
     }

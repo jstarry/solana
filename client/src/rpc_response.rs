@@ -9,7 +9,8 @@ use {
         transaction::{Result, TransactionError},
     },
     solana_transaction_status::{
-        ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
+        ConfirmedTransactionStatusWithSignature, EncodeTransactionError,
+        TransactionConfirmationStatus, UiConfirmedBlock,
     },
     std::{collections::HashMap, fmt, net::SocketAddr},
     thiserror::Error,
@@ -429,6 +430,14 @@ pub struct RpcInflationReward {
 pub enum RpcBlockUpdateError {
     #[error("block store error")]
     BlockStoreError,
+    #[error("transaction encoding error")]
+    EncodeTransactionError(EncodeTransactionError),
+}
+
+impl From<EncodeTransactionError> for RpcBlockUpdateError {
+    fn from(err: EncodeTransactionError) -> Self {
+        Self::EncodeTransactionError(err)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

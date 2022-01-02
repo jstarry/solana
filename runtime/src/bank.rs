@@ -238,7 +238,7 @@ impl ExecuteTimings {
 }
 
 type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "2pPboTQ9ixNuR1hvRt7McJriam5EHfd3vpBWfxnVbmF3")]
+#[frozen_abi(digest = "4vXQj7XbDnGzRbufYMsEi6oQokva2qrEeNLiFBbyVepR")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.

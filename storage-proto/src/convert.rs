@@ -569,6 +569,10 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
             19 => TransactionError::InvalidWritableAccount,
             20 => TransactionError::WouldExceedMaxAccountCostLimit,
             21 => TransactionError::WouldExceedMaxAccountDataCostLimit,
+            22 => TransactionError::AddressLookupTableNotFound,
+            23 => TransactionError::InvalidAddressLookupTableOwner,
+            24 => TransactionError::InvalidAddressLookupTableData,
+            25 => TransactionError::InvalidAddressLookupTableIndex,
             _ => return Err("Invalid TransactionError"),
         })
     }
@@ -641,6 +645,18 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                 }
                 TransactionError::WouldExceedMaxAccountDataCostLimit => {
                     tx_by_addr::TransactionErrorType::WouldExceedMaxAccountDataCostLimit
+                }
+                TransactionError::AddressLookupTableNotFound => {
+                    tx_by_addr::TransactionErrorType::AddressLookupTableNotFound
+                }
+                TransactionError::InvalidAddressLookupTableOwner => {
+                    tx_by_addr::TransactionErrorType::InvalidAddressLookupTableOwner
+                }
+                TransactionError::InvalidAddressLookupTableData => {
+                    tx_by_addr::TransactionErrorType::InvalidAddressLookupTableData
+                }
+                TransactionError::InvalidAddressLookupTableIndex => {
+                    tx_by_addr::TransactionErrorType::InvalidAddressLookupTableIndex
                 }
             } as i32,
             instruction_error: match transaction_error {

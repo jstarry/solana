@@ -60,7 +60,10 @@ use {
         feature_set::{self, nonce_must_be_writable},
         fee_calculator::FeeCalculator,
         hash::Hash,
-        message::{Message, SanitizedMessage},
+        message::{
+            v0::{LoadedAddresses, MessageAddressTableLookup},
+            Message, SanitizedMessage,
+        },
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
         stake::state::{StakeActivationStatus, StakeState},
@@ -989,6 +992,8 @@ impl JsonRpcRequestProcessor {
             let transaction_details = config.transaction_details.unwrap_or_default();
             let show_rewards = config.rewards.unwrap_or(true);
             let commitment = config.commitment.unwrap_or_default();
+            let reject_versioned_transactions =
+                !config.enable_versioned_transactions.unwrap_or_default();
             check_is_at_least_confirmed(commitment)?;
 
             // Block is old enough to be finalized
@@ -1002,54 +1007,80 @@ impl JsonRpcRequestProcessor {
                 self.check_status_is_complete(slot)?;
                 let result = self.blockstore.get_rooted_block(slot, true);
                 self.check_blockstore_root(&result, slot)?;
-                let configure_block = |confirmed_block: ConfirmedBlock| {
-                    let mut confirmed_block =
-                        confirmed_block.configure(encoding, transaction_details, show_rewards);
-                    if slot == 0 {
-                        confirmed_block.block_time = Some(self.genesis_creation_time());
-                        confirmed_block.block_height = Some(0);
-                    }
-                    confirmed_block
-                };
+                let configure_block =
+                    |confirmed_block: Option<ConfirmedBlock>| match confirmed_block {
+                        Some(confirmed_block) => {
+                            let mut confirmed_block = confirmed_block
+                                .configure(
+                                    encoding,
+                                    transaction_details,
+                                    show_rewards,
+                                    reject_versioned_transactions,
+                                )
+                                .map_err(RpcCustomError::EncodeTransactionError)?;
+                            if slot == 0 {
+                                confirmed_block.block_time = Some(self.genesis_creation_time());
+                                confirmed_block.block_height = Some(0);
+                            }
+                            Ok(Some(confirmed_block))
+                        }
+                        None => Ok(None),
+                    };
                 if result.is_err() {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
                         let bigtable_result =
                             bigtable_ledger_storage.get_confirmed_block(slot).await;
                         self.check_bigtable_result(&bigtable_result)?;
-                        return Ok(bigtable_result.ok().map(configure_block));
+                        return configure_block(bigtable_result.ok());
                     }
                 }
                 self.check_slot_cleaned_up(&result, slot)?;
-                return Ok(result.ok().map(configure_block));
+                configure_block(result.ok())
             } else if commitment.is_confirmed() {
                 // Check if block is confirmed
                 let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
                 if confirmed_bank.status_cache_ancestors().contains(&slot) {
                     self.check_status_is_complete(slot)?;
                     let result = self.blockstore.get_complete_block(slot, true);
-                    return Ok(result.ok().map(|mut confirmed_block| {
-                        if confirmed_block.block_time.is_none()
-                            || confirmed_block.block_height.is_none()
-                        {
-                            let r_bank_forks = self.bank_forks.read().unwrap();
-                            let bank = r_bank_forks.get(slot).cloned();
-                            if let Some(bank) = bank {
-                                if confirmed_block.block_time.is_none() {
-                                    confirmed_block.block_time = Some(bank.clock().unix_timestamp);
-                                }
-                                if confirmed_block.block_height.is_none() {
-                                    confirmed_block.block_height = Some(bank.block_height());
+                    match result.ok() {
+                        None => Ok(None),
+                        Some(mut confirmed_block) => {
+                            if confirmed_block.block_time.is_none()
+                                || confirmed_block.block_height.is_none()
+                            {
+                                let r_bank_forks = self.bank_forks.read().unwrap();
+                                let bank = r_bank_forks.get(slot).cloned();
+                                if let Some(bank) = bank {
+                                    if confirmed_block.block_time.is_none() {
+                                        confirmed_block.block_time =
+                                            Some(bank.clock().unix_timestamp);
+                                    }
+                                    if confirmed_block.block_height.is_none() {
+                                        confirmed_block.block_height = Some(bank.block_height());
+                                    }
                                 }
                             }
+                            let ui_confirmed_block = confirmed_block
+                                .configure(
+                                    encoding,
+                                    transaction_details,
+                                    show_rewards,
+                                    reject_versioned_transactions,
+                                )
+                                .map_err(RpcCustomError::EncodeTransactionError)?;
+
+                            Ok(Some(ui_confirmed_block))
                         }
-                        confirmed_block.configure(encoding, transaction_details, show_rewards)
-                    }));
+                    }
+                } else {
+                    Err(RpcCustomError::BlockNotAvailable { slot }.into())
                 }
+            } else {
+                Err(RpcCustomError::BlockNotAvailable { slot }.into())
             }
         } else {
-            return Err(RpcCustomError::TransactionHistoryNotAvailable.into());
+            Err(RpcCustomError::TransactionHistoryNotAvailable.into())
         }
-        Err(RpcCustomError::BlockNotAvailable { slot }.into())
     }
 
     pub async fn get_blocks(
@@ -1364,49 +1395,67 @@ impl JsonRpcRequestProcessor {
             .unwrap_or_default();
         let encoding = config.encoding.unwrap_or(UiTransactionEncoding::Json);
         let commitment = config.commitment.unwrap_or_default();
+        let reject_versioned_transactions =
+            !config.enable_versioned_transactions.unwrap_or_default();
         check_is_at_least_confirmed(commitment)?;
 
         if self.config.enable_rpc_transaction_history {
             let confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
-            let transaction = if commitment.is_confirmed() {
+            let transaction_with_meta = if commitment.is_confirmed() {
                 let highest_confirmed_slot = confirmed_bank.slot();
                 self.blockstore
                     .get_complete_transaction(signature, highest_confirmed_slot)
             } else {
                 self.blockstore.get_rooted_transaction(signature)
             };
-            match transaction.unwrap_or(None) {
-                Some(mut confirmed_transaction) => {
+            match transaction_with_meta.unwrap_or(None) {
+                Some(mut confirmed_transaction_with_meta) => {
                     if commitment.is_confirmed()
                         && confirmed_bank // should be redundant
                             .status_cache_ancestors()
-                            .contains(&confirmed_transaction.slot)
+                            .contains(&confirmed_transaction_with_meta.slot)
                     {
-                        if confirmed_transaction.block_time.is_none() {
+                        if confirmed_transaction_with_meta.block_time.is_none() {
                             let r_bank_forks = self.bank_forks.read().unwrap();
-                            confirmed_transaction.block_time = r_bank_forks
-                                .get(confirmed_transaction.slot)
+                            confirmed_transaction_with_meta.block_time = r_bank_forks
+                                .get(confirmed_transaction_with_meta.slot)
                                 .map(|bank| bank.clock().unix_timestamp);
                         }
-                        return Ok(Some(confirmed_transaction.encode(encoding)));
+                        return Ok(Some(
+                            confirmed_transaction_with_meta
+                                .encode(encoding, None, reject_versioned_transactions)
+                                .map_err(RpcCustomError::EncodeTransactionError)?,
+                        ));
                     }
-                    if confirmed_transaction.slot
+                    if confirmed_transaction_with_meta.slot
                         <= self
                             .block_commitment_cache
                             .read()
                             .unwrap()
                             .highest_confirmed_root()
                     {
-                        return Ok(Some(confirmed_transaction.encode(encoding)));
+                        return Ok(Some(
+                            confirmed_transaction_with_meta
+                                .encode(encoding, None, reject_versioned_transactions)
+                                .map_err(RpcCustomError::EncodeTransactionError)?,
+                        ));
                     }
                 }
                 None => {
                     if let Some(bigtable_ledger_storage) = &self.bigtable_ledger_storage {
-                        return Ok(bigtable_ledger_storage
+                        if let Some(confirmed_transaction) = bigtable_ledger_storage
                             .get_confirmed_transaction(&signature)
                             .await
                             .unwrap_or(None)
-                            .map(|confirmed| confirmed.encode(encoding)));
+                        {
+                            return Ok(Some(
+                                confirmed_transaction
+                                    .encode(encoding, None, reject_versioned_transactions)
+                                    .map_err(RpcCustomError::EncodeTransactionError)?,
+                            ));
+                        } else {
+                            return Ok(None);
+                        }
                     }
                 }
             }
@@ -3448,7 +3497,10 @@ pub mod rpc_full {
                 .preflight_commitment
                 .map(|commitment| CommitmentConfig { commitment });
             let preflight_bank = &*meta.bank(preflight_commitment);
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let finalized_bank = &*meta.bank(Some(CommitmentConfig::finalized()));
+            let transaction = sanitize_transaction(unsanitized_tx, |lookups| {
+                finalized_bank.load_lookup_table_addresses(lookups)
+            })?;
             let signature = *transaction.signature();
 
             let mut last_valid_block_height = preflight_bank
@@ -3556,7 +3608,10 @@ pub mod rpc_full {
                     .set_recent_blockhash(bank.last_blockhash());
             }
 
-            let transaction = sanitize_transaction(unsanitized_tx)?;
+            let finalized_bank = &*meta.bank(Some(CommitmentConfig::finalized()));
+            let transaction = sanitize_transaction(unsanitized_tx, |lookups| {
+                finalized_bank.load_lookup_table_addresses(lookups)
+            })?;
             if config.sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
@@ -4244,12 +4299,15 @@ where
         .map(|output| (wire_output, output))
 }
 
-fn sanitize_transaction(transaction: VersionedTransaction) -> Result<SanitizedTransaction> {
+fn sanitize_transaction(
+    transaction: VersionedTransaction,
+    address_loader: impl FnOnce(
+        &[MessageAddressTableLookup],
+    ) -> std::result::Result<LoadedAddresses, TransactionError>,
+) -> Result<SanitizedTransaction> {
     let message_hash = transaction.message.hash();
-    SanitizedTransaction::try_create(transaction, message_hash, None, |_| {
-        Err(TransactionError::UnsupportedVersion)
-    })
-    .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
+    SanitizedTransaction::try_create(transaction, message_hash, None, address_loader)
+        .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
 
 pub(crate) fn create_validator_exit(exit: &Arc<AtomicBool>) -> Arc<RwLock<Exit>> {
@@ -4364,12 +4422,12 @@ pub mod tests {
             fee_calculator::DEFAULT_BURN_PERCENT,
             hash::{hash, Hash},
             instruction::InstructionError,
-            message::Message,
+            message::{v0, Message, MessageHeader, VersionedMessage},
             nonce, rpc_port,
             signature::{Keypair, Signer},
             system_program, system_transaction,
             timing::slot_duration_from_slots_per_year,
-            transaction::{self, Transaction, TransactionError},
+            transaction::{self, AddressLookupError, Transaction, TransactionError},
         },
         solana_transaction_status::{
             EncodedConfirmedBlock, EncodedTransaction, EncodedTransactionWithStatusMeta,
@@ -6554,7 +6612,8 @@ pub mod tests {
                     let meta = meta.unwrap();
                     let transaction_recent_blockhash = match transaction.message {
                         UiMessage::Parsed(message) => message.recent_blockhash,
-                        UiMessage::Raw(message) => message.recent_blockhash,
+                        UiMessage::RawLegacy(message) => message.recent_blockhash,
+                        UiMessage::RawV0(message) => message.recent_blockhash,
                     };
                     assert_eq!(transaction_recent_blockhash, blockhash.to_string());
                     assert_eq!(meta.status, Ok(()));
@@ -6653,6 +6712,7 @@ pub mod tests {
                 transaction_details: Some(TransactionDetails::Signatures),
                 rewards: Some(false),
                 commitment: None,
+                enable_versioned_transactions: None,
             })
         );
         let res = io.handle_request_sync(&req, meta.clone());
@@ -6674,6 +6734,7 @@ pub mod tests {
                 transaction_details: Some(TransactionDetails::None),
                 rewards: Some(true),
                 commitment: None,
+                enable_versioned_transactions: None,
             })
         );
         let res = io.handle_request_sync(&req, meta);
@@ -8031,8 +8092,40 @@ pub mod tests {
                 .to_string(),
         );
         assert_eq!(
-            sanitize_transaction(unsanitary_versioned_tx).unwrap_err(),
+            sanitize_transaction(unsanitary_versioned_tx, |_| Ok(LoadedAddresses::default()))
+                .unwrap_err(),
             expect58
+        );
+    }
+
+    #[test]
+    fn test_sanitize_invalid_lookups() {
+        let versioned_tx = VersionedTransaction {
+            signatures: vec![Signature::default()],
+            message: VersionedMessage::V0(v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                account_keys: vec![Pubkey::new_unique()],
+                address_table_lookups: vec![MessageAddressTableLookup {
+                    account_key: Pubkey::new_unique(),
+                    writable_indexes: vec![255],
+                    readonly_indexes: vec![],
+                }],
+                ..v0::Message::default()
+            }),
+        };
+
+        let sanitize_err = sanitize_transaction(versioned_tx, |_| {
+            Err(AddressLookupError::InvalidLookupIndex.into())
+        })
+        .unwrap_err();
+        assert_eq!(
+            sanitize_err,
+            Error::invalid_params(
+                "invalid transaction: Transaction address table lookup failed".to_string(),
+            )
         );
     }
 }

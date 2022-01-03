@@ -191,7 +191,7 @@ impl RpcSender for MockSender {
                     transaction: EncodedTransaction::Json(
                         UiTransaction {
                             signatures: vec!["3AsdoALgZFuq2oUVWrDYhg2pNeaLJKPLf8hU2mQ6U8qJxeJ6hsrPVpMn9ma39DtfYCrDQSvngWRP8NnTpEhezJpE".to_string()],
-                            message: UiMessage::Raw(
+                            message: UiMessage::RawLegacy(
                                 UiRawMessage {
                                     header: MessageHeader {
                                         num_required_signatures: 1,
@@ -222,6 +222,8 @@ impl RpcSender for MockSender {
                             pre_token_balances: None,
                             post_token_balances: None,
                             rewards: None,
+                            loaded_writable_addresses: vec![],
+                            loaded_readonly_addresses: vec![],
                         }),
                 },
                 block_time: Some(1628633791),

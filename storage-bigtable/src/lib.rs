@@ -6,17 +6,18 @@ use {
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
+        message::v0::LoadedAddresses,
         pubkey::Pubkey,
         signature::Signature,
         sysvar::is_sysvar_id,
-        transaction::{Transaction, TransactionError},
+        transaction::{TransactionError, VersionedTransaction},
     },
     solana_storage_proto::convert::{generated, tx_by_addr},
     solana_transaction_status::{
         extract_and_fmt_memos, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
-        ConfirmedTransactionWithStatusMeta, Reward, TransactionByAddrInfo,
-        TransactionConfirmationStatus, TransactionStatus, TransactionStatusMeta,
-        TransactionWithStatusMeta,
+        ConfirmedTransactionWithStatusMeta, Reward, SanitizedTransactionWithStatusMeta,
+        TransactionByAddrInfo, TransactionConfirmationStatus, TransactionStatus,
+        TransactionStatusMeta, TransactionWithStatusMeta,
     },
     std::{
         collections::{HashMap, HashSet},
@@ -52,6 +53,15 @@ pub enum Error {
 
     #[error("Signature not found")]
     SignatureNotFound,
+
+    #[error("Transaction error: {0}")]
+    TransactionError(TransactionError),
+}
+
+impl std::convert::From<TransactionError> for Error {
+    fn from(err: TransactionError) -> Self {
+        Self::TransactionError(err)
+    }
 }
 
 impl std::convert::From<bigtable::Error> for Error {
@@ -164,7 +174,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
 
 #[derive(Serialize, Deserialize)]
 struct StoredConfirmedBlockTransaction {
-    transaction: Transaction,
+    transaction: VersionedTransaction,
     meta: Option<StoredConfirmedBlockTransactionStatusMeta>,
 }
 
@@ -216,6 +226,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances: None,
             post_token_balances: None,
             rewards: None,
+            loaded_addresses: LoadedAddresses::default(),
         }
     }
 }
@@ -626,23 +637,26 @@ impl LedgerStorage {
     ) -> Result<()> {
         let mut bytes_written = 0;
 
-        let mut by_addr: HashMap<&Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
+        let mut by_addr: HashMap<Pubkey, Vec<TransactionByAddrInfo>> = HashMap::new();
 
         let mut tx_cells = vec![];
-        for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
-            let TransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
+        for (index, transaction_with_meta) in
+            confirmed_block.transactions.iter().cloned().enumerate()
+        {
+            let SanitizedTransactionWithStatusMeta { meta, transaction } =
+                transaction_with_meta.try_into()?;
             let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
             let index = index as u32;
-            let signature = transaction.signatures[0];
-            let memo = extract_and_fmt_memos(&transaction.message);
+            let signature = transaction.signature();
+            let memo = extract_and_fmt_memos(transaction.message());
 
-            for address in &transaction.message.account_keys {
+            for address in transaction.message().account_keys_iter() {
                 if !is_sysvar_id(address) {
                     by_addr
-                        .entry(address)
+                        .entry(*address)
                         .or_default()
                         .push(TransactionByAddrInfo {
-                            signature,
+                            signature: signature.clone(),
                             err: err.clone(),
                             index,
                             memo: memo.clone(),
@@ -714,18 +728,19 @@ impl LedgerStorage {
 
     // Delete a confirmed block and associated meta data.
     pub async fn delete_confirmed_block(&self, slot: Slot, dry_run: bool) -> Result<()> {
-        let mut addresses: HashSet<&Pubkey> = HashSet::new();
+        let mut addresses: HashSet<Pubkey> = HashSet::new();
         let mut expected_tx_infos: HashMap<String, UploadedTransaction> = HashMap::new();
         let confirmed_block = self.get_confirmed_block(slot).await?;
-        for (index, transaction_with_meta) in confirmed_block.transactions.iter().enumerate() {
-            let TransactionWithStatusMeta { meta, transaction } = transaction_with_meta;
-            let signature = transaction.signatures[0];
+        for (index, transaction_with_meta) in confirmed_block.transactions.into_iter().enumerate() {
+            let SanitizedTransactionWithStatusMeta { meta, transaction } =
+                transaction_with_meta.try_into()?;
+            let signature = transaction.signature();
             let index = index as u32;
             let err = meta.as_ref().and_then(|meta| meta.status.clone().err());
 
-            for address in &transaction.message.account_keys {
+            for address in transaction.message().account_keys_iter() {
                 if !is_sysvar_id(address) {
-                    addresses.insert(address);
+                    addresses.insert(*address);
                 }
             }
 

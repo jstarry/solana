@@ -4,10 +4,12 @@ use {
     solana_sdk::{
         hash::Hash,
         instruction::{CompiledInstruction, InstructionError},
-        message::{Message, MessageHeader},
+        message::{
+            legacy::Message as LegacyMessage, v0::LoadedAddresses, MessageHeader, VersionedMessage,
+        },
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{Transaction, TransactionError},
+        transaction::{TransactionError, VersionedTransaction},
     },
     solana_transaction_status::{
         ConfirmedBlock, InnerInstructions, Reward, RewardType, TransactionByAddrInfo,
@@ -186,8 +188,8 @@ impl TryFrom<generated::ConfirmedTransaction> for TransactionWithStatusMeta {
     }
 }
 
-impl From<Transaction> for generated::Transaction {
-    fn from(value: Transaction) -> Self {
+impl From<VersionedTransaction> for generated::Transaction {
+    fn from(value: VersionedTransaction) -> Self {
         Self {
             signatures: value
                 .signatures
@@ -199,7 +201,7 @@ impl From<Transaction> for generated::Transaction {
     }
 }
 
-impl From<generated::Transaction> for Transaction {
+impl From<generated::Transaction> for VersionedTransaction {
     fn from(value: generated::Transaction) -> Self {
         Self {
             signatures: value
@@ -212,24 +214,31 @@ impl From<generated::Transaction> for Transaction {
     }
 }
 
-impl From<Message> for generated::Message {
-    fn from(value: Message) -> Self {
-        Self {
-            header: Some(value.header.into()),
-            account_keys: value
-                .account_keys
-                .into_iter()
-                .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
-                .collect(),
-            recent_blockhash: value.recent_blockhash.to_bytes().into(),
-            instructions: value.instructions.into_iter().map(|ix| ix.into()).collect(),
+impl From<VersionedMessage> for generated::Message {
+    fn from(value: VersionedMessage) -> Self {
+        match value {
+            VersionedMessage::Legacy(message) => Self {
+                header: Some(message.header.into()),
+                account_keys: message
+                    .account_keys
+                    .into_iter()
+                    .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+                    .collect(),
+                recent_blockhash: message.recent_blockhash.to_bytes().into(),
+                instructions: message
+                    .instructions
+                    .into_iter()
+                    .map(|ix| ix.into())
+                    .collect(),
+            },
+            _ => todo!(),
         }
     }
 }
 
-impl From<generated::Message> for Message {
+impl From<generated::Message> for VersionedMessage {
     fn from(value: generated::Message) -> Self {
-        Self {
+        Self::Legacy(LegacyMessage {
             header: value.header.expect("header is required").into(),
             account_keys: value
                 .account_keys
@@ -238,7 +247,7 @@ impl From<generated::Message> for Message {
                 .collect(),
             recent_blockhash: Hash::new(&value.recent_blockhash),
             instructions: value.instructions.into_iter().map(|ix| ix.into()).collect(),
-        }
+        })
     }
 }
 
@@ -274,6 +283,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_addresses,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -304,6 +314,16 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             .into_iter()
             .map(|reward| reward.into())
             .collect();
+        let loaded_writable_addresses = loaded_addresses
+            .writable
+            .into_iter()
+            .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+            .collect();
+        let loaded_readonly_addresses = loaded_addresses
+            .readonly
+            .into_iter()
+            .map(|key| <Pubkey as AsRef<[u8]>>::as_ref(&key).into())
+            .collect();
 
         Self {
             err,
@@ -317,6 +337,8 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_writable_addresses,
+            loaded_readonly_addresses,
         }
     }
 }
@@ -344,6 +366,8 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_writable_addresses,
+            loaded_readonly_addresses,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -377,6 +401,16 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
                 .collect(),
         );
         let rewards = Some(rewards.into_iter().map(|reward| reward.into()).collect());
+        let loaded_addresses = LoadedAddresses {
+            writable: loaded_writable_addresses
+                .into_iter()
+                .map(|key| Pubkey::new(&key))
+                .collect(),
+            readonly: loaded_readonly_addresses
+                .into_iter()
+                .map(|key| Pubkey::new(&key))
+                .collect(),
+        };
         Ok(Self {
             status,
             fee,
@@ -387,6 +421,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+            loaded_addresses,
         })
     }
 }

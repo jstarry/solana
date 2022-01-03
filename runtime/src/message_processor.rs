@@ -12,7 +12,7 @@ use {
         compute_budget::ComputeBudget,
         feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
-        message::Message,
+        message::SanitizedMessage,
         precompiles::is_precompile,
         pubkey::Pubkey,
         rent::Rent,
@@ -51,7 +51,7 @@ impl MessageProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn process_message(
         builtin_programs: &[BuiltinProgram],
-        message: &Message,
+        message: &SanitizedMessage,
         program_indices: &[Vec<usize>],
         transaction_context: &TransactionContext,
         rent: Rent,
@@ -81,14 +81,12 @@ impl MessageProcessor {
             current_accounts_data_len,
         );
 
-        debug_assert_eq!(program_indices.len(), message.instructions.len());
-        for (instruction_index, (instruction, program_indices)) in message
-            .instructions
-            .iter()
+        debug_assert_eq!(program_indices.len(), message.instructions().len());
+        for (instruction_index, ((program_id, instruction), program_indices)) in message
+            .program_instructions_iter()
             .zip(program_indices.iter())
             .enumerate()
         {
-            let program_id = instruction.program_id(&message.account_keys);
             if invoke_context
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
@@ -138,7 +136,7 @@ impl MessageProcessor {
             );
             time.stop();
             timings.accumulate_program(
-                instruction.program_id(&message.account_keys),
+                program_id,
                 time.as_us(),
                 compute_units_consumed,
                 result.is_err(),

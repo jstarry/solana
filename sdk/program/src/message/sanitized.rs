@@ -14,7 +14,7 @@ use {
 
 /// Sanitized message of a transaction which includes a set of atomic
 /// instructions to be executed on-chain
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SanitizedMessage {
     /// Sanitized legacy message
     Legacy(LegacyMessage),
@@ -197,7 +197,10 @@ impl SanitizedMessage {
     /// Returns true if the account at the specified index signed this
     /// message.
     pub fn is_signer(&self, index: usize) -> bool {
-        index < usize::from(self.header().num_required_signatures)
+        match self {
+            Self::Legacy(message) => message.is_signer(index),
+            Self::V0(message) => message.is_signer(index),
+        }
     }
 
     // First encode the number of instructions:

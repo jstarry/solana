@@ -1060,6 +1060,7 @@ pub fn process_get_block(
             RpcBlockConfig {
                 encoding: Some(UiTransactionEncoding::Base64),
                 commitment: Some(CommitmentConfig::confirmed()),
+                enable_versioned_transactions: Some(true),
                 ..RpcBlockConfig::default()
             },
         )?
@@ -2018,16 +2019,16 @@ pub fn process_transaction_history(
                     RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
                         commitment: Some(CommitmentConfig::confirmed()),
+                        enable_versioned_transactions: Some(true),
                     },
                 ) {
                     Ok(confirmed_transaction) => {
                         println_transaction(
                             &confirmed_transaction
                                 .transaction
-                                .transaction
-                                .decode()
+                                .decode_transaction()
                                 .expect("Successful decode"),
-                            &confirmed_transaction.transaction.meta,
+                            confirmed_transaction.transaction.meta.as_ref(),
                             "  ",
                             None,
                             None,

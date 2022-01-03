@@ -9,12 +9,15 @@ use {
         input_validators::{is_slot, is_valid_pubkey},
     },
     solana_cli_output::{
-        display::println_transaction, CliBlock, CliTransaction, CliTransactionConfirmation,
-        OutputFormat,
+        display::println_transaction, CliBlock, CliDisplayTransaction, CliTransaction,
+        CliTransactionConfirmation, OutputFormat,
     },
     solana_ledger::{blockstore::Blockstore, blockstore_db::AccessType},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
-    solana_transaction_status::{ConfirmedBlock, Encodable, UiTransactionEncoding},
+    solana_transaction_status::{
+        ConfirmedBlock, ConfirmedTransactionWithStatusMeta, Encodable,
+        SanitizedTransactionWithStatusMeta, UiTransactionEncoding,
+    },
     std::{
         path::Path,
         process::exit,
@@ -73,7 +76,7 @@ async fn block(slot: Slot, output_format: OutputFormat) -> Result<(), Box<dyn st
     let block = bigtable.get_confirmed_block(slot).await?;
 
     let cli_block = CliBlock {
-        encoded_confirmed_block: block.encode(UiTransactionEncoding::Base64),
+        encoded_confirmed_block: block.encode(UiTransactionEncoding::Base64, None, false)?,
         slot,
     };
     println!("{}", output_format.formatted_string(&cli_block));
@@ -108,15 +111,29 @@ async fn confirm(
     if verbose {
         match bigtable.get_confirmed_transaction(signature).await {
             Ok(Some(confirmed_transaction)) => {
+                let ConfirmedTransactionWithStatusMeta {
+                    block_time,
+                    slot,
+                    transaction: transaction_with_meta,
+                } = confirmed_transaction;
+
+                let versioned_tx = transaction_with_meta.transaction.clone();
+                let SanitizedTransactionWithStatusMeta {
+                    transaction: sanitized_tx,
+                    meta,
+                } = transaction_with_meta.try_into()?;
+
+                let loaded_addresses = meta.as_ref().map(|meta| &meta.loaded_addresses);
                 transaction = Some(CliTransaction {
-                    transaction: confirmed_transaction
-                        .transaction
-                        .transaction
-                        .encode(UiTransactionEncoding::Json),
-                    meta: confirmed_transaction.transaction.meta.map(|m| m.into()),
-                    block_time: confirmed_transaction.block_time,
-                    slot: Some(confirmed_transaction.slot),
-                    decoded_transaction: confirmed_transaction.transaction.transaction,
+                    transaction: versioned_tx.encode(
+                        UiTransactionEncoding::Json,
+                        loaded_addresses,
+                        false,
+                    )?,
+                    meta: meta.map(Into::into),
+                    block_time,
+                    slot: Some(slot),
+                    display_transaction: CliDisplayTransaction::Sanitized(sanitized_tx),
                     prefix: "  ".to_string(),
                     sigverify_status: vec![],
                 });
@@ -197,9 +214,11 @@ pub async fn transaction_history(
                                     );
                                 }
                                 Some(transaction_with_meta) => {
+                                    let SanitizedTransactionWithStatusMeta { transaction, meta } =
+                                        transaction_with_meta.clone().try_into()?;
                                     println_transaction(
-                                        &transaction_with_meta.transaction,
-                                        &transaction_with_meta.meta.clone().map(|m| m.into()),
+                                        &transaction,
+                                        meta.map(|m| m.into()).as_ref(),
                                         "  ",
                                         None,
                                         None,

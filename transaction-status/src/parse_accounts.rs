@@ -1,4 +1,4 @@
-use solana_sdk::message::Message;
+use solana_sdk::message::{v0::LoadedMessage, Message};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -8,9 +8,21 @@ pub struct ParsedAccount {
     pub signer: bool,
 }
 
-pub fn parse_accounts(message: &Message) -> Vec<ParsedAccount> {
+pub fn parse_accounts_from_message(message: &Message) -> Vec<ParsedAccount> {
     let mut accounts: Vec<ParsedAccount> = vec![];
     for (i, account_key) in message.account_keys.iter().enumerate() {
+        accounts.push(ParsedAccount {
+            pubkey: account_key.to_string(),
+            writable: message.is_writable(i),
+            signer: message.is_signer(i),
+        });
+    }
+    accounts
+}
+
+pub fn parse_accounts_from_v0_message(message: &LoadedMessage) -> Vec<ParsedAccount> {
+    let mut accounts: Vec<ParsedAccount> = vec![];
+    for (i, account_key) in message.account_keys_iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
             writable: message.is_writable(i),
@@ -41,7 +53,7 @@ mod test {
         };
 
         assert_eq!(
-            parse_accounts(&message),
+            parse_accounts_from_message(&message),
             vec![
                 ParsedAccount {
                     pubkey: pubkey0.to_string(),

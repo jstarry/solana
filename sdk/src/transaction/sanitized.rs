@@ -1,5 +1,7 @@
 #![cfg(feature = "full")]
 
+use solana_program::message::v0::MessageAddressTableLookup;
+
 use {
     crate::{
         hash::Hash,
@@ -21,7 +23,7 @@ use {
 };
 
 /// Sanitized transaction and the hash of its message
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SanitizedTransaction {
     message: SanitizedMessage,
     message_hash: Hash,
@@ -46,7 +48,7 @@ impl SanitizedTransaction {
         tx: VersionedTransaction,
         message_hash: Hash,
         is_simple_vote_tx: Option<bool>,
-        address_loader: impl Fn(&v0::Message) -> Result<LoadedAddresses>,
+        address_loader: impl FnOnce(&[MessageAddressTableLookup]) -> Result<LoadedAddresses>,
     ) -> Result<Self> {
         tx.sanitize()?;
 
@@ -54,7 +56,7 @@ impl SanitizedTransaction {
         let message = match tx.message {
             VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
             VersionedMessage::V0(message) => SanitizedMessage::V0(v0::LoadedMessage {
-                loaded_addresses: address_loader(&message)?,
+                loaded_addresses: address_loader(&message.address_table_lookups)?,
                 message,
             }),
         };
@@ -165,6 +167,14 @@ impl SanitizedTransaction {
         }
 
         account_locks
+    }
+
+    /// Return the list of addresses loaded from on-chain address lookup tables
+    pub fn get_loaded_addresses(&self) -> LoadedAddresses {
+        match &self.message {
+            SanitizedMessage::Legacy(_) => LoadedAddresses::default(),
+            SanitizedMessage::V0(message) => message.loaded_addresses.clone(),
+        }
     }
 
     /// If the transaction uses a durable nonce, return the pubkey of the nonce account

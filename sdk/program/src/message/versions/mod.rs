@@ -1,3 +1,5 @@
+use self::v0::MessageAddressTableLookup;
+
 use {
     crate::{
         hash::Hash,
@@ -43,25 +45,81 @@ impl VersionedMessage {
         }
     }
 
-    pub fn unmapped_keys(self) -> Vec<Pubkey> {
+    pub fn static_account_keys(&self) -> &[Pubkey] {
+        match self {
+            Self::Legacy(message) => &message.account_keys,
+            Self::V0(message) => &message.account_keys,
+        }
+    }
+
+    pub fn into_static_account_keys(self) -> Vec<Pubkey> {
         match self {
             Self::Legacy(message) => message.account_keys,
             Self::V0(message) => message.account_keys,
         }
     }
 
-    pub fn unmapped_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
+    pub fn static_account_keys_iter(&self) -> impl Iterator<Item = &Pubkey> {
         match self {
             Self::Legacy(message) => message.account_keys.iter(),
             Self::V0(message) => message.account_keys.iter(),
         }
     }
 
-    pub fn unmapped_keys_len(&self) -> usize {
+    pub fn static_account_keys_len(&self) -> usize {
         match self {
             Self::Legacy(message) => message.account_keys.len(),
             Self::V0(message) => message.account_keys.len(),
         }
+    }
+
+    pub fn address_table_lookups(&self) -> &[MessageAddressTableLookup] {
+        match self {
+            Self::Legacy(_) => &[],
+            Self::V0(message) => &message.address_table_lookups,
+        }
+    } 
+
+    /// Returns true if the account at the specified index signed this
+    /// message.
+    pub fn is_signer(&self, index: usize) -> bool {
+        index < usize::from(self.header().num_required_signatures)
+    }
+
+    /// Returns true if the account at the specified index is writable by the
+    /// instructions in this message. Since dynamically loaded addresses can't
+    /// have write locks demoted without loading addresses, this shouldn't be
+    /// used in the runtime.
+    pub fn is_maybe_writable(&self, index: usize) -> bool {
+        match self {
+            Self::Legacy(message) => message.is_writable(index),
+            Self::V0(message) => message.is_maybe_writable(index),
+        }
+    }
+
+    /// Returns true if the account at the specified index is an input to some
+    /// program instruction in this message.
+    fn is_key_passed_to_program(&self, key_index: usize) -> bool {
+        if let Ok(key_index) = u8::try_from(key_index) {
+            self.instructions()
+                .iter()
+                .any(|ix| ix.accounts.contains(&key_index))
+        } else {
+            false
+        }
+    }
+
+    pub fn is_invoked(&self, key_index: usize) -> bool {
+        match self {
+            Self::Legacy(message) => message.is_key_called_as_program(key_index),
+            Self::V0(message) => message.is_key_called_as_program(key_index),
+        }
+    }
+
+    /// Returns true if the account at the specified index is not invoked as a
+    /// program or, if invoked, is passed to a program.
+    pub fn is_non_loader_key(&self, key_index: usize) -> bool {
+        !self.is_invoked(key_index) || self.is_key_passed_to_program(key_index)
     }
 
     pub fn recent_blockhash(&self) -> &Hash {
@@ -75,6 +133,15 @@ impl VersionedMessage {
         match self {
             Self::Legacy(message) => message.recent_blockhash = recent_blockhash,
             Self::V0(message) => message.recent_blockhash = recent_blockhash,
+        }
+    }
+
+    /// Program instructions that will be executed in sequence and committed in
+    /// one atomic transaction if all succeed.
+    pub fn instructions(&self) -> &[CompiledInstruction] {
+        match self {
+            Self::Legacy(message) => &message.instructions,
+            Self::V0(message) => &message.instructions,
         }
     }
 

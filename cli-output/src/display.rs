@@ -1,15 +1,23 @@
 use {
-    crate::cli_output::CliSignatureVerificationStatus,
+    crate::{cli_output::CliSignatureVerificationStatus, CliDisplayTransaction},
     chrono::{DateTime, Local, NaiveDateTime, SecondsFormat, TimeZone, Utc},
     console::style,
     indicatif::{ProgressBar, ProgressStyle},
     solana_sdk::{
-        clock::UnixTimestamp, hash::Hash, message::Message, native_token::lamports_to_sol,
-        program_utils::limited_deserialize, pubkey::Pubkey, stake, transaction::Transaction,
+        clock::UnixTimestamp,
+        hash::Hash,
+        instruction::CompiledInstruction,
+        message::{v0::MessageAddressTableLookup, VersionedMessage},
+        native_token::lamports_to_sol,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        signature::Signature,
+        stake,
+        transaction::{SanitizedTransaction, TransactionError, VersionedTransaction},
     },
-    solana_transaction_status::UiTransactionStatusMeta,
+    solana_transaction_status::{Rewards, UiTransactionStatusMeta},
     spl_memo::{id as spl_memo_id, v1::id as spl_memo_v1_id},
-    std::{collections::HashMap, fmt, io},
+    std::{collections::HashMap, fmt, io, str::FromStr},
 };
 
 #[derive(Clone, Debug)]
@@ -131,22 +139,28 @@ pub fn println_signers(
     println!();
 }
 
-fn format_account_mode(message: &Message, index: usize) -> String {
+struct CliAccountMeta {
+    is_signer: bool,
+    is_writable: bool,
+    is_invoked: bool,
+}
+
+fn format_account_mode(meta: CliAccountMeta) -> String {
     format!(
         "{}r{}{}", // accounts are always readable...
-        if message.is_signer(index) {
+        if meta.is_signer {
             "s" // stands for signer
         } else {
             "-"
         },
-        if message.is_writable(index) {
+        if meta.is_writable {
             "w" // comment for consistent rust fmt (no joking; lol)
         } else {
             "-"
         },
         // account may be executable on-chain while not being
         // designated as a program-id in the message
-        if message.maybe_executable(index) {
+        if meta.is_invoked {
             "x"
         } else {
             // programs to be executed via CPI cannot be identified as
@@ -158,13 +172,144 @@ fn format_account_mode(message: &Message, index: usize) -> String {
 
 pub fn write_transaction<W: io::Write>(
     w: &mut W,
-    transaction: &Transaction,
-    transaction_status: &Option<UiTransactionStatusMeta>,
+    transaction: &SanitizedTransaction,
+    transaction_status: Option<&UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
     block_time: Option<UnixTimestamp>,
 ) -> io::Result<()> {
-    let message = &transaction.message;
+    write_block_time(w, block_time, prefix)?;
+
+    let message = transaction.message();
+    write_recent_blockhash(w, message.recent_blockhash(), prefix)?;
+    write_signatures(w, transaction.signatures(), sigverify_status, prefix)?;
+
+    let mut fee_payer_index = None;
+    for (account_index, account) in message.account_keys_iter().enumerate() {
+        if fee_payer_index.is_none() && message.is_non_loader_key(account_index) {
+            fee_payer_index = Some(account_index)
+        }
+
+        let account_meta = CliAccountMeta {
+            is_signer: message.is_signer(account_index),
+            is_writable: message.is_writable(account_index),
+            is_invoked: message.is_invoked(account_index),
+        };
+
+        write_account(
+            w,
+            account_index,
+            account,
+            format_account_mode(account_meta),
+            Some(account_index) == fee_payer_index,
+            prefix,
+        )?;
+    }
+
+    for (instruction_index, (program_pubkey, instruction)) in
+        message.program_instructions_iter().enumerate()
+    {
+        let instruction_accounts = instruction.accounts.iter().map(|account_index| {
+            let account_key = message
+                .get_account_key(*account_index as usize)
+                .expect("invalid instruction account index");
+            (account_key, *account_index)
+        });
+
+        write_instruction(
+            w,
+            instruction_index,
+            program_pubkey,
+            instruction,
+            instruction_accounts,
+            prefix,
+        )?;
+    }
+
+    if let Some(transaction_status) = transaction_status {
+        write_status(w, &transaction_status.status, prefix)?;
+        write_fees(w, transaction_status.fee, prefix)?;
+        write_balances(w, transaction_status, prefix)?;
+        write_log_messages(w, transaction_status.log_messages.as_ref(), prefix)?;
+        write_rewards(w, transaction_status.rewards.as_ref(), prefix)?;
+    } else {
+        writeln!(w, "{}Status: Unavailable", prefix)?;
+    }
+
+    Ok(())
+}
+
+pub fn write_raw_transaction<W: io::Write>(
+    w: &mut W,
+    raw_transaction: &VersionedTransaction,
+    prefix: &str,
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    block_time: Option<UnixTimestamp>,
+) -> io::Result<()> {
+    write_block_time(w, block_time, prefix)?;
+
+    let message = &raw_transaction.message;
+    let static_account_keys = message.static_account_keys();
+    write_version(w, message, prefix)?;
+    write_recent_blockhash(w, message.recent_blockhash(), prefix)?;
+    write_signatures(w, &raw_transaction.signatures, sigverify_status, prefix)?;
+
+    let mut fee_payer_index = None;
+    for (account_index, account) in static_account_keys.iter().enumerate() {
+        if fee_payer_index.is_none() && message.is_non_loader_key(account_index) {
+            fee_payer_index = Some(account_index)
+        }
+
+        let account_meta = CliAccountMeta {
+            is_signer: message.is_signer(account_index),
+            is_writable: message.is_maybe_writable(account_index),
+            is_invoked: message.is_invoked(account_index),
+        };
+
+        write_account(
+            w,
+            account_index,
+            account,
+            format_account_mode(account_meta),
+            Some(account_index) == fee_payer_index,
+            prefix,
+        )?;
+    }
+
+    let dynamic_address = Pubkey::from_str("DynamicAddress111111111111111111111111111111").unwrap();
+    let get_account_key = |account_index: u8| -> &Pubkey {
+        static_account_keys
+            .get(account_index as usize)
+            .unwrap_or(&dynamic_address)
+    };
+
+    for (instruction_index, instruction) in message.instructions().iter().enumerate() {
+        let program_pubkey = get_account_key(instruction.program_id_index);
+        let instruction_accounts = instruction
+            .accounts
+            .iter()
+            .map(|account_index| (get_account_key(*account_index), *account_index));
+
+        write_instruction(
+            w,
+            instruction_index,
+            program_pubkey,
+            instruction,
+            instruction_accounts,
+            prefix,
+        )?;
+    }
+
+    write_address_table_lookups(w, message.address_table_lookups(), prefix)?;
+
+    Ok(())
+}
+
+fn write_block_time<W: io::Write>(
+    w: &mut W,
+    block_time: Option<UnixTimestamp>,
+    prefix: &str,
+) -> io::Result<()> {
     if let Some(block_time) = block_time {
         writeln!(
             w,
@@ -173,24 +318,45 @@ pub fn write_transaction<W: io::Write>(
             Local.timestamp(block_time, 0)
         )?;
     }
-    writeln!(
-        w,
-        "{}Recent Blockhash: {:?}",
-        prefix, message.recent_blockhash
-    )?;
+    Ok(())
+}
+
+fn write_version<W: io::Write>(
+    w: &mut W,
+    message: &VersionedMessage,
+    prefix: &str,
+) -> io::Result<()> {
+    let version = match message {
+        VersionedMessage::Legacy(_) => "legacy",
+        VersionedMessage::V0(_) => "0",
+    };
+    writeln!(w, "{}Version: {:?}", prefix, version)
+}
+
+fn write_recent_blockhash<W: io::Write>(
+    w: &mut W,
+    recent_blockhash: &Hash,
+    prefix: &str,
+) -> io::Result<()> {
+    writeln!(w, "{}Recent Blockhash: {:?}", prefix, recent_blockhash)
+}
+
+fn write_signatures<W: io::Write>(
+    w: &mut W,
+    signatures: &[Signature],
+    sigverify_status: Option<&[CliSignatureVerificationStatus]>,
+    prefix: &str,
+) -> io::Result<()> {
     let sigverify_statuses = if let Some(sigverify_status) = sigverify_status {
         sigverify_status
             .iter()
             .map(|s| format!(" ({})", s))
             .collect()
     } else {
-        vec!["".to_string(); transaction.signatures.len()]
+        vec!["".to_string(); signatures.len()]
     };
-    for (signature_index, (signature, sigverify_status)) in transaction
-        .signatures
-        .iter()
-        .zip(&sigverify_statuses)
-        .enumerate()
+    for (signature_index, (signature, sigverify_status)) in
+        signatures.iter().zip(&sigverify_statuses).enumerate()
     {
         writeln!(
             w,
@@ -198,170 +364,217 @@ pub fn write_transaction<W: io::Write>(
             prefix, signature_index, signature, sigverify_status,
         )?;
     }
-    let mut fee_payer_index = None;
-    for (account_index, account) in message.account_keys.iter().enumerate() {
-        if fee_payer_index.is_none() && message.is_non_loader_key(account_index) {
-            fee_payer_index = Some(account_index)
-        }
+    Ok(())
+}
+
+fn write_account<W: io::Write>(
+    w: &mut W,
+    account_index: usize,
+    account_address: &Pubkey,
+    account_mode: String,
+    is_fee_payer: bool,
+    prefix: &str,
+) -> io::Result<()> {
+    writeln!(
+        w,
+        "{}Account {}: {} {}{}",
+        prefix,
+        account_index,
+        account_mode,
+        account_address,
+        if is_fee_payer { " (fee payer)" } else { "" },
+    )
+}
+
+fn write_instruction<'a, W: io::Write>(
+    w: &mut W,
+    instruction_index: usize,
+    program_pubkey: &Pubkey,
+    instruction: &CompiledInstruction,
+    instruction_accounts: impl Iterator<Item = (&'a Pubkey, u8)>,
+    prefix: &str,
+) -> io::Result<()> {
+    writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
+    writeln!(
+        w,
+        "{}  Program:   {} ({})",
+        prefix, program_pubkey, instruction.program_id_index
+    )?;
+    for (index, (account_pubkey, account_index)) in instruction_accounts.enumerate() {
         writeln!(
             w,
-            "{}Account {}: {} {}{}",
-            prefix,
-            account_index,
-            format_account_mode(message, account_index),
-            account,
-            if Some(account_index) == fee_payer_index {
-                " (fee payer)"
-            } else {
-                ""
-            },
+            "{}  Account {}: {} ({})",
+            prefix, index, account_pubkey, account_index
         )?;
     }
-    for (instruction_index, instruction) in message.instructions.iter().enumerate() {
-        let program_pubkey = message.account_keys[instruction.program_id_index as usize];
-        writeln!(w, "{}Instruction {}", prefix, instruction_index)?;
-        writeln!(
-            w,
-            "{}  Program:   {} ({})",
-            prefix, program_pubkey, instruction.program_id_index
-        )?;
-        for (account_index, account) in instruction.accounts.iter().enumerate() {
-            let account_pubkey = message.account_keys[*account as usize];
-            writeln!(
-                w,
-                "{}  Account {}: {} ({})",
-                prefix, account_index, account_pubkey, account
-            )?;
-        }
 
-        let mut raw = true;
-        if program_pubkey == solana_vote_program::id() {
-            if let Ok(vote_instruction) = limited_deserialize::<
-                solana_vote_program::vote_instruction::VoteInstruction,
-            >(&instruction.data)
-            {
-                writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
-                raw = false;
-            }
-        } else if program_pubkey == stake::program::id() {
-            if let Ok(stake_instruction) =
-                limited_deserialize::<stake::instruction::StakeInstruction>(&instruction.data)
-            {
-                writeln!(w, "{}  {:?}", prefix, stake_instruction)?;
-                raw = false;
-            }
-        } else if program_pubkey == solana_sdk::system_program::id() {
-            if let Ok(system_instruction) = limited_deserialize::<
-                solana_sdk::system_instruction::SystemInstruction,
-            >(&instruction.data)
-            {
-                writeln!(w, "{}  {:?}", prefix, system_instruction)?;
-                raw = false;
-            }
-        } else if is_memo_program(&program_pubkey) {
-            if let Ok(s) = std::str::from_utf8(&instruction.data) {
-                writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
-                raw = false;
-            }
-        }
-
-        if raw {
-            writeln!(w, "{}  Data: {:?}", prefix, instruction.data)?;
-        }
-    }
-
-    if let Some(transaction_status) = transaction_status {
-        writeln!(
-            w,
-            "{}Status: {}",
-            prefix,
-            match &transaction_status.status {
-                Ok(_) => "Ok".into(),
-                Err(err) => err.to_string(),
-            }
-        )?;
-        writeln!(
-            w,
-            "{}  Fee: ◎{}",
-            prefix,
-            lamports_to_sol(transaction_status.fee)
-        )?;
-        assert_eq!(
-            transaction_status.pre_balances.len(),
-            transaction_status.post_balances.len()
-        );
-        for (i, (pre, post)) in transaction_status
-            .pre_balances
-            .iter()
-            .zip(transaction_status.post_balances.iter())
-            .enumerate()
+    let mut raw = true;
+    if program_pubkey == &solana_vote_program::id() {
+        if let Ok(vote_instruction) = limited_deserialize::<
+            solana_vote_program::vote_instruction::VoteInstruction,
+        >(&instruction.data)
         {
-            if pre == post {
-                writeln!(
-                    w,
-                    "{}  Account {} balance: ◎{}",
-                    prefix,
-                    i,
-                    lamports_to_sol(*pre)
-                )?;
-            } else {
-                writeln!(
-                    w,
-                    "{}  Account {} balance: ◎{} -> ◎{}",
-                    prefix,
-                    i,
-                    lamports_to_sol(*pre),
-                    lamports_to_sol(*post)
-                )?;
-            }
+            writeln!(w, "{}  {:?}", prefix, vote_instruction)?;
+            raw = false;
         }
+    } else if program_pubkey == &stake::program::id() {
+        if let Ok(stake_instruction) =
+            limited_deserialize::<stake::instruction::StakeInstruction>(&instruction.data)
+        {
+            writeln!(w, "{}  {:?}", prefix, stake_instruction)?;
+            raw = false;
+        }
+    } else if program_pubkey == &solana_sdk::system_program::id() {
+        if let Ok(system_instruction) = limited_deserialize::<
+            solana_sdk::system_instruction::SystemInstruction,
+        >(&instruction.data)
+        {
+            writeln!(w, "{}  {:?}", prefix, system_instruction)?;
+            raw = false;
+        }
+    } else if is_memo_program(program_pubkey) {
+        if let Ok(s) = std::str::from_utf8(&instruction.data) {
+            writeln!(w, "{}  Data: \"{}\"", prefix, s)?;
+            raw = false;
+        }
+    }
 
-        if let Some(log_messages) = &transaction_status.log_messages {
-            if !log_messages.is_empty() {
-                writeln!(w, "{}Log Messages:", prefix,)?;
-                for log_message in log_messages {
-                    writeln!(w, "{}  {}", prefix, log_message)?;
-                }
-            }
-        }
-
-        if let Some(rewards) = &transaction_status.rewards {
-            if !rewards.is_empty() {
-                writeln!(w, "{}Rewards:", prefix,)?;
-                writeln!(
-                    w,
-                    "{}  {:<44}  {:^15}  {:<15}  {:<20}",
-                    prefix, "Address", "Type", "Amount", "New Balance"
-                )?;
-                for reward in rewards {
-                    let sign = if reward.lamports < 0 { "-" } else { "" };
-                    writeln!(
-                        w,
-                        "{}  {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}",
-                        prefix,
-                        reward.pubkey,
-                        if let Some(reward_type) = reward.reward_type {
-                            format!("{}", reward_type)
-                        } else {
-                            "-".to_string()
-                        },
-                        sign,
-                        lamports_to_sol(reward.lamports.abs() as u64),
-                        lamports_to_sol(reward.post_balance)
-                    )?;
-                }
-            }
-        }
-    } else {
-        writeln!(w, "{}Status: Unavailable", prefix)?;
+    if raw {
+        writeln!(w, "{}  Data: {:?}", prefix, instruction.data)?;
     }
 
     Ok(())
 }
 
+fn write_address_table_lookups<W: io::Write>(
+    w: &mut W,
+    address_table_lookups: &[MessageAddressTableLookup],
+    prefix: &str,
+) -> io::Result<()> {
+    for lookup in address_table_lookups.iter() {
+        writeln!(
+            w,
+            "{}Address Table Lookup {}: writable indexes: {:?} readonly indexes: {:?}",
+            prefix,
+            lookup.account_key,
+            &lookup.writable_indexes[..],
+            &lookup.readonly_indexes[..],
+        )?;
+    }
+    Ok(())
+}
+
+fn write_rewards<W: io::Write>(
+    w: &mut W,
+    rewards: Option<&Rewards>,
+    prefix: &str,
+) -> io::Result<()> {
+    if let Some(rewards) = rewards {
+        if !rewards.is_empty() {
+            writeln!(w, "{}Rewards:", prefix,)?;
+            writeln!(
+                w,
+                "{}  {:<44}  {:^15}  {:<15}  {:<20}",
+                prefix, "Address", "Type", "Amount", "New Balance"
+            )?;
+            for reward in rewards {
+                let sign = if reward.lamports < 0 { "-" } else { "" };
+                writeln!(
+                    w,
+                    "{}  {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}",
+                    prefix,
+                    reward.pubkey,
+                    if let Some(reward_type) = reward.reward_type {
+                        format!("{}", reward_type)
+                    } else {
+                        "-".to_string()
+                    },
+                    sign,
+                    lamports_to_sol(reward.lamports.abs() as u64),
+                    lamports_to_sol(reward.post_balance)
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_status<W: io::Write>(
+    w: &mut W,
+    transaction_status: &Result<(), TransactionError>,
+    prefix: &str,
+) -> io::Result<()> {
+    writeln!(
+        w,
+        "{}Status: {}",
+        prefix,
+        match transaction_status {
+            Ok(_) => "Ok".into(),
+            Err(err) => err.to_string(),
+        }
+    )
+}
+
+fn write_fees<W: io::Write>(w: &mut W, transaction_fee: u64, prefix: &str) -> io::Result<()> {
+    writeln!(w, "{}  Fee: ◎{}", prefix, lamports_to_sol(transaction_fee))
+}
+
+fn write_balances<W: io::Write>(
+    w: &mut W,
+    transaction_status: &UiTransactionStatusMeta,
+    prefix: &str,
+) -> io::Result<()> {
+    assert_eq!(
+        transaction_status.pre_balances.len(),
+        transaction_status.post_balances.len()
+    );
+    for (i, (pre, post)) in transaction_status
+        .pre_balances
+        .iter()
+        .zip(transaction_status.post_balances.iter())
+        .enumerate()
+    {
+        if pre == post {
+            writeln!(
+                w,
+                "{}  Account {} balance: ◎{}",
+                prefix,
+                i,
+                lamports_to_sol(*pre)
+            )?;
+        } else {
+            writeln!(
+                w,
+                "{}  Account {} balance: ◎{} -> ◎{}",
+                prefix,
+                i,
+                lamports_to_sol(*pre),
+                lamports_to_sol(*post)
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn write_log_messages<W: io::Write>(
+    w: &mut W,
+    log_messages: Option<&Vec<String>>,
+    prefix: &str,
+) -> io::Result<()> {
+    if let Some(log_messages) = log_messages {
+        if !log_messages.is_empty() {
+            writeln!(w, "{}Log Messages:", prefix,)?;
+            for log_message in log_messages {
+                writeln!(w, "{}  {}", prefix, log_message)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn println_transaction(
-    transaction: &Transaction,
-    transaction_status: &Option<UiTransactionStatusMeta>,
+    transaction: &SanitizedTransaction,
+    transaction_status: Option<&UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
     block_time: Option<UnixTimestamp>,
@@ -385,23 +598,32 @@ pub fn println_transaction(
 
 pub fn writeln_transaction(
     f: &mut dyn fmt::Write,
-    transaction: &Transaction,
-    transaction_status: &Option<UiTransactionStatusMeta>,
+    display_transaction: &CliDisplayTransaction,
+    transaction_status: Option<&UiTransactionStatusMeta>,
     prefix: &str,
     sigverify_status: Option<&[CliSignatureVerificationStatus]>,
     block_time: Option<UnixTimestamp>,
 ) -> fmt::Result {
     let mut w = Vec::new();
-    if write_transaction(
-        &mut w,
-        transaction,
-        transaction_status,
-        prefix,
-        sigverify_status,
-        block_time,
-    )
-    .is_ok()
-    {
+    let write_result = match display_transaction {
+        CliDisplayTransaction::Raw(raw_transaction) => write_raw_transaction(
+            &mut w,
+            raw_transaction,
+            prefix,
+            sigverify_status,
+            block_time,
+        ),
+        CliDisplayTransaction::Sanitized(transaction) => write_transaction(
+            &mut w,
+            transaction,
+            transaction_status,
+            prefix,
+            sigverify_status,
+            block_time,
+        ),
+    };
+
+    if write_result.is_ok() {
         if let Ok(s) = String::from_utf8(w) {
             write!(f, "{}", s)?;
         }

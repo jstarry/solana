@@ -21,8 +21,8 @@ use {
     },
     solana_cli_output::{
         display::build_balance_message, return_signers_with_config, CliAccount,
-        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
-        ReturnSignersConfig,
+        CliDisplayTransaction, CliSignatureVerificationStatus, CliTransaction,
+        CliTransactionConfirmation, OutputFormat, ReturnSignersConfig,
     },
     solana_client::{
         blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
@@ -37,9 +37,12 @@ use {
         stake,
         system_instruction::{self, SystemError},
         system_program,
-        transaction::Transaction,
+        transaction::{Transaction, VersionedTransaction},
     },
-    solana_transaction_status::{Encodable, EncodedTransaction, UiTransactionEncoding},
+    solana_transaction_status::{
+        Encodable, EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
+        UiTransactionEncoding,
+    },
     std::{fmt::Write as FmtWrite, fs::File, io::Write, sync::Arc},
 };
 
@@ -556,23 +559,38 @@ pub fn process_confirm(
                         RpcTransactionConfig {
                             encoding: Some(UiTransactionEncoding::Base64),
                             commitment: Some(CommitmentConfig::confirmed()),
+                            enable_versioned_transactions: Some(true),
                         },
                     ) {
                         Ok(confirmed_transaction) => {
-                            let decoded_transaction = confirmed_transaction
-                                .transaction
+                            let EncodedConfirmedTransactionWithStatusMeta {
+                                block_time,
+                                slot,
+                                transaction: transaction_with_meta,
+                            } = confirmed_transaction;
+
+                            let display_transaction = CliDisplayTransaction::Sanitized(
+                                transaction_with_meta
+                                    .decode_transaction()
+                                    .expect("invalid encoding"),
+                            );
+
+                            let decoded_transaction = transaction_with_meta
                                 .transaction
                                 .decode()
                                 .expect("Successful decode");
-                            let json_transaction =
-                                decoded_transaction.encode(UiTransactionEncoding::Json);
+                            let json_transaction = decoded_transaction.encode(
+                                UiTransactionEncoding::Json,
+                                None,
+                                false,
+                            )?;
 
                             transaction = Some(CliTransaction {
                                 transaction: json_transaction,
-                                meta: confirmed_transaction.transaction.meta,
-                                block_time: confirmed_transaction.block_time,
-                                slot: Some(confirmed_transaction.slot),
-                                decoded_transaction,
+                                meta: transaction_with_meta.meta,
+                                block_time,
+                                slot: Some(slot),
+                                display_transaction,
                                 prefix: "  ".to_string(),
                                 sigverify_status: vec![],
                             });
@@ -603,11 +621,14 @@ pub fn process_confirm(
 }
 
 #[allow(clippy::unnecessary_wraps)]
-pub fn process_decode_transaction(config: &CliConfig, transaction: &Transaction) -> ProcessResult {
+pub fn process_decode_transaction(
+    config: &CliConfig,
+    transaction: &VersionedTransaction,
+) -> ProcessResult {
     let sigverify_status = CliSignatureVerificationStatus::verify_transaction(transaction);
     let decode_transaction = CliTransaction {
-        decoded_transaction: transaction.clone(),
-        transaction: transaction.encode(UiTransactionEncoding::Json),
+        display_transaction: CliDisplayTransaction::Raw(transaction),
+        transaction: transaction.encode(UiTransactionEncoding::Json, None, false)?,
         meta: None,
         block_time: None,
         slot: None,

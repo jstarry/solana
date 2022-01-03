@@ -281,19 +281,29 @@ fn filter_block_result_txs(
     block: ConfirmedBlock,
     last_modified_slot: Slot,
     params: &BlockSubscriptionParams,
-) -> Option<RpcBlockUpdate> {
+) -> Result<Option<RpcBlockUpdate>, RpcBlockUpdateError> {
     let transactions = match params.kind {
         BlockSubscriptionKind::All => block.transactions,
         BlockSubscriptionKind::MentionsAccountOrProgram(pk) => block
             .transactions
             .into_iter()
-            .filter(|tx| tx.transaction.message.account_keys.contains(&pk))
+            .filter(|tx| {
+                tx.transaction.message.static_account_keys().contains(&pk)
+                    || tx
+                        .meta
+                        .as_ref()
+                        .map(|meta| {
+                            meta.loaded_addresses.writable.contains(&pk)
+                                || meta.loaded_addresses.readonly.contains(&pk)
+                        })
+                        .unwrap_or_default()
+            })
             .collect(),
     };
 
     if transactions.is_empty() {
         if let BlockSubscriptionKind::MentionsAccountOrProgram(_) = params.kind {
-            return None;
+            return Ok(None);
         }
     }
 
@@ -305,16 +315,17 @@ fn filter_block_result_txs(
         params.encoding,
         params.transaction_details,
         params.show_rewards,
-    );
+        params.reject_versioned_transactions,
+    )?;
 
     // If last_modified_slot < last_notified_slot, then the last notif was for a fork.
     // That's the risk clients take when subscribing to non-finalized commitments.
     // This code lets the logic for dealing with forks live on the client side.
-    Some(RpcBlockUpdate {
+    Ok(Some(RpcBlockUpdate {
         slot: last_modified_slot,
         block: Some(block),
         err: None,
-    })
+    }))
 }
 
 fn filter_account_result(
@@ -957,10 +968,18 @@ impl RpcSubscriptions {
                                 if s > max_complete_transaction_status_slot.load(Ordering::SeqCst) {
                                     break;
                                 }
-                                match blockstore.get_complete_block(s, false) {
-                                    Ok(block) => {
-                                        if let Some(res) = filter_block_result_txs(block, s, params)
-                                        {
+                                match blockstore
+                                    .get_complete_block(s, false)
+                                    .map_err(|err| {
+                                        // we don't advance `w_last_unnotified_slot` so that
+                                        // it'll retry on the next notification trigger
+                                        error!("get_complete_block error: {}", err);
+                                        RpcBlockUpdateError::BlockStoreError
+                                    })
+                                    .and_then(|block| filter_block_result_txs(block, s, params))
+                                {
+                                    Ok(filtered_block) => {
+                                        if let Some(res) = filtered_block {
                                             notifier.notify(
                                                 Response {
                                                     context: RpcResponseContext { slot: s },
@@ -975,17 +994,14 @@ impl RpcSubscriptions {
                                             *w_last_unnotified_slot = s + 1;
                                         }
                                     }
-                                    Err(e) => {
-                                        // we don't advance `w_last_unnotified_slot` so that
-                                        // it'll retry on the next notification trigger
-                                        error!("get_complete_block error: {}", e);
+                                    Err(err) => {
                                         notifier.notify(
                                             Response {
                                                 context: RpcResponseContext { slot: s },
                                                 value: RpcBlockUpdate {
                                                     slot,
                                                     block: None,
-                                                    err: Some(RpcBlockUpdateError::BlockStoreError),
+                                                    err: Some(err),
                                                 },
                                             },
                                             subscription,

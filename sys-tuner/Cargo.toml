@@ -11,16 +11,16 @@ documentation = "https://docs.rs/solana-sys-tuner"
 publish = true
 
 [dependencies]
-clap = "2.33.1"
+clap = "3.0.4"
 log = "0.4.14"
-libc = "0.2.109"
+libc = "0.2.112"
 solana-logger = { path = "../logger", version = "=1.10.0" }
 solana-version = { path = "../version", version = "=1.10.0" }
 
 [target."cfg(unix)".dependencies]
 unix_socket2 = "0.5.4"
 users = "0.10.0"
-nix = "0.23.0"
+nix = "0.23.1"
 sysctl = "0.4.3"
 
 [lib]

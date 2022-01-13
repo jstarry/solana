@@ -25,7 +25,7 @@ use {
         system_instruction,
         sysvar::{self, clock::Clock, rent::Rent, slot_hashes::SlotHashes},
     },
-    std::{collections::HashSet, sync::Arc},
+    std::{collections::HashSet, str::FromStr, sync::Arc},
     thiserror::Error,
 };
 
@@ -403,25 +403,61 @@ mod get_sysvar_with_keyed_account_check {
         keyed_account: &KeyedAccount,
         invoke_context: &InvokeContext,
     ) -> Result<Arc<Clock>, InstructionError> {
-        check_sysvar_keyed_account::<Clock>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_clock()
+        if invoke_context.feature_set.is_active(&load_sysvar_key()) {
+            from_keyed_account(keyed_account).map(Arc::new)
+        } else {
+            check_sysvar_keyed_account::<Clock>(keyed_account)?;
+            invoke_context.get_sysvar_cache().get_clock()
+        }
     }
 
     pub fn rent(
         keyed_account: &KeyedAccount,
         invoke_context: &InvokeContext,
     ) -> Result<Arc<Rent>, InstructionError> {
-        check_sysvar_keyed_account::<Rent>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_rent()
+        if invoke_context.feature_set.is_active(&load_sysvar_key()) {
+            from_keyed_account(keyed_account).map(Arc::new)
+        } else {
+            check_sysvar_keyed_account::<Rent>(keyed_account)?;
+            invoke_context.get_sysvar_cache().get_rent()
+        }
     }
 
     pub fn slot_hashes(
         keyed_account: &KeyedAccount,
         invoke_context: &InvokeContext,
     ) -> Result<Arc<SlotHashes>, InstructionError> {
-        check_sysvar_keyed_account::<SlotHashes>(keyed_account)?;
-        invoke_context.get_sysvar_cache().get_slot_hashes()
+        if invoke_context.feature_set.is_active(&load_sysvar_key()) {
+            from_keyed_account(keyed_account).map(Arc::new)
+        } else {
+            check_sysvar_keyed_account::<SlotHashes>(keyed_account)?;
+            invoke_context.get_sysvar_cache().get_slot_hashes()
+        }
     }
+}
+
+pub fn load_sysvar_key() -> Pubkey {
+    Pubkey::from_str("DB6ZM16kkSCJRQcSYY22aJTNKzucqGPFB7oVhpcwwtCH").unwrap()
+}
+
+pub fn breakpoint_key_1() -> Pubkey {
+    Pubkey::from_str("3R6L87Uij8QKYnskRLmoophYrF3qNsn5Z8kj4he6VjZ1").unwrap()
+}
+
+pub fn breakpoint_key_2() -> Pubkey {
+    Pubkey::from_str("2P6gAdwwpo2BGQKCZqEr8UfccH9ZvJ7FQV3SYpX28q1k").unwrap()
+}
+
+pub fn breakpoint_key_3() -> Pubkey {
+    Pubkey::from_str("7Wk3R244i3qtrGoZstQdFfi341S7dX8RdVuPzncW8A3M").unwrap()
+}
+
+pub fn breakpoint_key_4() -> Pubkey {
+    Pubkey::from_str("2uAhCi4C9fRaixdR9bSFjQ6ou97sJpcqbETD9kifGk3h").unwrap()
+}
+
+pub fn breakpoint_key_5() -> Pubkey {
+    Pubkey::from_str("HmJuPV3rf4yt4E5zGHP69iwonCU76peU8xxdpQNeMAjF").unwrap()
 }
 
 pub fn process_instruction(
@@ -429,6 +465,18 @@ pub fn process_instruction(
     data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    let (breakpoint_1, breakpoint_2, breakpoint_3, breakpoint_4, breakpoint_5) = (
+        invoke_context.feature_set.is_active(&breakpoint_key_1()),
+        invoke_context.feature_set.is_active(&breakpoint_key_2()),
+        invoke_context.feature_set.is_active(&breakpoint_key_3()),
+        invoke_context.feature_set.is_active(&breakpoint_key_4()),
+        invoke_context.feature_set.is_active(&breakpoint_key_5()),
+    );
+
+    if breakpoint_1 {
+        return Ok(());
+    }
+
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     trace!("process_instruction: {:?}", data);
@@ -469,6 +517,9 @@ pub fn process_instruction(
             vote_state::update_commission(me, commission, &signers)
         }
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
+            if !vote.slots.is_empty() && breakpoint_2 {
+                return Ok(());
+            }
             inc_new_counter_info!("vote-native", 1);
             let slot_hashes = get_sysvar_with_keyed_account_check::slot_hashes(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
@@ -478,7 +529,18 @@ pub fn process_instruction(
                 keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
             )?;
-            vote_state::process_vote(me, &slot_hashes, &clock, &vote, &signers)
+            if breakpoint_3 {
+                return Ok(());
+            }
+            vote_state::process_vote(
+                me,
+                &slot_hashes,
+                &clock,
+                &vote,
+                &signers,
+                breakpoint_4,
+                breakpoint_5,
+            )
         }
         VoteInstruction::UpdateVoteState(vote_state_update)
         | VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _) => {
@@ -536,336 +598,5 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use {
-        super::*,
-        bincode::serialize,
-        solana_program_runtime::{
-            invoke_context::{mock_process_instruction, mock_process_instruction_with_sysvars},
-            sysvar_cache::SysvarCache,
-        },
-        solana_sdk::account::{self, Account, AccountSharedData},
-        std::str::FromStr,
-    };
-
-    fn create_default_account() -> AccountSharedData {
-        AccountSharedData::new(0, 0, &Pubkey::new_unique())
-    }
-
-    fn process_instruction(
-        instruction_data: &[u8],
-        transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
-        instruction_accounts: Vec<AccountMeta>,
-        expected_result: Result<(), InstructionError>,
-    ) -> Vec<AccountSharedData> {
-        mock_process_instruction(
-            &id(),
-            Vec::new(),
-            instruction_data,
-            transaction_accounts,
-            instruction_accounts,
-            expected_result,
-            super::process_instruction,
-        )
-    }
-
-    fn process_instruction_as_one_arg(
-        instruction: &Instruction,
-        expected_result: Result<(), InstructionError>,
-    ) -> Vec<AccountSharedData> {
-        let transaction_accounts: Vec<_> = instruction
-            .accounts
-            .iter()
-            .map(|meta| {
-                (
-                    meta.pubkey,
-                    if sysvar::clock::check_id(&meta.pubkey) {
-                        account::create_account_shared_data_for_test(&Clock::default())
-                    } else if sysvar::slot_hashes::check_id(&meta.pubkey) {
-                        account::create_account_shared_data_for_test(&SlotHashes::default())
-                    } else if sysvar::rent::check_id(&meta.pubkey) {
-                        account::create_account_shared_data_for_test(&Rent::free())
-                    } else if meta.pubkey == invalid_vote_state_pubkey() {
-                        AccountSharedData::from(Account {
-                            owner: invalid_vote_state_pubkey(),
-                            ..Account::default()
-                        })
-                    } else {
-                        AccountSharedData::from(Account {
-                            owner: id(),
-                            ..Account::default()
-                        })
-                    },
-                )
-            })
-            .collect();
-        let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.set_rent(Rent::free());
-        sysvar_cache.set_clock(Clock::default());
-        sysvar_cache.set_slot_hashes(SlotHashes::default());
-        mock_process_instruction_with_sysvars(
-            &id(),
-            Vec::new(),
-            &instruction.data,
-            transaction_accounts,
-            instruction.accounts.clone(),
-            expected_result,
-            &sysvar_cache,
-            super::process_instruction,
-        )
-    }
-
-    fn invalid_vote_state_pubkey() -> Pubkey {
-        Pubkey::from_str("BadVote111111111111111111111111111111111111").unwrap()
-    }
-
-    // these are for 100% coverage in this file
-    #[test]
-    fn test_vote_process_instruction_decode_bail() {
-        process_instruction(
-            &[],
-            Vec::new(),
-            Vec::new(),
-            Err(InstructionError::NotEnoughAccountKeys),
-        );
-    }
-
-    #[test]
-    fn test_spoofed_vote() {
-        process_instruction_as_one_arg(
-            &vote(
-                &invalid_vote_state_pubkey(),
-                &Pubkey::new_unique(),
-                Vote::default(),
-            ),
-            Err(InstructionError::InvalidAccountOwner),
-        );
-        process_instruction_as_one_arg(
-            &update_vote_state(
-                &invalid_vote_state_pubkey(),
-                &Pubkey::default(),
-                VoteStateUpdate::default(),
-            ),
-            Err(InstructionError::InvalidAccountOwner),
-        );
-    }
-
-    #[test]
-    fn test_vote_process_instruction() {
-        solana_logger::setup();
-        let instructions = create_account(
-            &Pubkey::new_unique(),
-            &Pubkey::new_unique(),
-            &VoteInit::default(),
-            101,
-        );
-        process_instruction_as_one_arg(&instructions[1], Err(InstructionError::InvalidAccountData));
-        process_instruction_as_one_arg(
-            &vote(
-                &Pubkey::new_unique(),
-                &Pubkey::new_unique(),
-                Vote::default(),
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-        process_instruction_as_one_arg(
-            &vote_switch(
-                &Pubkey::new_unique(),
-                &Pubkey::new_unique(),
-                Vote::default(),
-                Hash::default(),
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-        process_instruction_as_one_arg(
-            &authorize(
-                &Pubkey::new_unique(),
-                &Pubkey::new_unique(),
-                &Pubkey::new_unique(),
-                VoteAuthorize::Voter,
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-        process_instruction_as_one_arg(
-            &update_vote_state(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                VoteStateUpdate::default(),
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-
-        process_instruction_as_one_arg(
-            &update_vote_state_switch(
-                &Pubkey::default(),
-                &Pubkey::default(),
-                VoteStateUpdate::default(),
-                Hash::default(),
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-
-        process_instruction_as_one_arg(
-            &update_validator_identity(
-                &Pubkey::new_unique(),
-                &Pubkey::new_unique(),
-                &Pubkey::new_unique(),
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-        process_instruction_as_one_arg(
-            &update_commission(&Pubkey::new_unique(), &Pubkey::new_unique(), 0),
-            Err(InstructionError::InvalidAccountData),
-        );
-
-        process_instruction_as_one_arg(
-            &withdraw(
-                &Pubkey::new_unique(),
-                &Pubkey::new_unique(),
-                0,
-                &Pubkey::new_unique(),
-            ),
-            Err(InstructionError::InvalidAccountData),
-        );
-    }
-
-    #[test]
-    fn test_vote_authorize_checked() {
-        let vote_pubkey = Pubkey::new_unique();
-        let authorized_pubkey = Pubkey::new_unique();
-        let new_authorized_pubkey = Pubkey::new_unique();
-
-        // Test with vanilla authorize accounts
-        let mut instruction = authorize_checked(
-            &vote_pubkey,
-            &authorized_pubkey,
-            &new_authorized_pubkey,
-            VoteAuthorize::Voter,
-        );
-        instruction.accounts = instruction.accounts[0..2].to_vec();
-        process_instruction_as_one_arg(&instruction, Err(InstructionError::NotEnoughAccountKeys));
-
-        let mut instruction = authorize_checked(
-            &vote_pubkey,
-            &authorized_pubkey,
-            &new_authorized_pubkey,
-            VoteAuthorize::Withdrawer,
-        );
-        instruction.accounts = instruction.accounts[0..2].to_vec();
-        process_instruction_as_one_arg(&instruction, Err(InstructionError::NotEnoughAccountKeys));
-
-        // Test with non-signing new_authorized_pubkey
-        let mut instruction = authorize_checked(
-            &vote_pubkey,
-            &authorized_pubkey,
-            &new_authorized_pubkey,
-            VoteAuthorize::Voter,
-        );
-        instruction.accounts[3] = AccountMeta::new_readonly(new_authorized_pubkey, false);
-        process_instruction_as_one_arg(
-            &instruction,
-            Err(InstructionError::MissingRequiredSignature),
-        );
-
-        let mut instruction = authorize_checked(
-            &vote_pubkey,
-            &authorized_pubkey,
-            &new_authorized_pubkey,
-            VoteAuthorize::Withdrawer,
-        );
-        instruction.accounts[3] = AccountMeta::new_readonly(new_authorized_pubkey, false);
-        process_instruction_as_one_arg(
-            &instruction,
-            Err(InstructionError::MissingRequiredSignature),
-        );
-
-        // Test with new_authorized_pubkey signer
-        let vote_account = AccountSharedData::new(100, VoteState::size_of(), &id());
-        let clock_address = sysvar::clock::id();
-        let clock_account = account::create_account_shared_data_for_test(&Clock::default());
-        let default_authorized_pubkey = Pubkey::default();
-        let authorized_account = create_default_account();
-        let new_authorized_account = create_default_account();
-        let transaction_accounts = vec![
-            (vote_pubkey, vote_account),
-            (clock_address, clock_account),
-            (default_authorized_pubkey, authorized_account),
-            (new_authorized_pubkey, new_authorized_account),
-        ];
-        let instruction_accounts = vec![
-            AccountMeta {
-                pubkey: vote_pubkey,
-                is_signer: false,
-                is_writable: false,
-            },
-            AccountMeta {
-                pubkey: clock_address,
-                is_signer: false,
-                is_writable: false,
-            },
-            AccountMeta {
-                pubkey: default_authorized_pubkey,
-                is_signer: true,
-                is_writable: false,
-            },
-            AccountMeta {
-                pubkey: new_authorized_pubkey,
-                is_signer: true,
-                is_writable: false,
-            },
-        ];
-        process_instruction(
-            &serialize(&VoteInstruction::AuthorizeChecked(VoteAuthorize::Voter)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-        process_instruction(
-            &serialize(&VoteInstruction::AuthorizeChecked(
-                VoteAuthorize::Withdrawer,
-            ))
-            .unwrap(),
-            transaction_accounts,
-            instruction_accounts,
-            Ok(()),
-        );
-    }
-
-    #[test]
-    fn test_minimum_balance() {
-        let rent = Rent::default();
-        let minimum_balance = rent.minimum_balance(VoteState::size_of());
-        // golden, may need updating when vote_state grows
-        assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.04)
-    }
-
-    #[test]
-    fn test_custom_error_decode() {
-        use num_traits::FromPrimitive;
-        fn pretty_err<T>(err: InstructionError) -> String
-        where
-            T: 'static + std::error::Error + DecodeError<T> + FromPrimitive,
-        {
-            if let InstructionError::Custom(code) = err {
-                let specific_error: T = T::decode_custom_error_to_enum(code).unwrap();
-                format!(
-                    "{:?}: {}::{:?} - {}",
-                    err,
-                    T::type_of(),
-                    specific_error,
-                    specific_error,
-                )
-            } else {
-                "".to_string()
-            }
-        }
-        assert_eq!(
-            "Custom(0): VoteError::VoteTooOld - vote already recorded or not in slot hashes history",
-            pretty_err::<VoteError>(VoteError::VoteTooOld.into())
-        )
     }
 }

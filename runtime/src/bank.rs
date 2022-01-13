@@ -4942,7 +4942,11 @@ impl Bank {
             &mut ExecuteTimings::default(),
         )
         .0
-        .fee_collection_results
+        .execution_results
+        .into_iter()
+        .map(|execution_result| execution_result.flattened_result())
+        .collect()
+        // .fee_collection_results
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of

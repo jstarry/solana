@@ -1,3 +1,4 @@
+
 use {
     crate::{
         accounts_db::{
@@ -22,6 +23,7 @@ use {
     },
     log::*,
     rand::{thread_rng, Rng},
+    rayon::iter::{ParallelBridge, ParallelIterator},
     solana_address_lookup_table_program::state::AddressLookupTable,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -474,6 +476,7 @@ impl Accounts {
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
+            .par_bridge()
             .map(|etx| match etx {
                 (tx, (Ok(()), nonce)) => {
                     let lamports_per_signature = nonce
@@ -492,7 +495,7 @@ impl Accounts {
                         ancestors,
                         tx,
                         fee,
-                        error_counters,
+                        &mut ErrorCounters::default(),
                         rent_collector,
                         feature_set,
                     ) {

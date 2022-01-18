@@ -33,6 +33,7 @@
 //! It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
+use rayon::iter::ParallelBridge;
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
 use {
@@ -3826,18 +3827,19 @@ impl Bank {
         let execution_results: Vec<TransactionExecutionResult> = loaded_txs
             .iter_mut()
             .zip(sanitized_txs.iter())
+            .par_bridge()
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
                     let mut feature_set_clone_time = Measure::start("feature_set_clone");
                     let feature_set = self.feature_set.clone();
                     feature_set_clone_time.stop();
-                    saturating_add_assign!(
-                        timings.execute_accessories.feature_set_clone_us,
-                        feature_set_clone_time.as_us()
-                    );
+                    // saturating_add_assign!(
+                    //     timings.execute_accessories.feature_set_clone_us,
+                    //     feature_set_clone_time.as_us()
+                    // );
 
-                    signature_count += u64::from(tx.message().header().num_required_signatures);
+                    // signature_count += u64::from(tx.message().header().num_required_signatures);
 
                     let mut compute_budget = self.compute_budget.unwrap_or_else(ComputeBudget::new);
                     if feature_set.is_active(&tx_wide_compute_cap::id()) {
@@ -3846,12 +3848,12 @@ impl Bank {
                         let process_transaction_result =
                             compute_budget.process_transaction(tx, feature_set);
                         compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
+                        // saturating_add_assign!(
+                        //     timings
+                        //         .execute_accessories
+                        //         .compute_budget_process_transaction_us,
+                        //     compute_budget_process_transaction_time.as_us()
+                        // );
                         if let Err(err) = process_transaction_result {
                             return TransactionExecutionResult::NotExecuted(err);
                         }
@@ -3866,8 +3868,8 @@ impl Bank {
                         durable_nonce_fee,
                         enable_cpi_recording,
                         enable_log_recording,
-                        timings,
-                        &mut error_counters,
+                        &mut ExecuteTimings::default(),
+                        &mut ErrorCounters::default(),
                     )
                 }
             })

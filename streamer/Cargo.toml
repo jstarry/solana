@@ -10,6 +10,7 @@ documentation = "https://docs.rs/solana-streamer"
 edition = "2021"
 
 [dependencies]
+bytes = "1.1.0"
 crossbeam-channel = "0.5"
 futures-util = "0.3.19"
 histogram = "0.6.9"
@@ -23,11 +24,12 @@ rcgen = "0.8.14"
 rustls = { version = "0.20.2", features = ["dangerous_configuration"] }
 pem = "1.0.2"
 pkcs8 = { version = "0.8.0", features = ["alloc"] }
+solana-measure = { path = "../measure", version = "=1.10.0" }
 solana-metrics = { path = "../metrics", version = "=1.10.0" }
 solana-sdk = { path = "../sdk", version = "=1.10.0" }
 solana-perf = { path = "../perf", version = "=1.10.0" }
 thiserror = "1.0"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "rt-multi-thread"] }
 
 
 [dev-dependencies]

@@ -5,6 +5,7 @@ use {
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
     quinn::{Endpoint, EndpointConfig, ServerConfig},
     rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
+    solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
@@ -55,7 +56,8 @@ fn configure_server(
     // disable bidi & datagrams
     const MAX_CONCURRENT_BIDI_STREAMS: u32 = 0;
     config.max_concurrent_bidi_streams(MAX_CONCURRENT_BIDI_STREAMS.into());
-    config.datagram_receive_buffer_size(None);
+    //config.datagram_receive_buffer_size(None);
+    config.datagram_receive_buffer_size(Some(PACKET_DATA_SIZE));
 
     Ok((server_config, cert_chain_pem))
 }
@@ -121,7 +123,8 @@ fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams
 }
 
 pub fn rt() -> Runtime {
-    Builder::new_current_thread().enable_all().build().unwrap()
+    //Builder::new_current_thread().enable_all().build().unwrap()
+    Builder::new_multi_thread().enable_all().build().unwrap()
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -139,10 +142,15 @@ fn handle_chunk(
     maybe_batch: &mut Option<PacketBatch>,
     remote_addr: &SocketAddr,
     packet_sender: &Sender<PacketBatch>,
+    skip_send: bool,
 ) -> bool {
     match chunk {
         Ok(maybe_chunk) => {
             if let Some(chunk) = maybe_chunk {
+                if skip_send {
+                    packet_sender.send(PacketBatch::default()).unwrap();
+                    return false;
+                }
                 trace!("got chunk: {:?}", chunk);
                 let chunk_len = chunk.bytes.len() as u64;
 
@@ -169,7 +177,7 @@ fn handle_chunk(
                     batch.packets[0].meta.size = std::cmp::max(batch.packets[0].meta.size, end);
                 }
             } else {
-                trace!("chunk is none");
+                debug!("chunk is none");
                 // done receiving chunks
                 if let Some(batch) = maybe_batch.take() {
                     let len = batch.packets[0].meta.size;
@@ -196,6 +204,7 @@ pub fn spawn_server(
     gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
+    skip_send: bool,
 ) -> Result<thread::JoinHandle<()>, QuicServerError> {
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
@@ -222,24 +231,52 @@ pub fn spawn_server(
                         let quinn::NewConnection {
                             connection,
                             mut uni_streams,
+                            //mut datagrams,
                             ..
                         } = new_connection;
 
                         let remote_addr = connection.remote_address();
                         let packet_sender = packet_sender.clone();
+                        let packet_sender1 = packet_sender.clone();
+
+                        /*info!("got connection: {}", remote_addr);
+                        tokio::spawn(async move {
+                            while let Some(Ok(packet)) = datagrams.next().await {
+                                info!("sending packet");
+                                let mut batch = PacketBatch::with_capacity(1);
+                                let mut packet = Packet::default();
+                                batch.packets.push(packet);
+                                packet_sender.send(batch).unwrap();
+                            }
+                        });*/
+
+                        let packet_sender = packet_sender1.clone();
                         tokio::spawn(async move {
                             debug!("new connection {}", remote_addr);
-                            while let Some(Ok(mut stream)) = uni_streams.next().await {
-                                let mut maybe_batch = None;
-                                while !exit.load(Ordering::Relaxed) {
-                                    if handle_chunk(
-                                        &stream.read_chunk(PACKET_DATA_SIZE, false).await,
-                                        &mut maybe_batch,
-                                        &remote_addr,
-                                        &packet_sender,
-                                    ) {
-                                        break;
+                            loop {
+                                let mut start = Measure::start("stream start");
+                                if let Some(Ok(mut stream)) = uni_streams.next().await {
+                                    debug!("new stream");
+                                    let packet_sender = packet_sender.clone();
+                                    let exit = exit.clone();
+                                    //tokio::spawn(async move {
+                                    let mut maybe_batch = None;
+                                    while !exit.load(Ordering::Relaxed) {
+                                        if handle_chunk(
+                                            &stream.read_chunk(PACKET_DATA_SIZE, false).await,
+                                            &mut maybe_batch,
+                                            &remote_addr,
+                                            &packet_sender,
+                                            skip_send,
+                                        ) {
+                                            break;
+                                        }
                                     }
+                                    //});
+                                } else {
+                                    start.stop();
+                                    debug!("{}", start);
+                                    break;
                                 }
                             }
                         });
@@ -298,7 +335,7 @@ mod test {
         let (sender, _receiver) = unbounded();
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone()).unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), false).unwrap();
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
     }
@@ -315,6 +352,118 @@ mod test {
     }
 
     #[test]
+    #[ignore]
+    fn test_bench_single_connect() {
+        solana_logger::setup();
+        let s = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let exit = Arc::new(AtomicBool::new(false));
+        let (sender, receiver) = unbounded();
+        let keypair = Keypair::new();
+        let ip = "127.0.0.1".parse().unwrap();
+        let server_address = s.local_addr().unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), false).unwrap();
+
+        let mut num_threads = 1;
+        let mut num_packets_per_thread = std::env::var("PACKETS_PER_THREAD")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(200_000);
+        let packet_size = std::env::var("PACKET_SIZE")
+            .map(|x| x.parse().unwrap())
+            .unwrap_or(200);
+        let use_datagram = false;
+        for _ in 0..5 {
+            let mut send_streams = Measure::start("send_streams");
+            let mut received_packets = Measure::start("received_packets");
+            let num_packets = num_packets_per_thread * num_threads;
+            let client_threads: Vec<_> = (0..num_threads)
+                .into_iter()
+                .map(|tid| {
+                    thread::spawn(move || {
+                        let runtime = rt();
+                        let _rt_guard = runtime.enter();
+
+                        let conn = Arc::new(make_client_endpoint(&runtime, &server_address));
+                        if tid == 0 {
+                            info!("max_datagram: {:?}", conn.connection.max_datagram_size());
+                        }
+
+                        let batch_size = 10;
+                        let num_batches = num_packets_per_thread / batch_size;
+                        for _ in 0..num_batches {
+                            let packet = vec![0u8; packet_size];
+                            let packet_datagram = bytes::Bytes::copy_from_slice(&packet);
+                            let conn = conn.clone();
+                            let handle = runtime.spawn(async move {
+                                for _ in 0..batch_size {
+                                    if use_datagram {
+                                        info!("sending datagram");
+                                        conn.connection.send_datagram(packet_datagram.clone()).unwrap();
+                                    } else {
+                                        let mut stream = conn.connection.open_uni().await.unwrap();
+                                        stream.write_all(&packet).await.unwrap();
+                                        stream.finish().await.unwrap();
+                                    }
+                                }
+                            });
+                            runtime.block_on(handle).unwrap();
+                        }
+                        /*for _ in 0..num_packets_per_thread {
+                            let mut s1 = runtime.block_on(conn.connection.open_uni()).unwrap();
+                            runtime.block_on(s1.write_all(&[0u8; PACKET_SIZE])).unwrap();
+                            runtime.block_on(s1.finish()).unwrap();
+                        }*/
+                    })
+                })
+                .collect();
+            for t in client_threads {
+                t.join().unwrap();
+            }
+            send_streams.stop();
+
+            let mut num_received_packets = 0;
+            let mut start = Instant::now();
+            loop {
+                while let Ok(new) = receiver.recv_timeout(Duration::from_millis(1000)) {
+                    num_received_packets += new.packets.len();
+                    if num_received_packets >= num_packets {
+                        break;
+                    }
+                }
+                if num_received_packets >= num_packets {
+                    break;
+                }
+                if start.elapsed().as_secs() >= 10 {
+                    info!(
+                        "waiting... received: {} of {}",
+                        num_received_packets, num_packets
+                    );
+                    start = Instant::now();
+                }
+            }
+            received_packets.stop();
+            info!(
+                "sent {}x {}b packets with {} threads: kpps: {:.2} mbps: {:.2}\n {} {}",
+                num_packets,
+                packet_size,
+                num_threads,
+                num_packets as f32 / (1000.0f32 * received_packets.as_s()),
+                (num_packets * packet_size) as f32
+                    / (1000.0f32 * 1000.0f32 * received_packets.as_s()),
+                send_streams,
+                received_packets,
+            );
+            num_threads *= 2;
+            num_packets_per_thread /= 2;
+        }
+
+        exit.store(true, Ordering::Relaxed);
+        let mut after_store = Measure::start("after store");
+        t.join().unwrap();
+        after_store.stop();
+        info!("{}", after_store);
+    }
+
+    #[test]
     fn test_quic_server_multiple_streams() {
         solana_logger::setup();
         let s = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -323,7 +472,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone()).unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), false).unwrap();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();
@@ -378,7 +527,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let t = spawn_server(s, &keypair, ip, sender, exit.clone()).unwrap();
+        let t = spawn_server(s, &keypair, ip, sender, exit.clone(), false).unwrap();
 
         let runtime = rt();
         let _rt_guard = runtime.enter();

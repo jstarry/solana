@@ -363,7 +363,7 @@ mod test {
         let server_address = s.local_addr().unwrap();
         let t = spawn_server(s, &keypair, ip, sender, exit.clone(), false).unwrap();
 
-        let mut num_threads = 1;
+        let mut num_threads = 100;
         let mut num_packets_per_thread = std::env::var("PACKETS_PER_THREAD")
             .map(|x| x.parse().unwrap())
             .unwrap_or(200_000);
@@ -371,42 +371,54 @@ mod test {
             .map(|x| x.parse().unwrap())
             .unwrap_or(200);
         let use_datagram = false;
-        for _ in 0..5 {
+
+                        let runtime = rt();
+                        let _rt_guard = runtime.enter();
+        // for _ in 0..5 {
             let mut send_streams = Measure::start("send_streams");
             let mut received_packets = Measure::start("received_packets");
             let num_packets = num_packets_per_thread * num_threads;
+            let conn = Arc::new(make_client_endpoint(&runtime, &server_address));
+            info!("max_datagram: {:?}", conn.connection.max_datagram_size());
+
             let client_threads: Vec<_> = (0..num_threads)
                 .into_iter()
                 .map(|tid| {
-                    thread::spawn(move || {
-                        let runtime = rt();
-                        let _rt_guard = runtime.enter();
-
-                        let conn = Arc::new(make_client_endpoint(&runtime, &server_address));
-                        if tid == 0 {
-                            info!("max_datagram: {:?}", conn.connection.max_datagram_size());
-                        }
-
+                    let conn = conn.clone();
+                    tokio::spawn(async move {
                         let batch_size = 10;
                         let num_batches = num_packets_per_thread / batch_size;
+                        let mut open_elapsed = 0;
+                        let mut write_elapsed = 0;
+                        let mut finish_elapsed = 0;
                         for _ in 0..num_batches {
                             let packet = vec![0u8; packet_size];
                             let packet_datagram = bytes::Bytes::copy_from_slice(&packet);
                             let conn = conn.clone();
-                            let handle = runtime.spawn(async move {
-                                for _ in 0..batch_size {
-                                    if use_datagram {
-                                        info!("sending datagram");
-                                        conn.connection.send_datagram(packet_datagram.clone()).unwrap();
-                                    } else {
-                                        let mut stream = conn.connection.open_uni().await.unwrap();
-                                        stream.write_all(&packet).await.unwrap();
-                                        stream.finish().await.unwrap();
-                                    }
+                            for _ in 0..batch_size {
+                                if use_datagram {
+                                    info!("sending datagram");
+                                    conn.connection.send_datagram(packet_datagram.clone()).unwrap();
+                                } else {
+                                    let mut open_uni_time = Measure::start("open_uni");
+                                    let mut stream = conn.connection.open_uni().await.unwrap();
+                                    open_uni_time.stop();
+                                    open_elapsed += open_uni_time.as_us();
+
+                                    let mut write_all_time = Measure::start("write_all");
+                                    stream.write_all(&packet).await.unwrap();
+                                    write_all_time.stop();
+                                    write_elapsed += write_all_time.as_us();
+
+                                    let mut finish_time = Measure::start("finish");
+                                    stream.finish().await.unwrap();
+                                    finish_time.stop();
+                                    finish_elapsed += finish_time.as_us();
+
                                 }
-                            });
-                            runtime.block_on(handle).unwrap();
+                            }
                         }
+                        dbg!(open_elapsed, write_elapsed, finish_elapsed);
                         /*for _ in 0..num_packets_per_thread {
                             let mut s1 = runtime.block_on(conn.connection.open_uni()).unwrap();
                             runtime.block_on(s1.write_all(&[0u8; PACKET_SIZE])).unwrap();
@@ -416,7 +428,8 @@ mod test {
                 })
                 .collect();
             for t in client_threads {
-                t.join().unwrap();
+                runtime.block_on(t);
+                // t.join().unwrap();
             }
             send_streams.stop();
 
@@ -452,9 +465,9 @@ mod test {
                 send_streams,
                 received_packets,
             );
-            num_threads *= 2;
-            num_packets_per_thread /= 2;
-        }
+            // num_threads *= 2;
+            // num_packets_per_thread /= 2;
+        // }
 
         exit.store(true, Ordering::Relaxed);
         let mut after_store = Measure::start("after store");

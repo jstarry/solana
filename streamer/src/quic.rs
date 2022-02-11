@@ -256,7 +256,7 @@ pub fn spawn_server(
                             loop {
                                 let mut start = Measure::start("stream start");
                                 if let Some(Ok(mut stream)) = uni_streams.next().await {
-                                    debug!("new stream");
+                                    // debug!("new stream");
                                     let packet_sender = packet_sender.clone();
                                     let exit = exit.clone();
                                     //tokio::spawn(async move {
@@ -275,7 +275,7 @@ pub fn spawn_server(
                                     //});
                                 } else {
                                     start.stop();
-                                    debug!("{}", start);
+                                    // debug!("{}", start);
                                     break;
                                 }
                             }

@@ -3413,8 +3413,6 @@ checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 [[package]]
 name = "quinn"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61a84d97630b137463c8e6802adc1dfe9de81457b41bb1ac59189e6761ab9255"
 dependencies = [
  "bytes 1.1.0",
  "futures-channel",
@@ -3430,10 +3428,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "quinn-proto"
+name = "quinn"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "063dedf7983c8d57db474218f258daa85b627de6f2dbc458b690a93b1de790e8"
+checksum = "61a84d97630b137463c8e6802adc1dfe9de81457b41bb1ac59189e6761ab9255"
+replace = "quinn 0.8.0"
+
+[[package]]
+name = "quinn-proto"
+version = "0.8.0"
 dependencies = [
  "bytes 1.1.0",
  "fxhash",
@@ -3452,8 +3455,6 @@ dependencies = [
 [[package]]
 name = "quinn-udp"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f7996776e9ee3fc0e5c14476c1a640a17e993c847ae9c81191c2c102fbef903"
 dependencies = [
  "futures-util",
  "libc",
@@ -6105,7 +6106,7 @@ dependencies = [
  "nix",
  "pem",
  "pkcs8",
- "quinn",
+ "quinn 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3",
  "rcgen",
  "rustls 0.20.2",

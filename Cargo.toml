@@ -87,3 +87,6 @@ members = [
 exclude = [
     "programs/bpf",
 ]
+
+[replace]
+"quinn:0.8.0" = { path = '../../quinn/quinn' }

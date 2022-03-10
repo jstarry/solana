@@ -2,10 +2,13 @@
 //!
 //! This module implements clone-on-write semantics for `StakeDelegations` to reduce unnecessary
 //! cloning of the underlying map.
+
 use {
+    solana_memory_usage::MemoryUsage,
     solana_sdk::{pubkey::Pubkey, stake::state::Delegation},
     std::{
         collections::HashMap,
+        mem::size_of,
         ops::{Deref, DerefMut},
         sync::Arc,
     },
@@ -25,6 +28,15 @@ impl Deref for StakeDelegations {
 impl DerefMut for StakeDelegations {
     fn deref_mut(&mut self) -> &mut Self::Target {
         Arc::make_mut(&mut self.0)
+    }
+}
+
+impl MemoryUsage for StakeDelegations {
+    fn estimated_heap_size(&self) -> usize {
+        let strong_count = Arc::<_>::strong_count(&self.0);
+        let type_size = size_of::<StakeDelegationsInner>();
+        let heap_size = self.0.capacity() * (size_of::<Pubkey>() + size_of::<Delegation>());
+        (type_size + heap_size) / strong_count
     }
 }
 

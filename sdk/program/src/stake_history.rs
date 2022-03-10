@@ -3,7 +3,10 @@
 //! this account carries history about stake activations and de-activations
 //!
 pub use crate::clock::Epoch;
-use std::ops::Deref;
+use {
+    solana_memory_usage::MemoryUsage,
+    std::{mem::size_of, ops::Deref},
+};
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
@@ -53,6 +56,12 @@ impl std::ops::Add for StakeHistoryEntry {
 #[repr(C)]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone, AbiExample)]
 pub struct StakeHistory(Vec<(Epoch, StakeHistoryEntry)>);
+
+impl MemoryUsage for StakeHistory {
+    fn estimated_heap_size(&self) -> usize {
+        self.0.capacity() * size_of::<(Epoch, StakeHistoryEntry)>()
+    }
+}
 
 impl StakeHistory {
     pub fn get(&self, epoch: Epoch) -> Option<&StakeHistoryEntry> {

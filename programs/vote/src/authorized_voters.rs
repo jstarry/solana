@@ -1,13 +1,20 @@
 use {
     log::*,
     serde_derive::{Deserialize, Serialize},
+    solana_memory_usage::MemoryUsage,
     solana_sdk::{clock::Epoch, pubkey::Pubkey},
-    std::collections::BTreeMap,
+    std::{collections::BTreeMap, mem::size_of},
 };
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
 pub struct AuthorizedVoters {
     authorized_voters: BTreeMap<Epoch, Pubkey>,
+}
+
+impl MemoryUsage for AuthorizedVoters {
+    fn estimated_heap_size(&self) -> usize {
+        self.authorized_voters.len() * size_of::<Epoch>() + size_of::<Pubkey>()
+    }
 }
 
 impl AuthorizedVoters {

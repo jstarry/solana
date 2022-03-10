@@ -5138,6 +5138,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-memory-usage"
+version = "1.10.1"
+
+[[package]]
 name = "solana-merkle-root-bench"
 version = "1.10.1"
 dependencies = [
@@ -5357,6 +5361,7 @@ dependencies = [
  "solana-frozen-abi 1.10.1",
  "solana-frozen-abi-macro 1.10.1",
  "solana-logger 1.10.1",
+ "solana-memory-usage",
  "solana-sdk-macro 1.10.1",
  "static_assertions",
  "thiserror",
@@ -5601,6 +5606,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.10.1",
  "solana-logger 1.10.1",
  "solana-measure",
+ "solana-memory-usage",
  "solana-metrics",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
@@ -5660,6 +5666,7 @@ dependencies = [
  "solana-frozen-abi 1.10.1",
  "solana-frozen-abi-macro 1.10.1",
  "solana-logger 1.10.1",
+ "solana-memory-usage",
  "solana-program 1.10.1",
  "solana-sdk-macro 1.10.1",
  "thiserror",
@@ -6024,6 +6031,7 @@ dependencies = [
  "solana-frozen-abi 1.10.1",
  "solana-frozen-abi-macro 1.10.1",
  "solana-logger 1.10.1",
+ "solana-memory-usage",
  "solana-metrics",
  "solana-program-runtime",
  "solana-sdk",

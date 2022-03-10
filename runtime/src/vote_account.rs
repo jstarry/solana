@@ -4,6 +4,7 @@ use {
         de::{Deserialize, Deserializer},
         ser::{Serialize, Serializer},
     },
+    solana_memory_usage::MemoryUsage,
     solana_sdk::{
         account::{Account, AccountSharedData},
         instruction::InstructionError,
@@ -14,6 +15,7 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
+        mem::{size_of, size_of_val},
         sync::{Arc, Once, RwLock, RwLockReadGuard},
     },
 };
@@ -26,11 +28,32 @@ const INVALID_VOTE_STATE: Result<VoteState, InstructionError> =
 #[derive(Clone, Debug, Default, PartialEq, AbiExample)]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
+impl MemoryUsage for VoteAccount {
+    fn estimated_heap_size(&self) -> usize {
+        let strong_count = Arc::<_>::strong_count(&self.0);
+        self.0.estimated_total_size() / strong_count
+    }
+}
+
 #[derive(Debug, AbiExample)]
 struct VoteAccountInner {
     account: Account,
     vote_state: RwLock<Result<VoteState, InstructionError>>,
     vote_state_once: Once,
+}
+
+impl MemoryUsage for VoteAccountInner {
+    fn estimated_heap_size(&self) -> usize {
+        let account_heap_size = self.account.estimated_heap_size();
+        let vote_state_result: &Result<_, _> = &self.vote_state.read().unwrap();
+        let result_type_size = size_of_val(vote_state_result);
+        let result_heap_size = vote_state_result
+            .as_ref()
+            .ok()
+            .map(|vote_state| vote_state.estimated_heap_size())
+            .unwrap_or_default();
+        account_heap_size + result_type_size + result_heap_size
+    }
 }
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
@@ -49,6 +72,36 @@ pub struct VoteAccounts {
         >,
     >,
     staked_nodes_once: Once,
+}
+
+impl MemoryUsage for VoteAccounts {
+    fn estimated_heap_size(&self) -> usize {
+        let vote_accounts_size = {
+            let strong_count = Arc::<_>::strong_count(&self.vote_accounts);
+            let type_size = size_of::<VoteAccountsHashMap>();
+            let heap_size = {
+                let hashmap_heap_size = self.vote_accounts.capacity()
+                    * (size_of::<Pubkey>() + size_of::<(u64, VoteAccount)>());
+                let vote_accounts_heap_size: usize = self
+                    .vote_accounts
+                    .values()
+                    .map(|(_, vote_account)| vote_account.estimated_heap_size())
+                    .sum();
+                hashmap_heap_size + vote_accounts_heap_size
+            };
+            (type_size + heap_size) / strong_count
+        };
+
+        let staked_nodes_size = {
+            let staked_nodes = self.staked_nodes.read().unwrap();
+            let strong_count = Arc::<_>::strong_count(&staked_nodes);
+            let type_size = size_of::<HashMap<Pubkey, u64>>();
+            let heap_size = staked_nodes.capacity() * (size_of::<Pubkey>() + size_of::<u64>());
+            (type_size + heap_size) / strong_count
+        };
+
+        vote_accounts_size + staked_nodes_size
+    }
 }
 
 impl VoteAccount {

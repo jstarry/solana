@@ -29,6 +29,7 @@ use {
 mod vote_state_0_23_5;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
+use {solana_memory_usage::MemoryUsage, std::mem::size_of};
 
 // Maximum number of votes to keep around, tightly coupled with epoch_schedule::MINIMUM_SLOTS_PER_EPOCH
 pub const MAX_LOCKOUT_HISTORY: usize = 31;
@@ -321,6 +322,16 @@ pub struct VoteState {
 
     /// most recent timestamp submitted with a vote
     pub last_timestamp: BlockTimestamp,
+}
+
+impl MemoryUsage for VoteState {
+    fn estimated_heap_size(&self) -> usize {
+        let votes_size = self.votes.capacity() * size_of::<Lockout>();
+        let authorized_voters_size = self.authorized_voters.estimated_heap_size();
+        let epoch_credits_size =
+            self.epoch_credits.capacity() * size_of::<(Pubkey, Epoch, Epoch)>();
+        votes_size + authorized_voters_size + epoch_credits_size
+    }
 }
 
 impl VoteState {

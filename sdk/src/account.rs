@@ -4,6 +4,7 @@ use {
         lamports::LamportsError,
         pubkey::Pubkey,
     },
+    solana_memory_usage::MemoryUsage,
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
         cell::{Ref, RefCell},
@@ -30,6 +31,12 @@ pub struct Account {
     pub executable: bool,
     /// the epoch at which this account will next owe rent
     pub rent_epoch: Epoch,
+}
+
+impl MemoryUsage for Account {
+    fn estimated_heap_size(&self) -> usize {
+        self.data.capacity()
+    }
 }
 
 /// An Account with data that is stored on chain

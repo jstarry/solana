@@ -1,5 +1,6 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
+
 use {
     crate::{
         stake_delegations::StakeDelegations,
@@ -13,6 +14,7 @@ use {
         iter::{IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
+    solana_memory_usage::MemoryUsage,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::{Epoch, Slot},
@@ -161,6 +163,14 @@ pub struct Stakes {
 
     /// history of staking levels
     stake_history: StakeHistory,
+}
+
+impl MemoryUsage for Stakes {
+    fn estimated_heap_size(&self) -> usize {
+        self.vote_accounts.estimated_heap_size()
+            + self.stake_delegations.estimated_heap_size()
+            + self.stake_history.estimated_heap_size()
+    }
 }
 
 impl Stakes {

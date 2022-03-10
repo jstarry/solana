@@ -1,13 +1,23 @@
 //! This module implements clone-on-write semantics for the SDK's `StakeHistory` to reduce
 //! unnecessary cloning of the underlying vector.
-use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
+use {
+    solana_memory_usage::MemoryUsage,
+    std::{
+        ops::{Deref, DerefMut},
+        sync::Arc,
+    },
 };
 
 /// The SDK's stake history with clone-on-write semantics
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 pub struct StakeHistory(Arc<StakeHistoryInner>);
+
+impl MemoryUsage for StakeHistory {
+    fn estimated_heap_size(&self) -> usize {
+        let strong_count = Arc::<_>::strong_count(&self.0);
+        self.0.estimated_total_size() / strong_count
+    }
+}
 
 impl Deref for StakeHistory {
     type Target = StakeHistoryInner;

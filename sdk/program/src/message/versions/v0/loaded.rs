@@ -40,6 +40,15 @@ impl FromIterator<LoadedAddresses> for LoadedAddresses {
     }
 }
 
+impl Extend<Self> for LoadedAddresses {
+    fn extend<T: IntoIterator<Item = LoadedAddresses>>(&mut self, iter: T) {
+        for loaded_addresses in iter {
+            self.writable.extend(loaded_addresses.writable);
+            self.readonly.extend(loaded_addresses.readonly);
+        }
+    }
+}
+
 impl LoadedAddresses {
     /// Checks if there are no writable or readonly addresses
     pub fn is_empty(&self) -> bool {

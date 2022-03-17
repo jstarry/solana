@@ -43,6 +43,7 @@ pub mod legacy;
 #[path = ""]
 mod non_bpf_modules {
     mod account_keys;
+    pub(crate) mod compiled_keys;
     mod sanitized;
     mod versions;
 

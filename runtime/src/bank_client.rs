@@ -14,7 +14,7 @@ use {
         signature::{Keypair, Signature, Signer},
         signers::Signers,
         system_instruction,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, VersionedTransaction},
         transport::{Result, TransportError},
     },
     std::{
@@ -28,7 +28,7 @@ use {
 
 pub struct BankClient {
     bank: Arc<Bank>,
-    transaction_sender: Mutex<Sender<Transaction>>,
+    transaction_sender: Mutex<Sender<VersionedTransaction>>,
 }
 
 impl Client for BankClient {
@@ -41,13 +41,23 @@ impl AsyncClient for BankClient {
     fn async_send_transaction(&self, transaction: Transaction) -> Result<Signature> {
         let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
         let transaction_sender = self.transaction_sender.lock().unwrap();
+        transaction_sender.send(transaction.into()).unwrap();
+        Ok(signature)
+    }
+
+    fn async_send_versioned_transaction(
+        &self,
+        transaction: VersionedTransaction,
+    ) -> Result<Signature> {
+        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let transaction_sender = self.transaction_sender.lock().unwrap();
         transaction_sender.send(transaction).unwrap();
         Ok(signature)
     }
 
-    fn async_send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
+    fn async_send_transaction_batch(&self, transactions: Vec<VersionedTransaction>) -> Result<()> {
         for t in transactions {
-            self.async_send_transaction(t)?;
+            self.async_send_versioned_transaction(t)?;
         }
         Ok(())
     }
@@ -333,13 +343,9 @@ impl SyncClient for BankClient {
 }
 
 impl BankClient {
-    fn run(bank: &Bank, transaction_receiver: Receiver<Transaction>) {
+    fn run(bank: &Bank, transaction_receiver: Receiver<VersionedTransaction>) {
         while let Ok(tx) = transaction_receiver.recv() {
-            let mut transactions = vec![tx];
-            while let Ok(tx) = transaction_receiver.try_recv() {
-                transactions.push(tx);
-            }
-            let _ = bank.try_process_transactions(transactions.iter());
+            let _ = bank.try_process_entry_transactions(vec![tx]);
         }
     }
 

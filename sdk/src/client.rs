@@ -21,7 +21,7 @@ use crate::{
     pubkey::Pubkey,
     signature::{Keypair, Signature},
     signers::Signers,
-    transaction,
+    transaction::{self, Transaction, VersionedTransaction},
     transport::Result,
 };
 
@@ -173,9 +173,16 @@ pub trait SyncClient {
 
 pub trait AsyncClient {
     /// Send a signed transaction, but don't wait to see if the server accepted it.
-    fn async_send_transaction(&self, transaction: transaction::Transaction) -> Result<Signature>;
+    fn async_send_transaction(&self, transaction: Transaction) -> Result<Signature>;
 
-    fn async_send_batch(&self, transactions: Vec<transaction::Transaction>) -> Result<()>;
+    /// Send a signed versioned transaction, but don't wait to see if the server accepted it.
+    fn async_send_versioned_transaction(
+        &self,
+        transaction: VersionedTransaction,
+    ) -> Result<Signature>;
+
+    /// Send a batch of signed versioned transactions without confirmation.
+    fn async_send_transaction_batch(&self, transactions: Vec<VersionedTransaction>) -> Result<()>;
 
     /// Create a transaction from the given message, and send it to the
     /// server, but don't wait for to see if the server accepted it.

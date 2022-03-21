@@ -18,7 +18,7 @@ use {
         signature::{Keypair, Signer},
         system_instruction, system_transaction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
-        transaction::Transaction,
+        transaction::{Transaction, VersionedTransaction},
     },
     std::{
         collections::{HashSet, VecDeque},
@@ -475,7 +475,7 @@ fn do_tx_transfers<T: Client>(
             let tx_len = txs0.len();
             let transfer_start = Instant::now();
             let mut old_transactions = false;
-            let mut transactions = Vec::<_>::new();
+            let mut transactions = Vec::with_capacity(txs0.len());
             for tx in txs0 {
                 let now = timestamp();
                 // Transactions that are too old will be rejected by the cluster Don't bother
@@ -484,10 +484,10 @@ fn do_tx_transfers<T: Client>(
                     old_transactions = true;
                     continue;
                 }
-                transactions.push(tx.0);
+                transactions.push(VersionedTransaction::from(tx.0));
             }
 
-            if let Err(error) = client.async_send_batch(transactions) {
+            if let Err(error) = client.async_send_transaction_batch(transactions) {
                 warn!("send_batch_sync in do_tx_transfers failed: {}", error);
             }
 

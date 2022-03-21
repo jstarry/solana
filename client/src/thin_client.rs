@@ -24,7 +24,7 @@ use {
         signers::Signers,
         system_instruction,
         timing::duration_as_ms,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
     },
     std::{
@@ -611,7 +611,21 @@ impl<C: 'static + TpuConnection> AsyncClient for ThinClient<C> {
         Ok(transaction.signatures[0])
     }
 
-    fn async_send_batch(&self, transactions: Vec<Transaction>) -> TransportResult<()> {
+    fn async_send_versioned_transaction(
+        &self,
+        transaction: VersionedTransaction,
+    ) -> TransportResult<Signature> {
+        let wire_transaction =
+            bincode::serialize(&transaction).expect("transaction serialization failed");
+        self.tpu_connection()
+            .send_wire_transaction(&wire_transaction)?;
+        Ok(transaction.signatures[0])
+    }
+
+    fn async_send_transaction_batch(
+        &self,
+        transactions: Vec<VersionedTransaction>,
+    ) -> TransportResult<()> {
         let batch: Vec<_> = transactions
             .iter()
             .map(|tx| bincode::serialize(&tx).expect("transaction serialization failed"))

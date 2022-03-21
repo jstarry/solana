@@ -2,8 +2,9 @@ use {
     solana_program_test::{processor, ProgramTest},
     solana_sdk::{
         account_info::AccountInfo, clock::Clock, entrypoint::ProgramResult,
-        epoch_schedule::EpochSchedule, instruction::Instruction, msg, pubkey::Pubkey, rent::Rent,
-        signature::Signer, sysvar::Sysvar, transaction::Transaction,
+        epoch_schedule::EpochSchedule, instruction::Instruction, message::Message, msg,
+        pubkey::Pubkey, rent::Rent, signature::Signer, sysvar::Sysvar,
+        transaction::VersionedTransaction,
     },
 };
 
@@ -38,14 +39,16 @@ async fn get_sysvar() {
 
     let mut context = program_test.start_with_context().await;
     context.warp_to_slot(42).unwrap();
-    let instructions = vec![Instruction::new_with_bincode(program_id, &(), vec![])];
-
-    let transaction = Transaction::new_signed_with_payer(
-        &instructions,
-        Some(&context.payer.pubkey()),
+    let instruction = Instruction::new_with_bincode(program_id, &(), vec![]);
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(
+            &[instruction],
+            Some(&context.payer.pubkey()),
+            &context.last_blockhash,
+        ),
         &[&context.payer],
-        context.last_blockhash,
-    );
+    )
+    .unwrap();
 
     context
         .banks_client

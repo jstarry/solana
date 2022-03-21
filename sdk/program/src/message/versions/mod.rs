@@ -35,6 +35,18 @@ pub enum VersionedMessage {
     V0(v0::Message),
 }
 
+impl From<LegacyMessage> for VersionedMessage {
+    fn from(message: LegacyMessage) -> Self {
+        Self::Legacy(message)
+    }
+}
+
+impl From<v0::Message> for VersionedMessage {
+    fn from(message: v0::Message) -> Self {
+        Self::V0(message)
+    }
+}
+
 impl VersionedMessage {
     pub fn header(&self) -> &MessageHeader {
         match self {

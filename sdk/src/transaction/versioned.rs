@@ -80,9 +80,10 @@ impl VersionedTransaction {
     /// Signs a versioned message and if successful, returns a signed
     /// transaction.
     pub fn try_new<T: Signers>(
-        message: VersionedMessage,
+        message: impl Into<VersionedMessage>,
         keypairs: &T,
     ) -> std::result::Result<Self, SignerError> {
+        let message: VersionedMessage = message.into();
         let static_account_keys = message.static_account_keys();
         if static_account_keys.len() < message.header().num_required_signatures as usize {
             return Err(SignerError::InvalidInput("invalid message".to_string()));

@@ -12,9 +12,10 @@ use {
         account::{ReadableAccount, WritableAccount},
         clock::Clock,
         instruction::{Instruction, InstructionError},
+        message::Message,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signer},
-        transaction::{Transaction, TransactionError},
+        transaction::{TransactionError, VersionedTransaction},
     },
     std::{borrow::Cow, result::Result},
 };
@@ -44,12 +45,15 @@ async fn run_test_case(context: &mut ProgramTestContext, test_case: TestCase<'_>
         signers.push(extra_signer);
     }
 
-    let transaction = Transaction::new_signed_with_payer(
-        &[test_case.instruction],
-        Some(&payer.pubkey()),
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(
+            &[test_case.instruction],
+            Some(&payer.pubkey()),
+            &recent_blockhash,
+        ),
         &signers,
-        recent_blockhash,
-    );
+    )
+    .unwrap();
 
     let process_result = client.process_transaction(transaction).await;
 

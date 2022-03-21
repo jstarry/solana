@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use {
     solana_address_lookup_table_program::{
         id,
@@ -11,10 +12,11 @@ use {
         clock::Slot,
         hash::Hash,
         instruction::{Instruction, InstructionError},
+        message::Message,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         slot_hashes::SlotHashes,
-        transaction::{Transaction, TransactionError},
+        transaction::{TransactionError, VersionedTransaction},
     },
     std::borrow::Cow,
 };
@@ -39,12 +41,11 @@ pub async fn assert_ix_error(
         signers.push(authority);
     }
 
-    let transaction = Transaction::new_signed_with_payer(
-        &[ix],
-        Some(&payer.pubkey()),
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(&[ix], Some(&payer.pubkey()), &recent_blockhash),
         &signers,
-        recent_blockhash,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         client

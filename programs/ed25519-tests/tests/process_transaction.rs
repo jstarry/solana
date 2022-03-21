@@ -5,8 +5,9 @@ use {
     solana_sdk::{
         ed25519_instruction::new_ed25519_instruction,
         feature_set,
+        message::Message,
         signature::Signer,
-        transaction::{Transaction, TransactionError},
+        transaction::{TransactionError, VersionedTransaction},
     },
 };
 
@@ -22,12 +23,11 @@ async fn test_success() {
     let message_arr = b"hello";
     let instruction = new_ed25519_instruction(&privkey, message_arr);
 
-    let transaction = Transaction::new_signed_with_payer(
-        &[instruction],
-        Some(&payer.pubkey()),
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(&[instruction], Some(&payer.pubkey()), &recent_blockhash),
         &[payer],
-        recent_blockhash,
-    );
+    )
+    .unwrap();
 
     assert_matches!(client.process_transaction(transaction).await, Ok(()));
 }
@@ -46,12 +46,11 @@ async fn test_failure() {
 
     instruction.data[0] += 1;
 
-    let transaction = Transaction::new_signed_with_payer(
-        &[instruction],
-        Some(&payer.pubkey()),
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(&[instruction], Some(&payer.pubkey()), &recent_blockhash),
         &[payer],
-        recent_blockhash,
-    );
+    )
+    .unwrap();
 
     assert_matches!(
         client.process_transaction(transaction).await,
@@ -75,12 +74,11 @@ async fn test_success_call_builtin_program() {
     let message_arr = b"hello";
     let instruction = new_ed25519_instruction(&privkey, message_arr);
 
-    let transaction = Transaction::new_signed_with_payer(
-        &[instruction],
-        Some(&payer.pubkey()),
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(&[instruction], Some(&payer.pubkey()), &recent_blockhash),
         &[payer],
-        recent_blockhash,
-    );
+    )
+    .unwrap();
 
     assert_matches!(client.process_transaction(transaction).await, Ok(()));
 }

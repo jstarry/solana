@@ -22,7 +22,7 @@ use {
         commitment_config::CommitmentLevel,
         message::Message,
         signature::Signature,
-        transaction::{self, Transaction},
+        transaction::{self, VersionedTransaction},
     },
     tarpc::{
         client::{self, NewClient, RequestDispatch},
@@ -59,7 +59,7 @@ impl BanksClient {
     pub fn send_transaction_with_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.inner
             .send_transaction_with_context(ctx, transaction)
@@ -114,7 +114,7 @@ impl BanksClient {
     pub fn process_transaction_with_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<Option<transaction::Result<()>>, BanksClientError>> + '_ {
         self.inner
@@ -125,7 +125,7 @@ impl BanksClient {
     pub fn process_transaction_with_preflight_and_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
     {
@@ -154,7 +154,7 @@ impl BanksClient {
     /// blockhash expires.
     pub fn send_transaction(
         &mut self,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.send_transaction_with_context(context::current(), transaction)
     }
@@ -205,7 +205,7 @@ impl BanksClient {
     /// reached the given level of commitment.
     pub fn process_transaction_with_commitment(
         &mut self,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         let mut ctx = context::current();
@@ -223,7 +223,7 @@ impl BanksClient {
     /// after the transaction has been rejected or reached the given level of commitment.
     pub fn process_transaction_with_preflight_and_commitment(
         &mut self,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         let mut ctx = context::current();
@@ -259,7 +259,7 @@ impl BanksClient {
     /// after the transaction has been finalized or rejected.
     pub fn process_transaction_with_preflight(
         &mut self,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.process_transaction_with_preflight_and_commitment(
             transaction,
@@ -270,14 +270,14 @@ impl BanksClient {
     /// Send a transaction and return until the transaction has been finalized or rejected.
     pub fn process_transaction(
         &mut self,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.process_transaction_with_commitment(transaction, CommitmentLevel::default())
     }
 
     pub async fn process_transactions_with_commitment(
         &mut self,
-        transactions: Vec<Transaction>,
+        transactions: Vec<VersionedTransaction>,
         commitment: CommitmentLevel,
     ) -> Result<(), BanksClientError> {
         let mut clients: Vec<_> = transactions.iter().map(|_| self.clone()).collect();
@@ -294,7 +294,7 @@ impl BanksClient {
     /// Send transactions and return until the transaction has been finalized or rejected.
     pub fn process_transactions(
         &mut self,
-        transactions: Vec<Transaction>,
+        transactions: Vec<VersionedTransaction>,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.process_transactions_with_commitment(transactions, CommitmentLevel::default())
     }
@@ -476,7 +476,9 @@ mod tests {
             bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
             genesis_utils::create_genesis_config,
         },
-        solana_sdk::{message::Message, signature::Signer, system_instruction},
+        solana_sdk::{
+            message::Message, signature::Signer, system_instruction, transaction::Transaction,
+        },
         std::sync::{Arc, RwLock},
         tarpc::transport,
         tokio::{runtime::Runtime, time::sleep},
@@ -515,7 +517,10 @@ mod tests {
 
             let recent_blockhash = banks_client.get_latest_blockhash().await?;
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
-            banks_client.process_transaction(transaction).await.unwrap();
+            banks_client
+                .process_transaction(VersionedTransaction::from(transaction))
+                .await
+                .unwrap();
             assert_eq!(banks_client.get_balance(bob_pubkey).await?, 1);
             Ok(())
         })
@@ -551,7 +556,9 @@ mod tests {
                 .unwrap();
             let transaction = Transaction::new(&[&genesis.mint_keypair], message, recent_blockhash);
             let signature = transaction.signatures[0];
-            banks_client.send_transaction(transaction).await?;
+            banks_client
+                .send_transaction(VersionedTransaction::from(transaction))
+                .await?;
 
             let mut status = banks_client.get_transaction_status(signature).await?;
 

@@ -4,11 +4,12 @@ use {
         account_info::{next_account_info, AccountInfo},
         entrypoint::ProgramResult,
         instruction::{AccountMeta, Instruction},
+        message::Message,
         msg,
         program::{get_return_data, invoke, set_return_data},
         pubkey::Pubkey,
         signature::Signer,
-        transaction::Transaction,
+        transaction::VersionedTransaction,
     },
     std::str::from_utf8,
 };
@@ -66,18 +67,21 @@ async fn return_data() {
     );
 
     let mut context = program_test.start_with_context().await;
-    let instructions = vec![Instruction {
+    let instruction = Instruction {
         program_id: get_return_data_program_id,
         accounts: vec![AccountMeta::new_readonly(set_return_data_program_id, false)],
         data: vec![240, 159, 166, 150],
-    }];
+    };
 
-    let transaction = Transaction::new_signed_with_payer(
-        &instructions,
-        Some(&context.payer.pubkey()),
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(
+            &[instruction],
+            Some(&context.payer.pubkey()),
+            &context.last_blockhash,
+        ),
         &[&context.payer],
-        context.last_blockhash,
-    );
+    )
+    .unwrap();
 
     context
         .banks_client

@@ -6,12 +6,13 @@ use {
         entrypoint::ProgramResult,
         hash::Hash,
         instruction::Instruction,
+        message::Message,
         msg,
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
         system_instruction,
-        transaction::Transaction,
+        transaction::VersionedTransaction,
     },
 };
 
@@ -103,14 +104,16 @@ async fn run_fuzz_instructions(
         signer_keypairs.push(keypair);
     }
     // Process transaction on test network
-    let mut transaction = Transaction::new_with_payer(&instructions, Some(&payer.pubkey()));
     let signers = [payer]
         .iter()
         .copied()
         .chain(signer_keypairs.iter())
         .collect::<Vec<&Keypair>>();
-    transaction.partial_sign(&signers, last_blockhash);
-
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(&instructions, Some(&payer.pubkey()), &last_blockhash),
+        &signers,
+    )
+    .unwrap();
     banks_client.process_transaction(transaction).await.unwrap();
     for keypair in signer_keypairs {
         let account = banks_client

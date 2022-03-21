@@ -9,9 +9,10 @@ use {
     solana_sdk::{
         clock::Clock,
         instruction::InstructionError,
+        message::Message,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        transaction::Transaction,
+        transaction::VersionedTransaction,
     },
 };
 
@@ -34,16 +35,19 @@ async fn test_close_lookup_table() {
     let client = &mut context.banks_client;
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
-    let transaction = Transaction::new_signed_with_payer(
-        &[close_lookup_table(
-            lookup_table_address,
-            authority_keypair.pubkey(),
-            context.payer.pubkey(),
-        )],
-        Some(&payer.pubkey()),
+    let transaction = VersionedTransaction::try_new(
+        Message::new_with_blockhash(
+            &[close_lookup_table(
+                lookup_table_address,
+                authority_keypair.pubkey(),
+                context.payer.pubkey(),
+            )],
+            Some(&payer.pubkey()),
+            &recent_blockhash,
+        ),
         &[payer, &authority_keypair],
-        recent_blockhash,
-    );
+    )
+    .unwrap();
 
     assert_matches!(client.process_transaction(transaction).await, Ok(()));
     assert!(client

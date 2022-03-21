@@ -11,7 +11,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, TransactionError, VersionedTransaction},
     },
 };
 
@@ -45,7 +45,7 @@ pub struct BanksTransactionResultWithSimulation {
 
 #[tarpc::service]
 pub trait Banks {
-    async fn send_transaction_with_context(transaction: Transaction);
+    async fn send_transaction_with_context(transaction: VersionedTransaction);
     #[deprecated(
         since = "1.9.0",
         note = "Please use `get_fee_for_message_with_commitment_and_context` instead"
@@ -58,11 +58,11 @@ pub trait Banks {
     async fn get_slot_with_context(commitment: CommitmentLevel) -> Slot;
     async fn get_block_height_with_context(commitment: CommitmentLevel) -> u64;
     async fn process_transaction_with_preflight_and_commitment_and_context(
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithSimulation;
     async fn process_transaction_with_commitment_and_context(
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>>;
     async fn get_account_with_commitment_and_context(

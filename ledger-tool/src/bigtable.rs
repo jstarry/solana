@@ -185,7 +185,7 @@ async fn confirm(
     if verbose {
         match bigtable.get_confirmed_transaction(signature).await {
             Ok(Some(confirmed_tx)) => {
-                let decoded_tx = confirmed_tx.get_transaction();
+                let decoded_tx = confirmed_tx.get_transaction().into_owned();
                 let encoded_tx_with_meta = confirmed_tx
                     .tx_with_meta
                     .encode(UiTransactionEncoding::Json, Some(0))

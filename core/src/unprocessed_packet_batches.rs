@@ -16,7 +16,7 @@ use {
 #[derive(Debug, Default)]
 pub struct DeserializedPacket {
     #[allow(dead_code)]
-    versioned_transaction: VersionedTransaction,
+    versioned_transaction: VersionedTransaction<'static>,
 
     #[allow(dead_code)]
     message_hash: Hash,

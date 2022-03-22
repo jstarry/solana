@@ -4628,7 +4628,7 @@ pub mod tests {
 
             let bank = self.working_bank();
             let recent_blockhash = bank.confirmed_last_blockhash();
-            let legacy_message = VersionedMessage::Legacy(Message {
+            let legacy_message = VersionedMessage::Legacy(Cow::Owned(Message {
                 header: MessageHeader {
                     num_required_signatures: 1,
                     num_readonly_signed_accounts: 0,
@@ -4637,7 +4637,7 @@ pub mod tests {
                 recent_blockhash,
                 account_keys: vec![self.mint_keypair.pubkey()],
                 instructions: vec![],
-            });
+            }));
             let version_0_message = VersionedMessage::V0(v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 1,
@@ -7860,7 +7860,7 @@ pub mod tests {
     #[test]
     fn test_sanitize_unsupported_transaction_version() {
         let versioned_tx = VersionedTransaction {
-            signatures: vec![Signature::default()],
+            signatures: Cow::Owned(vec![Signature::default()]),
             message: VersionedMessage::V0(v0::Message {
                 header: MessageHeader {
                     num_required_signatures: 1,

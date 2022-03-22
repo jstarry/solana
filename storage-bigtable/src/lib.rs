@@ -167,7 +167,7 @@ impl From<StoredConfirmedBlock> for ConfirmedBlock {
 
 #[derive(Serialize, Deserialize)]
 struct StoredConfirmedBlockTransaction {
-    transaction: VersionedTransaction,
+    transaction: VersionedTransaction<'static>,
     meta: Option<StoredConfirmedBlockTransactionStatusMeta>,
 }
 

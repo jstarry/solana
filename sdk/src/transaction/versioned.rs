@@ -14,7 +14,7 @@ use {
         transaction::{Result, Transaction, TransactionError},
     },
     serde::Serialize,
-    std::cmp::Ordering,
+    std::{borrow::Cow, cmp::Ordering},
 };
 
 /// Type that serializes to the string "legacy"
@@ -38,15 +38,15 @@ impl TransactionVersion {
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 /// An atomic transaction
 #[derive(Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, AbiExample)]
-pub struct VersionedTransaction {
+pub struct VersionedTransaction<'a> {
     /// List of signatures
-    #[serde(with = "short_vec")]
-    pub signatures: Vec<Signature>,
+    #[serde(with = "short_vec::cow")]
+    pub signatures: Cow<'a, [Signature]>,
     /// Message to sign.
-    pub message: VersionedMessage,
+    pub message: VersionedMessage<'a>,
 }
 
-impl Sanitize for VersionedTransaction {
+impl Sanitize for VersionedTransaction<'_> {
     fn sanitize(&self) -> std::result::Result<(), SanitizeError> {
         self.message.sanitize()?;
 
@@ -67,20 +67,36 @@ impl Sanitize for VersionedTransaction {
     }
 }
 
-impl From<Transaction> for VersionedTransaction {
+impl From<Transaction> for VersionedTransaction<'_> {
     fn from(transaction: Transaction) -> Self {
         Self {
-            signatures: transaction.signatures,
-            message: VersionedMessage::Legacy(transaction.message),
+            signatures: Cow::Owned(transaction.signatures),
+            message: VersionedMessage::Legacy(Cow::Owned(transaction.message)),
         }
     }
 }
 
-impl VersionedTransaction {
+impl<'a> From<&'a Transaction> for VersionedTransaction<'a> {
+    fn from(transaction: &'a Transaction) -> Self {
+        Self {
+            signatures: Cow::Borrowed(&transaction.signatures),
+            message: VersionedMessage::Legacy(Cow::Borrowed(&transaction.message)),
+        }
+    }
+}
+
+impl<'a> VersionedTransaction<'a> {
+    pub fn into_owned(self) -> VersionedTransaction<'static> {
+        VersionedTransaction {
+            signatures: Cow::Owned(self.signatures.into_owned()),
+            message: self.message.into_owned(),
+        }
+    }
+
     /// Signs a versioned message and if successful, returns a signed
     /// transaction.
     pub fn try_new<T: Signers>(
-        message: VersionedMessage,
+        message: VersionedMessage<'a>,
         keypairs: &T,
     ) -> std::result::Result<Self, SignerError> {
         let static_account_keys = message.static_account_keys();
@@ -103,7 +119,7 @@ impl VersionedTransaction {
         }
 
         let message_data = message.serialize();
-        let signatures = keypairs.try_sign_message(&message_data)?;
+        let signatures = Cow::Owned(keypairs.try_sign_message(&message_data)?);
 
         Ok(Self {
             signatures,
@@ -123,8 +139,8 @@ impl VersionedTransaction {
     pub fn into_legacy_transaction(self) -> Option<Transaction> {
         match self.message {
             VersionedMessage::Legacy(message) => Some(Transaction {
-                signatures: self.signatures,
-                message,
+                signatures: self.signatures.into_owned(),
+                message: message.into_owned(),
             }),
             _ => None,
         }

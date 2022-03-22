@@ -1,4 +1,5 @@
 #![cfg(feature = "full")]
+
 use {
     crate::{
         hash::Hash,
@@ -13,7 +14,7 @@ use {
         solana_sdk::feature_set,
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
-    std::sync::Arc,
+    std::{borrow::Cow, sync::Arc},
 };
 
 /// Maximum number of accounts that a transaction may lock.
@@ -88,9 +89,9 @@ impl SanitizedTransaction {
             MessageHash::Precomputed(hash) => hash,
         };
 
-        let signatures = tx.signatures;
+        let signatures = tx.signatures.into_owned();
         let message = match tx.message {
-            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
+            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message.into_owned()),
             VersionedMessage::V0(message) => {
                 let loaded_addresses =
                     address_loader.load_addresses(&message.address_table_lookups)?;
@@ -162,15 +163,14 @@ impl SanitizedTransaction {
     /// Convert this sanitized transaction into a versioned transaction for
     /// recording in the ledger.
     pub fn to_versioned_transaction(&self) -> VersionedTransaction {
-        let signatures = self.signatures.clone();
         match &self.message {
             SanitizedMessage::V0(sanitized_msg) => VersionedTransaction {
-                signatures,
+                signatures: Cow::from(&self.signatures),
                 message: VersionedMessage::V0(v0::Message::clone(&sanitized_msg.message)),
             },
             SanitizedMessage::Legacy(message) => VersionedTransaction {
-                signatures,
-                message: VersionedMessage::Legacy(message.clone()),
+                signatures: Cow::from(&self.signatures),
+                message: VersionedMessage::Legacy(Cow::Borrowed(message)),
             },
         }
     }

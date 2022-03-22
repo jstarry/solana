@@ -385,7 +385,7 @@ pub enum CliCommand {
         seed: String,
         program_id: Pubkey,
     },
-    DecodeTransaction(VersionedTransaction),
+    DecodeTransaction(VersionedTransaction<'static>),
     ResolveSigner(Option<String>),
     ShowAccount {
         pubkey: Pubkey,

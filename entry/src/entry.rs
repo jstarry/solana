@@ -129,7 +129,7 @@ pub struct Entry {
     /// An unordered list of transactions that were observed before the Entry ID was
     /// generated. They may have been observed before a previous Entry ID but were
     /// pushed back into this list to ensure deterministic interpretation of the ledger.
-    pub transactions: Vec<VersionedTransaction>,
+    pub transactions: Vec<VersionedTransaction<'static>>,
 }
 
 /// Typed entry to distinguish between transaction and tick entries
@@ -912,7 +912,7 @@ pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transacti
 pub fn next_versioned_entry(
     prev_hash: &Hash,
     num_hashes: u64,
-    transactions: Vec<VersionedTransaction>,
+    transactions: Vec<VersionedTransaction<'static>>,
 ) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
@@ -936,6 +936,7 @@ mod tests {
                 Result, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
             },
         },
+        std::borrow::Cow,
     };
 
     #[test]
@@ -1093,18 +1094,17 @@ mod tests {
 
         // Clear signature of the first transaction, see that it does not verify
         let orig_sig = e0[0].transactions[0].signatures[0];
-        e0[0].transactions[0].signatures[0] = Signature::default();
+        e0[0].transactions[0].signatures.to_mut()[0] = Signature::default();
         assert!(!e0.verify(&zero));
 
         // restore original signature
-        e0[0].transactions[0].signatures[0] = orig_sig;
+        e0[0].transactions[0].signatures.to_mut()[0] = orig_sig;
         assert!(e0.verify(&zero));
 
         // Resize signatures and see verification fails.
         let len = e0[0].transactions[0].signatures.len();
-        e0[0].transactions[0]
-            .signatures
-            .resize(len - 1, Signature::default());
+        e0[0].transactions[0].signatures =
+            Cow::from(e0[0].transactions[0].signatures[0..len - 1].to_vec());
         assert!(!e0.verify(&zero));
 
         // Pass an entry with no transactions

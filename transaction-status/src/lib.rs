@@ -613,7 +613,7 @@ pub enum TransactionWithStatusMeta {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VersionedTransactionWithStatusMeta {
-    pub transaction: VersionedTransaction,
+    pub transaction: VersionedTransaction<'static>,
     pub meta: TransactionStatusMeta,
 }
 
@@ -772,7 +772,7 @@ pub enum EncodedTransaction {
     Json(UiTransaction),
 }
 
-impl EncodableWithMeta for VersionedTransaction {
+impl EncodableWithMeta for VersionedTransaction<'_> {
     type Encoded = EncodedTransaction;
     fn encode_with_meta(
         &self,
@@ -842,7 +842,7 @@ impl Encodable for Transaction {
 }
 
 impl EncodedTransaction {
-    pub fn decode(&self) -> Option<VersionedTransaction> {
+    pub fn decode(&self) -> Option<VersionedTransaction<'static>> {
         let (blob, encoding) = match self {
             Self::Json(_) => return None,
             Self::LegacyBinary(blob) => (blob, TransactionBinaryEncoding::Base58),

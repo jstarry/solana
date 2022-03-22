@@ -2448,7 +2448,7 @@ impl Blockstore {
     pub fn map_transactions_to_statuses(
         &self,
         slot: Slot,
-        iterator: impl Iterator<Item = VersionedTransaction>,
+        iterator: impl Iterator<Item = VersionedTransaction<'static>>,
     ) -> Result<Vec<VersionedTransactionWithStatusMeta>> {
         iterator
             .map(|transaction| {
@@ -2761,7 +2761,7 @@ impl Blockstore {
         &self,
         slot: Slot,
         signature: Signature,
-    ) -> Result<Option<VersionedTransaction>> {
+    ) -> Result<Option<VersionedTransaction<'static>>> {
         let slot_entries = self.get_slot_entries(slot, 0)?;
         Ok(slot_entries
             .iter()
@@ -2882,13 +2882,7 @@ impl Blockstore {
         let mut slot_signatures: Vec<_> = block
             .transactions
             .into_iter()
-            .filter_map(|transaction_with_meta| {
-                transaction_with_meta
-                    .transaction
-                    .signatures
-                    .into_iter()
-                    .next()
-            })
+            .filter_map(|tx_with_meta| tx_with_meta.transaction.signatures.get(0).cloned())
             .collect();
 
         // Reverse sort signatures as a way to entire a stable ordering within a slot, as

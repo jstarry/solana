@@ -1076,7 +1076,7 @@ impl BankingStage {
                     .enumerate()
                     .filter_map(|(i, (execution_result, tx))| {
                         if execution_result.was_executed() {
-                            Some((tx.to_versioned_transaction(), i))
+                            Some((tx.to_versioned_transaction().into_owned(), i))
                         } else {
                             None
                         }

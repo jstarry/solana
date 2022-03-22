@@ -90,7 +90,7 @@ impl CompletedDataSetsService {
             .flat_map(|e| {
                 e.transactions
                     .into_iter()
-                    .filter_map(|mut t| t.signatures.drain(..).next())
+                    .filter_map(|t| t.signatures.get(0).cloned())
             })
             .collect::<Vec<Signature>>()
     }

@@ -230,6 +230,26 @@ where
     deserializer.deserialize_tuple(std::usize::MAX, visitor)
 }
 
+pub mod cow {
+    pub use super::serialize;
+    use {super::*, std::borrow::Cow};
+
+    /// If you don't want to use the ShortVec newtype, you can do ShortVec
+    /// deserialization on an ordinary vector with the following field annotation:
+    ///
+    /// #[serde(with = "short_vec::cow")]
+    ///
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Cow<'static, [T]>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de> + Clone,
+    {
+        let visitor = ShortVecVisitor { _t: PhantomData };
+        let tuple: Vec<T> = deserializer.deserialize_tuple(std::usize::MAX, visitor)?;
+        Ok(Cow::Owned(tuple))
+    }
+}
+
 pub struct ShortVec<T>(pub Vec<T>);
 
 impl<T: Serialize> Serialize for ShortVec<T> {

@@ -705,7 +705,7 @@ mod test {
         Keypair::from_bytes(&keypair.to_bytes()).unwrap()
     }
 
-    fn new_test_v0_transaction() -> VersionedTransaction {
+    fn new_test_v0_transaction() -> VersionedTransaction<'static> {
         let keypair = new_test_keypair();
         let account_key = Pubkey::new_from_array([1u8; 32]);
         let address_table_key = Pubkey::new_from_array([2u8; 32]);

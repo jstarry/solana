@@ -12,7 +12,7 @@ use {
         ser::{SerializeTuple, Serializer},
         Deserialize, Serialize,
     },
-    std::fmt,
+    std::{borrow::Cow, fmt},
 };
 
 pub mod v0;
@@ -30,12 +30,19 @@ pub const MESSAGE_VERSION_PREFIX: u8 = 0x80;
 /// format.
 #[frozen_abi(digest = "G4EAiqmGgBprgf5ePYemLJcoFfx4R7rhC1Weo2FVJ7fn")]
 #[derive(Debug, PartialEq, Eq, Clone, AbiEnumVisitor, AbiExample)]
-pub enum VersionedMessage {
-    Legacy(LegacyMessage),
+pub enum VersionedMessage<'a> {
+    Legacy(Cow<'a, LegacyMessage>),
     V0(v0::Message),
 }
 
-impl VersionedMessage {
+impl VersionedMessage<'_> {
+    pub fn into_owned(self) -> VersionedMessage<'static> {
+        match self {
+            Self::Legacy(message) => VersionedMessage::Legacy(Cow::Owned(message.into_owned())),
+            Self::V0(message) => VersionedMessage::V0(message),
+        }
+    }
+
     pub fn header(&self) -> &MessageHeader {
         match self {
             Self::Legacy(message) => &message.header,
@@ -108,7 +115,7 @@ impl VersionedMessage {
 
     pub fn set_recent_blockhash(&mut self, recent_blockhash: Hash) {
         match self {
-            Self::Legacy(message) => message.recent_blockhash = recent_blockhash,
+            Self::Legacy(message) => message.to_mut().recent_blockhash = recent_blockhash,
             Self::V0(message) => message.recent_blockhash = recent_blockhash,
         }
     }
@@ -142,13 +149,13 @@ impl VersionedMessage {
     }
 }
 
-impl Default for VersionedMessage {
+impl Default for VersionedMessage<'_> {
     fn default() -> Self {
-        Self::Legacy(LegacyMessage::default())
+        Self::Legacy(Cow::Owned(LegacyMessage::default()))
     }
 }
 
-impl Sanitize for VersionedMessage {
+impl Sanitize for VersionedMessage<'_> {
     fn sanitize(&self) -> Result<(), SanitizeError> {
         match self {
             Self::Legacy(message) => message.sanitize(),
@@ -157,7 +164,7 @@ impl Sanitize for VersionedMessage {
     }
 }
 
-impl Serialize for VersionedMessage {
+impl Serialize for VersionedMessage<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -210,21 +217,21 @@ impl<'de> Deserialize<'de> for MessagePrefix {
     }
 }
 
-impl<'de> Deserialize<'de> for VersionedMessage {
-    fn deserialize<D>(deserializer: D) -> Result<VersionedMessage, D::Error>
+impl<'de> Deserialize<'de> for VersionedMessage<'_> {
+    fn deserialize<D>(deserializer: D) -> Result<VersionedMessage<'static>, D::Error>
     where
         D: Deserializer<'de>,
     {
         struct MessageVisitor;
 
         impl<'de> Visitor<'de> for MessageVisitor {
-            type Value = VersionedMessage;
+            type Value = VersionedMessage<'static>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str("message bytes")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<VersionedMessage, A::Error>
+            fn visit_seq<A>(self, mut seq: A) -> Result<VersionedMessage<'static>, A::Error>
             where
                 A: SeqAccess<'de>,
             {
@@ -252,7 +259,7 @@ impl<'de> Deserialize<'de> for VersionedMessage {
                                 de::Error::invalid_length(1, &self)
                             })?;
 
-                        Ok(VersionedMessage::Legacy(LegacyMessage {
+                        Ok(VersionedMessage::Legacy(Cow::Owned(LegacyMessage {
                             header: MessageHeader {
                                 num_required_signatures,
                                 num_readonly_signed_accounts: message.num_readonly_signed_accounts,
@@ -262,7 +269,7 @@ impl<'de> Deserialize<'de> for VersionedMessage {
                             account_keys: message.account_keys,
                             recent_blockhash: message.recent_blockhash,
                             instructions: message.instructions,
-                        }))
+                        })))
                     }
                     MessagePrefix::Versioned(version) => {
                         if version == 0 {
@@ -324,7 +331,8 @@ mod tests {
         message.recent_blockhash = Hash::new_unique();
 
         let bytes1 = bincode::serialize(&message).unwrap();
-        let bytes2 = bincode::serialize(&VersionedMessage::Legacy(message.clone())).unwrap();
+        let bytes2 =
+            bincode::serialize(&VersionedMessage::Legacy(Cow::Borrowed(&message))).unwrap();
 
         assert_eq!(bytes1, bytes2);
 
@@ -333,7 +341,7 @@ mod tests {
 
         if let VersionedMessage::Legacy(message2) = message2 {
             assert_eq!(message, message1);
-            assert_eq!(message1, message2);
+            assert_eq!(&message1, message2.as_ref());
         } else {
             panic!("should deserialize to legacy message");
         }

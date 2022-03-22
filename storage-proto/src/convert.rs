@@ -221,7 +221,7 @@ impl From<Transaction> for generated::Transaction {
     }
 }
 
-impl From<VersionedTransaction> for generated::Transaction {
+impl From<VersionedTransaction<'_>> for generated::Transaction {
     fn from(value: VersionedTransaction) -> Self {
         Self {
             signatures: value
@@ -234,7 +234,7 @@ impl From<VersionedTransaction> for generated::Transaction {
     }
 }
 
-impl From<generated::Transaction> for VersionedTransaction {
+impl From<generated::Transaction> for VersionedTransaction<'_> {
     fn from(value: generated::Transaction) -> Self {
         Self {
             signatures: value
@@ -268,10 +268,10 @@ impl From<LegacyMessage> for generated::Message {
     }
 }
 
-impl From<VersionedMessage> for generated::Message {
+impl From<VersionedMessage<'_>> for generated::Message {
     fn from(message: VersionedMessage) -> Self {
         match message {
-            VersionedMessage::Legacy(message) => Self::from(message),
+            VersionedMessage::Legacy(message) => Self::from(message.into_owned()),
             VersionedMessage::V0(message) => Self {
                 header: Some(message.header.into()),
                 account_keys: message
@@ -296,7 +296,7 @@ impl From<VersionedMessage> for generated::Message {
     }
 }
 
-impl From<generated::Message> for VersionedMessage {
+impl From<generated::Message> for VersionedMessage<'_> {
     fn from(value: generated::Message) -> Self {
         let header = value.header.expect("header is required").into();
         let account_keys = value
@@ -313,12 +313,12 @@ impl From<generated::Message> for VersionedMessage {
             .collect();
 
         if !value.versioned {
-            Self::Legacy(LegacyMessage {
+            Self::Legacy(Cow::Owned(LegacyMessage {
                 header,
                 account_keys,
                 recent_blockhash,
                 instructions,
-            })
+            }))
         } else {
             Self::V0(v0::Message {
                 header,

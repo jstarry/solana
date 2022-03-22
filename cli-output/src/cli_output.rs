@@ -2221,7 +2221,7 @@ impl CliSignatureVerificationStatus {
     pub fn verify_transaction(tx: &VersionedTransaction) -> Vec<Self> {
         tx.verify_with_results()
             .iter()
-            .zip(&tx.signatures)
+            .zip(tx.signatures.as_ref())
             .map(|(stat, sig)| match stat {
                 true => CliSignatureVerificationStatus::Pass,
                 false if sig == &Signature::default() => CliSignatureVerificationStatus::None,
@@ -2354,7 +2354,7 @@ pub struct CliTransaction {
     #[serde(skip_serializing)]
     pub slot: Option<Slot>,
     #[serde(skip_serializing)]
-    pub decoded_transaction: VersionedTransaction,
+    pub decoded_transaction: VersionedTransaction<'static>,
     #[serde(skip_serializing)]
     pub prefix: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]

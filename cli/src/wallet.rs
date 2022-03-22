@@ -614,7 +614,7 @@ pub fn process_confirm(
 #[allow(clippy::unnecessary_wraps)]
 pub fn process_decode_transaction(
     config: &CliConfig,
-    transaction: &VersionedTransaction,
+    transaction: &VersionedTransaction<'static>,
 ) -> ProcessResult {
     let sigverify_status = CliSignatureVerificationStatus::verify_transaction(transaction);
     let decode_transaction = CliTransaction {

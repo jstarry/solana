@@ -20,7 +20,7 @@
     "access": "public"
   },
   "browser": {
-    "./lib/index.cjs.js": "./lib/index.browser.esm.js",
+    "./lib/index.cjs.js": "./lib/index.browser.cjs.js",
     "./lib/index.esm.js": "./lib/index.browser.esm.js"
   },
   "main": "lib/index.cjs.js",
@@ -48,7 +48,8 @@
     "type:gen": "./scripts/typegen.sh",
     "lint": "set -ex; npm run pretty; eslint . --ext .js,.ts",
     "lint:fix": "npm run pretty:fix && eslint . --fix --ext .js,.ts",
-    "ok": "run-s lint test doc",
+    "type:check": "tsc -p tsconfig.json --noEmit",
+    "ok": "run-s lint test doc type:check",
     "pretty": "prettier --check '{,{src,test}/**/}*.{j,t}s'",
     "pretty:fix": "prettier --write '{,{src,test}/**/}*.{j,t}s'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
@@ -60,9 +61,9 @@
   "dependencies": {
     "@babel/runtime": "^7.12.5",
     "@ethersproject/sha2": "^5.5.0",
-    "@solana/buffer-layout": "^3.0.0",
+    "@solana/buffer-layout": "^4.0.0",
     "bn.js": "^5.0.0",
-    "borsh": "^0.4.0",
+    "borsh": "^0.7.0",
     "bs58": "^4.0.1",
     "buffer": "6.0.1",
     "cross-fetch": "^3.1.4",
@@ -123,7 +124,7 @@
     "prettier": "^2.3.0",
     "puppeteer": "^12.0.0",
     "rimraf": "3.0.2",
-    "rollup": "2.60.2",
+    "rollup": "2.70.1",
     "rollup-plugin-dts": "^4.0.0",
     "rollup-plugin-node-polyfills": "^0.2.1",
     "rollup-plugin-terser": "^7.0.2",

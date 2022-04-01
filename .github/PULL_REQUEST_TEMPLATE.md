@@ -8,7 +8,8 @@
 
 Fixes #
 
-<!-- OPTIONAL -->
-<!-- Any changes that affect the behavior of a feature activation MUST add the feature-gate label and link to an issue -->
-<!-- Use the feature gate tracker issue template: https://github.com/solana-labs/solana/issues/new?template=feature-gate.yml -->
-<!-- Feature Gate Tracking Issue #<ISSUE NUMBER> -->
+<!-- Feature Gate Change Requirements -->
+<!-- 1. Add the feature-gate label -->
+<!-- 2. Create a feature gate tracking issue: https://github.com/solana-labs/solana/issues/new?template=feature-gate.yml -->
+<!-- 3. Link to the issue below -->
+<!-- Feature Gate Issue: # -->

@@ -18,7 +18,7 @@ solana-net-utils = { path = "../net-utils", version = "=1.9.17" }
 solana-version = { path = "../version", version = "=1.9.17" }
 =======
 crossbeam-channel = "0.5"
-clap = { version = "3.1.8", features = ["cargo"] }
+clap = { version = "3.1.10", features = ["cargo"] }
 solana-net-utils = { path = "../net-utils", version = "=1.11.0" }
 solana-streamer = { path = "../streamer", version = "=1.11.0" }
 solana-version = { path = "../version", version = "=1.11.0" }

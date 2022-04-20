@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 <<<<<<< HEAD
+<<<<<<< HEAD
 clap = "3.0.0-beta.2"
 serde = "1.0.130"
 serde_json = "1.0.72"
@@ -22,6 +23,9 @@ solana_rbpf = "=0.2.24"
 time = "0.3.5"
 =======
 clap = { version = "3.1.8", features = ["cargo"] }
+=======
+clap = { version = "3.1.10", features = ["cargo"] }
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 serde = "1.0.136"
 serde_json = "1.0.79"
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.0" }

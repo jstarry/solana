@@ -21,8 +21,12 @@ rand = "0.7.0"
 =======
 =======
 rand = "0.8.5"
+<<<<<<< HEAD
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
 clap = { version = "3.1.8", features = ["cargo"] }
+=======
+clap = { version = "3.1.10", features = ["cargo"] }
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 solana-logger = { path = "../logger", version = "=1.11.0" }

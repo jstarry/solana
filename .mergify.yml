@@ -12,16 +12,6 @@ pull_request_rules:
     actions:
       merge:
         method: squash
-  - name: remove automerge label on CI failure
-    conditions:
-      - label=automerge
-      - "#status-failure!=0"
-    actions:
-      label:
-        remove:
-          - automerge
-      comment:
-        message: automerge label removed due to a CI failure
   - name: remove outdated reviews
     conditions:
       - base=master

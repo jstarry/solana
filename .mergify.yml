@@ -18,7 +18,7 @@ pull_request_rules:
     actions:
       dismiss_reviews:
         changes_requested: true
-  - name: v1.9 feature-gate backportb
+  - name: v1.9 feature-gate backport
     conditions:
       - label=v1.9
       - label=feature-gate

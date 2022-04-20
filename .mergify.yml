@@ -9,20 +9,6 @@ pull_request_rules:
       - and:
         - label=automerge
         - label!=no-automerge
-        - or:
-          # only require travis success if docs files changed
-          - status-success=Travis CI - Pull Request
-          - -files~=^docs/
-        - or:
-          # only require explorer checks if explorer files changed
-          - status-success=check-explorer
-          - -files~=^explorer/
-        - or:
-          - and:
-            - status-success=all-web3-checks
-            - status-success=web3-commit-lint
-          # only require web3 checks if web3.js files changed
-          - -files~=^web3.js/
     actions:
       merge:
         method: squash

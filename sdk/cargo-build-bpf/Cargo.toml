@@ -15,8 +15,12 @@ bzip2 = "0.4.3"
 clap = "2.33.3"
 =======
 cargo_metadata = "0.14.2"
+<<<<<<< HEAD
 clap = { version = "3.1.8", features = ["cargo", "env"] }
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+clap = { version = "3.1.10", features = ["cargo", "env"] }
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 regex = "1.5.4"
 cargo_metadata = "0.14.1"
 solana-sdk = { path = "..", version = "=1.9.17" }

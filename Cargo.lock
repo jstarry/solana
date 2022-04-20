@@ -712,6 +712,7 @@ dependencies = [
 [[package]]
 name = "clap"
 <<<<<<< HEAD
+<<<<<<< HEAD
 version = "2.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
@@ -733,13 +734,18 @@ version = "3.1.8"
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "feff3878564edb93745d58cf63e17b63f24142506e7a20c87a5521ed7bfb1d63"
+=======
+version = "3.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3124f3f75ce09e22d1410043e1e24f2ecc44fad3afe4f08408f1f7663d68da2b"
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
+ "clap_lex",
  "indexmap",
  "lazy_static",
- "os_str_bytes",
  "strsim",
  "termcolor",
 <<<<<<< HEAD
@@ -764,12 +770,21 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
 dependencies = [
  "bitflags",
+=======
+name = "clap_lex"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "189ddd3b5d32a70b35e7686054371742a937b0d99128e76dde6340210e966669"
+dependencies = [
+ "os_str_bytes",
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 ]
 
 [[package]]
@@ -2929,10 +2944,14 @@ dependencies = [
 name = "os_str_bytes"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "addaa943333a514159c80c97ff4a93306530d965d27e139188283cd13e06a799"
 dependencies = [
  "memchr",
 ]
+=======
+checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 
 [[package]]
 name = "ouroboros"

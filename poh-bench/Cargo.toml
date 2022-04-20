@@ -11,10 +11,14 @@ publish = false
 
 [dependencies]
 <<<<<<< HEAD
+<<<<<<< HEAD
 clap = "2.33.1"
 =======
 clap = { version = "3.1.8", features = ["cargo"] }
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+clap = { version = "3.1.10", features = ["cargo"] }
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 log = "0.4.14"
 <<<<<<< HEAD
 rand = "0.7.0"

@@ -10,9 +10,13 @@ publish = false
 
 [dependencies]
 <<<<<<< HEAD
+<<<<<<< HEAD
 clap = "2.33.1"
 =======
 clap = "3.1.8"
+=======
+clap = "3.1.10"
+>>>>>>> e39c48ccd (chore: bump clap from 3.1.8 to 3.1.10 (#211))
 crossbeam-channel = "0.5"
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 log = "0.4.14"

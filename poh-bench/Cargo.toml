@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 <<<<<<< HEAD
+<<<<<<< HEAD
 clap = "2.33.1"
 =======
 clap = { version = "3.1.8", features = ["cargo"] }
@@ -26,6 +27,10 @@ solana-measure = { path = "../measure", version = "=1.9.17" }
 solana-version = { path = "../version", version = "=1.9.17" }
 solana-perf = { path = "../perf", version = "=1.9.17" }
 =======
+=======
+clap = { version = "3.1.8", features = ["cargo"] }
+log = "0.4.14"
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 rand = "0.8.5"
 rayon = "1.5.2"
 solana-entry = { path = "../entry", version = "=1.11.0" }

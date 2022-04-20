@@ -13,6 +13,7 @@ clap = "2.33.1"
 crossbeam-channel = "0.5"
 log = "0.4.14"
 <<<<<<< HEAD
+<<<<<<< HEAD
 rand = "0.7.0"
 rayon = "1.5.1"
 solana-core = { path = "../core", version = "=1.9.17" }
@@ -27,6 +28,8 @@ solana-streamer = { path = "../streamer", version = "=1.9.17" }
 solana-sdk = { path = "../sdk", version = "=1.9.17" }
 solana-version = { path = "../version", version = "=1.9.17" }
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 rand = "0.8.5"
 rayon = "1.5.2"
 solana-core = { path = "../core", version = "=1.11.0" }

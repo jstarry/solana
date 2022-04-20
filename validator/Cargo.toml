@@ -24,6 +24,7 @@ jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils= "18.0.0"
 log = "0.4.14"
 <<<<<<< HEAD
+<<<<<<< HEAD
 num_cpus = "1.13.0"
 rand = "0.7.0"
 solana-clap-utils = { path = "../clap-utils", version = "=1.9.17" }
@@ -51,6 +52,8 @@ solana-test-validator = { path = "../test-validator", version = "=1.9.17" }
 solana-version = { path = "../version", version = "=1.9.17" }
 solana-vote-program = { path = "../programs/vote", version = "=1.9.17" }
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 num_cpus = "1.13.1"
 rand = "0.8.5"
 serde = "1.0.136"

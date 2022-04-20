@@ -9,7 +9,12 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
+<<<<<<< HEAD
 clap = "2.33.1"
+=======
+clap = "3.1.8"
+crossbeam-channel = "0.5"
+>>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 log = "0.4.14"
 rayon = "1.5.1"
 serde_json = "1.0.72"

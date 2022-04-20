@@ -10,12 +10,21 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
+<<<<<<< HEAD
 byte-unit = "4.0.13"
 clap = "2.33.1"
 serde = "1.0.130"
 serde_json = "1.0.72"
 solana-logger = { path = "../logger", version = "=1.9.17" }
 solana-version = { path = "../version", version = "=1.9.17" }
+=======
+byte-unit = "4.0.14"
+clap = { version = "3.1.8", features = ["cargo"] }
+serde = "1.0.136"
+serde_json = "1.0.79"
+solana-logger = { path = "../logger", version = "=1.11.0" }
+solana-version = { path = "../version", version = "=1.11.0" }
+>>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 
 [[bin]]
 name = "solana-log-analyzer"

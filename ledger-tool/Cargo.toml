@@ -11,8 +11,13 @@ documentation = "https://docs.rs/solana-ledger-tool"
 
 [dependencies]
 bs58 = "0.4.0"
+<<<<<<< HEAD
 bytecount = "0.6.2"
 clap = "2.33.1"
+=======
+clap = "3.1.8"
+crossbeam-channel = "0.5"
+>>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 csv = "1.1.6"
 dashmap = "4.0.2"
 histogram = "0.6.9"

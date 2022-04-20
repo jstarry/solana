@@ -12,7 +12,12 @@ documentation = "https://docs.rs/solana-gossip"
 [dependencies]
 bincode = "1.3.3"
 bv = { version = "0.11.1", features = ["serde"] }
+<<<<<<< HEAD
 clap = "2.33.1"
+=======
+clap = "3.1.8"
+crossbeam-channel = "0.5"
+>>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 flate2 = "1.0"
 indexmap = { version = "1.7", features = ["rayon"] }
 itertools = "0.10.1"

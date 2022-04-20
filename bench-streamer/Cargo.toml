@@ -9,12 +9,20 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
+<<<<<<< HEAD
 clap = "2.33.1"
 solana-clap-utils = { path = "../clap-utils", version = "=1.9.17" }
 solana-streamer = { path = "../streamer", version = "=1.9.17" }
 solana-logger = { path = "../logger", version = "=1.9.17" }
 solana-net-utils = { path = "../net-utils", version = "=1.9.17" }
 solana-version = { path = "../version", version = "=1.9.17" }
+=======
+crossbeam-channel = "0.5"
+clap = { version = "3.1.8", features = ["cargo"] }
+solana-net-utils = { path = "../net-utils", version = "=1.11.0" }
+solana-streamer = { path = "../streamer", version = "=1.11.0" }
+solana-version = { path = "../version", version = "=1.11.0" }
+>>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

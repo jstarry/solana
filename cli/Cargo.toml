@@ -12,9 +12,13 @@ documentation = "https://docs.rs/solana-cli"
 [dependencies]
 bincode = "1.3.3"
 bs58 = "0.4.0"
+<<<<<<< HEAD
 clap = "2.33.1"
 criterion-stats = "0.3.0"
 ctrlc = { version = "3.2.1", features = ["termination"] }
+=======
+clap = "3.1.8"
+>>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 console = "0.15.0"
 const_format = "0.2.22"
 log = "0.4.14"

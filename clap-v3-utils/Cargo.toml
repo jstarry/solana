@@ -1,7 +1,7 @@
 [package]
-name = "solana-clap-utils"
-version = "1.9.17"
-description = "Solana utilities for the clap"
+name = "solana-clap-v3-utils"
+version = "1.11.0"
+description = "Solana utilities for the clap v3"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -10,31 +10,22 @@ documentation = "https://docs.rs/solana-clap-utils"
 edition = "2021"
 
 [dependencies]
-<<<<<<< HEAD
-clap = "2.33.0"
-rpassword = "5.0"
-solana-perf = { path = "../perf", version = "=1.9.17" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.9.17" }
-solana-sdk = { path = "../sdk", version = "=1.9.17" }
-=======
 chrono = "0.4"
-clap = "3.1.8"
+clap = { version = "3.1.8", features = ["cargo"] }
 rpassword = "6.0"
 solana-perf = { path = "../perf", version = "=1.11.0" }
 solana-remote-wallet = { path = "../remote-wallet", version = "=1.11.0", default-features = false }
 solana-sdk = { path = "../sdk", version = "=1.11.0" }
->>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
-uriparse = "0.6.3"
+uriparse = "0.6.4"
 url = "2.2.2"
-chrono = "0.4"
 
 [dev-dependencies]
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 
 [lib]
-name = "solana_clap_utils"
+name = "solana_clap_v3_utils"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

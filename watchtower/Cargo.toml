@@ -10,7 +10,12 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-watchtower"
 
 [dependencies]
+<<<<<<< HEAD
 clap = "2.33.1"
+=======
+clap = "3.1.8"
+humantime = "2.0.1"
+>>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 log = "0.4.14"
 humantime = "2.0.1"
 solana-clap-utils = { path = "../clap-utils", version = "=1.9.17" }

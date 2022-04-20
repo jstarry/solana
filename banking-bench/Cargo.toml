@@ -9,10 +9,10 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-clap = { version = "3.1.8", features = ["derive"] }
+clap = { version = "3.1.10", features = ["derive"] }
 crossbeam-channel = "0.5"
 log = "0.4.14"
-rand = "0.7.0"
+rand = "0.8.5"
 rayon = "1.5.2"
 solana-core = { path = "../core", version = "=1.11.0" }
 solana-gossip = { path = "../gossip", version = "=1.11.0" }

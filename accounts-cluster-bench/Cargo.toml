@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-clap = "3.1.8"
+clap = "3.1.10"
 log = "0.4.14"
 rand = "0.8.5"
 rayon = "1.5.2"

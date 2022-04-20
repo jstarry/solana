@@ -88,7 +88,11 @@ pull_request_rules:
     actions:
       dismiss_reviews:
         changes_requested: true
+<<<<<<< HEAD
   - name: set automerge label on mergify backport PRs
+=======
+  - name: v1.9 feature-gate backportb
+>>>>>>> e4d388bcd (balh (#219))
     conditions:
       - author=mergify[bot]
       - head~=^mergify/bp/

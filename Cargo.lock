@@ -4491,8 +4491,12 @@ dependencies = [
 =======
  "clap",
  "log",
+<<<<<<< HEAD
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "rand 0.7.3",
+=======
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "solana-account-decoder",
  "solana-clap-utils",
@@ -4552,8 +4556,13 @@ dependencies = [
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "crossbeam-channel",
+<<<<<<< HEAD
  "log 0.4.14",
  "rand 0.7.3",
+=======
+ "log",
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "solana-core",
  "solana-gossip",
@@ -4665,8 +4674,13 @@ version = "1.9.17"
 dependencies = [
  "bv",
  "fnv",
+<<<<<<< HEAD
  "log 0.4.14",
  "rand 0.7.3",
+=======
+ "log",
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "rustc_version 0.4.0",
  "serde",
@@ -4682,9 +4696,15 @@ version = "1.9.17"
 dependencies = [
  "bincode",
  "byteorder",
+<<<<<<< HEAD
  "libsecp256k1 0.6.0",
  "log 0.4.14",
  "rand 0.7.3",
+=======
+ "libsecp256k1",
+ "log",
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
@@ -4699,9 +4719,16 @@ name = "solana-bucket-map"
 version = "1.9.17"
 dependencies = [
  "fs_extra",
+<<<<<<< HEAD
  "log 0.4.14",
  "memmap2 0.5.0",
  "rand 0.7.3",
+=======
+ "log",
+ "memmap2",
+ "modular-bitfield",
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "solana-logger 1.9.17",
  "solana-measure",
@@ -4883,7 +4910,17 @@ dependencies = [
  "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
+<<<<<<< HEAD
  "log 0.4.14",
+=======
+ "lazy_static",
+ "log",
+ "lru",
+ "quinn",
+ "quinn-proto",
+ "rand 0.8.5",
+ "rand_chacha 0.2.2",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "reqwest",
  "semver 1.0.7",
@@ -4973,7 +5010,7 @@ dependencies = [
  "log 0.4.14",
  "lru",
  "matches",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rand_chacha 0.2.2",
  "raptorq",
  "rayon",
@@ -5030,8 +5067,13 @@ dependencies = [
 =======
  "clap",
  "log",
+<<<<<<< HEAD
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "rand 0.7.3",
+=======
+ "rand 0.8.5",
+ "serde",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "solana-client",
  "solana-core",
  "solana-gossip",
@@ -5061,7 +5103,7 @@ version = "1.9.17"
 dependencies = [
  "assert_matches",
  "ed25519-dalek",
- "rand 0.7.3",
+ "rand 0.8.5",
  "solana-program-test",
  "solana-sdk",
 ]
@@ -5075,7 +5117,7 @@ dependencies = [
  "dlopen_derive",
  "log 0.4.14",
  "matches",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rayon",
  "serde",
  "solana-logger 1.9.17",
@@ -5262,7 +5304,7 @@ dependencies = [
  "matches",
  "num-traits",
  "num_cpus",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rand_chacha 0.2.2",
  "rayon",
  "rustc_version 0.4.0",
@@ -5365,7 +5407,7 @@ dependencies = [
  "num-traits",
  "num_cpus",
  "prost",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rand_chacha 0.2.2",
  "rayon",
  "reed-solomon-erasure",
@@ -5447,9 +5489,15 @@ dependencies = [
  "crossbeam-channel",
  "fs_extra",
  "gag",
+<<<<<<< HEAD
  "itertools 0.10.3",
  "log 0.4.14",
  "rand 0.7.3",
+=======
+ "itertools",
+ "log",
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "serial_test",
  "solana-client",
@@ -5548,8 +5596,13 @@ dependencies = [
  "env_logger 0.9.0",
  "gethostname",
  "lazy_static",
+<<<<<<< HEAD
  "log 0.4.14",
  "rand 0.7.3",
+=======
+ "log",
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "reqwest",
  "serial_test",
  "solana-sdk",
@@ -5563,8 +5616,12 @@ dependencies = [
  "clap 2.33.3",
 =======
  "clap",
+<<<<<<< HEAD
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "rand 0.7.3",
+=======
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "serde",
  "serde_json",
  "solana-clap-utils",
@@ -5585,7 +5642,7 @@ dependencies = [
  "log",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "nix",
- "rand 0.7.3",
+ "rand 0.8.5",
  "serde",
  "serde_derive",
  "socket2",
@@ -5622,7 +5679,7 @@ dependencies = [
  "log 0.4.14",
  "matches",
  "nix",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rayon",
  "serde",
  "solana-bloom",
@@ -5642,7 +5699,7 @@ dependencies = [
  "crossbeam-channel",
  "log 0.4.14",
  "matches",
- "rand 0.7.3",
+ "rand 0.8.5",
  "solana-entry",
  "solana-ledger",
  "solana-logger 1.9.17",
@@ -5665,8 +5722,12 @@ dependencies = [
 =======
  "clap",
  "log",
+<<<<<<< HEAD
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "rand 0.7.3",
+=======
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "solana-entry",
  "solana-logger 1.9.17",
@@ -5981,7 +6042,7 @@ dependencies = [
  "num-traits",
  "num_cpus",
  "ouroboros",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rand_chacha 0.2.2",
  "rayon",
  "regex",
@@ -6041,7 +6102,7 @@ dependencies = [
  "num-traits",
  "pbkdf2 0.9.0",
  "qstring",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rand_chacha 0.2.2",
  "rustc_version 0.4.0",
  "rustversion",
@@ -6206,7 +6267,7 @@ dependencies = [
  "pem",
  "pkcs8",
  "quinn",
- "rand 0.7.3",
+ "rand 0.8.5",
  "rcgen",
  "rustls 0.20.2",
  "solana-logger 1.9.17",
@@ -6296,8 +6357,12 @@ dependencies = [
 =======
  "clap",
  "log",
+<<<<<<< HEAD
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "rand 0.7.3",
+=======
+ "rand 0.8.5",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "rayon",
  "solana-clap-utils",
  "solana-cli",
@@ -6367,7 +6432,13 @@ dependencies = [
  "libc",
  "log 0.4.14",
  "num_cpus",
+<<<<<<< HEAD
  "rand 0.7.3",
+=======
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
  "signal-hook",
  "solana-clap-utils",
  "solana-cli-config",
@@ -6450,6 +6521,80 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
+=======
+name = "solana-zk-token-proof-program"
+version = "1.11.0"
+dependencies = [
+ "bytemuck",
+ "getrandom 0.1.16",
+ "num-derive",
+ "num-traits",
+ "solana-program-runtime",
+ "solana-sdk 1.11.0",
+ "solana-zk-token-sdk 1.11.0",
+]
+
+[[package]]
+name = "solana-zk-token-sdk"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f79e20a90b9e8c10baa62cbb396fd9af6a1e3d7b0c1c3ce84189d08d0f273ea8"
+dependencies = [
+ "aes-gcm-siv",
+ "arrayref",
+ "base64 0.13.0",
+ "bincode",
+ "bytemuck",
+ "byteorder",
+ "cipher 0.3.0",
+ "curve25519-dalek",
+ "getrandom 0.1.16",
+ "lazy_static",
+ "merlin",
+ "num-derive",
+ "num-traits",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "sha3 0.9.1",
+ "solana-program 1.10.9",
+ "solana-sdk 1.10.9",
+ "subtle",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
+name = "solana-zk-token-sdk"
+version = "1.11.0"
+dependencies = [
+ "aes-gcm-siv",
+ "arrayref",
+ "base64 0.13.0",
+ "bincode",
+ "bytemuck",
+ "byteorder",
+ "cipher 0.4.3",
+ "curve25519-dalek",
+ "getrandom 0.1.16",
+ "lazy_static",
+ "merlin",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha3 0.9.1",
+ "solana-program 1.11.0",
+ "solana-sdk 1.11.0",
+ "subtle",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
 name = "solana_rbpf"
 version = "0.2.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -18,9 +18,15 @@ clap = { version = "3.1.8", features = ["cargo"] }
 crossbeam-channel = "0.5"
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 log = "0.4.14"
+<<<<<<< HEAD
 nix = "0.23.0"
 rand = "0.7.0"
 serde = "1.0.130"
+=======
+nix = "0.23.1"
+rand = "0.8.5"
+serde = "1.0.136"
+>>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
 serde_derive = "1.0.103"
 socket2 = "0.4.2"
 solana-logger = { path = "../logger", version = "=1.9.17" }

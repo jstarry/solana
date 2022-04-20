@@ -13,10 +13,13 @@ edition = "2021"
 bv = { version = "0.11.1", features = ["serde"] }
 fnv = "1.0.7"
 <<<<<<< HEAD
+<<<<<<< HEAD
 rand = "0.7.0"
 serde = { version = "1.0.133", features = ["rc"] }
 rayon = "1.5.1"
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 log = "0.4.14"
 rand = "0.8.5"
 rayon = "1.5.2"

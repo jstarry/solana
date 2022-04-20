@@ -12,9 +12,12 @@ documentation = "https://docs.rs/solana-ledger-tool"
 [dependencies]
 bs58 = "0.4.0"
 <<<<<<< HEAD
+<<<<<<< HEAD
 bytecount = "0.6.2"
 clap = "2.33.1"
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 clap = "3.1.8"
 crossbeam-channel = "0.5"
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))

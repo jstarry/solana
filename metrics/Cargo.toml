@@ -19,9 +19,12 @@ solana-sdk = { path = "../sdk", version = "=1.9.17" }
 
 [dev-dependencies]
 <<<<<<< HEAD
+<<<<<<< HEAD
 rand = "0.7.0"
 serial_test = "0.5.1"
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 env_logger = "0.9.0"
 rand = "0.8.5"
 serial_test = "0.6.0"

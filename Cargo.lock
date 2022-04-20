@@ -712,6 +712,7 @@ dependencies = [
 [[package]]
 name = "clap"
 <<<<<<< HEAD
+<<<<<<< HEAD
 version = "2.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
@@ -729,6 +730,8 @@ dependencies = [
 name = "clap"
 version = "3.0.0-beta.5"
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 version = "3.1.8"
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -743,11 +746,15 @@ dependencies = [
  "strsim",
  "termcolor",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "textwrap 0.14.2",
  "unicase 2.6.0",
 =======
  "textwrap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "textwrap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 ]
 
 [[package]]
@@ -3741,10 +3748,14 @@ name = "rbpf-cli"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 3.0.0-beta.5",
 =======
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "clap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "serde",
  "serde_json",
  "solana-bpf-loader-program",
@@ -4467,9 +4478,12 @@ name = "solana-accounts-bench"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "log",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
@@ -4486,6 +4500,7 @@ name = "solana-accounts-cluster-bench"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
@@ -4497,6 +4512,11 @@ dependencies = [
 =======
  "rand 0.8.5",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+ "clap",
+ "log",
+ "rand 0.8.5",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rayon",
  "solana-account-decoder",
  "solana-clap-utils",
@@ -4551,6 +4571,7 @@ name = "solana-banking-bench"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
 =======
  "clap",
@@ -4563,6 +4584,12 @@ dependencies = [
  "log",
  "rand 0.8.5",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+ "clap",
+ "crossbeam-channel",
+ "log",
+ "rand 0.8.5",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rayon",
  "solana-core",
  "solana-gossip",
@@ -4624,10 +4651,13 @@ name = "solana-bench-streamer"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "solana-clap-utils",
  "solana-logger 1.9.17",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "crossbeam-channel",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
@@ -4641,9 +4671,12 @@ name = "solana-bench-tps"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "crossbeam-channel",
  "log",
@@ -4675,12 +4708,17 @@ dependencies = [
  "bv",
  "fnv",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "log 0.4.14",
  "rand 0.7.3",
 =======
  "log",
  "rand 0.8.5",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+ "log",
+ "rand 0.8.5",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rayon",
  "rustc_version 0.4.0",
  "serde",
@@ -4704,7 +4742,10 @@ dependencies = [
  "libsecp256k1",
  "log",
  "rand 0.8.5",
+<<<<<<< HEAD
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
@@ -4728,7 +4769,10 @@ dependencies = [
  "memmap2",
  "modular-bitfield",
  "rand 0.8.5",
+<<<<<<< HEAD
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rayon",
  "solana-logger 1.9.17",
  "solana-measure",
@@ -4743,10 +4787,14 @@ dependencies = [
  "bzip2",
  "cargo_metadata",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
 =======
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "clap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "regex",
  "serial_test",
  "solana-download-utils",
@@ -4760,10 +4808,14 @@ version = "1.9.17"
 dependencies = [
  "cargo_metadata",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
 =======
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "clap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 ]
 
 [[package]]
@@ -4810,12 +4862,17 @@ version = "1.9.17"
 dependencies = [
  "bincode",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "bs58 0.4.0",
  "clap 2.33.3",
 =======
  "bs58",
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "bs58",
+ "clap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "console",
  "const_format",
  "criterion-stats",
@@ -5062,6 +5119,7 @@ version = "1.9.17"
 dependencies = [
  "bincode",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
@@ -5071,6 +5129,10 @@ dependencies = [
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
  "rand 0.7.3",
 =======
+=======
+ "clap",
+ "log",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rand 0.8.5",
  "serde",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
@@ -5136,9 +5198,12 @@ dependencies = [
  "bincode",
  "byteorder",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "crossbeam-channel",
  "log",
@@ -5221,12 +5286,17 @@ name = "solana-genesis"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "base64 0.12.3",
  "clap 2.33.3",
 =======
  "base64 0.13.0",
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "base64 0.13.0",
+ "clap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5291,8 +5361,11 @@ dependencies = [
  "bincode",
  "bv",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "crossbeam-channel",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
@@ -5370,12 +5443,17 @@ name = "solana-keygen"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "bs58 0.4.0",
  "clap 2.33.3",
 =======
  "bs58",
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "bs58",
+ "clap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "dirs-next",
  "num_cpus",
  "solana-clap-utils",
@@ -5448,8 +5526,11 @@ dependencies = [
  "bs58 0.4.0",
  "bytecount",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "crossbeam-channel",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
@@ -5497,7 +5578,10 @@ dependencies = [
  "itertools",
  "log",
  "rand 0.8.5",
+<<<<<<< HEAD
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rayon",
  "serial_test",
  "solana-client",
@@ -5522,10 +5606,14 @@ version = "1.9.17"
 dependencies = [
  "byte-unit",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
 =======
  "clap",
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
+=======
+ "clap",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "serde",
  "serde_json",
  "solana-logger 1.9.17",
@@ -5565,10 +5653,13 @@ name = "solana-merkle-root-bench"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
  "solana-logger 1.9.17",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "log",
  "solana-logger 1.11.0",
@@ -5597,12 +5688,17 @@ dependencies = [
  "gethostname",
  "lazy_static",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "log 0.4.14",
  "rand 0.7.3",
 =======
  "log",
  "rand 0.8.5",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+ "log",
+ "rand 0.8.5",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "reqwest",
  "serial_test",
  "solana-sdk",
@@ -5613,6 +5709,7 @@ name = "solana-net-shaper"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
 =======
  "clap",
@@ -5622,6 +5719,10 @@ dependencies = [
 =======
  "rand 0.8.5",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+ "clap",
+ "rand 0.8.5",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "serde",
  "serde_json",
  "solana-clap-utils",
@@ -5634,9 +5735,12 @@ version = "1.9.17"
 dependencies = [
  "bincode",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "crossbeam-channel",
  "log",
@@ -5717,6 +5821,7 @@ name = "solana-poh-bench"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
@@ -5728,6 +5833,11 @@ dependencies = [
 =======
  "rand 0.8.5",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+ "clap",
+ "log",
+ "rand 0.8.5",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rayon",
  "solana-entry",
  "solana-logger 1.9.17",
@@ -5988,7 +6098,7 @@ dependencies = [
  "symlink",
  "thiserror",
  "tokio",
- "tokio-util 0.6.9",
+ "tokio-util 0.7.1",
 ]
 
 [[package]]
@@ -6241,10 +6351,13 @@ name = "solana-store-tool"
 version = "1.9.17"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
  "solana-logger 1.9.17",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "clap",
  "log",
  "solana-logger 1.11.0",
@@ -6352,6 +6465,7 @@ version = "1.9.17"
 dependencies = [
  "bincode",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "clap 2.33.3",
  "log 0.4.14",
 =======
@@ -6363,6 +6477,11 @@ dependencies = [
 =======
  "rand 0.8.5",
 >>>>>>> 318544455 (chore: bump rand from 0.7.3 to 0.8.5 (#205))
+=======
+ "clap",
+ "log",
+ "rand 0.8.5",
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rayon",
  "solana-clap-utils",
  "solana-cli",
@@ -6433,8 +6552,11 @@ dependencies = [
  "log 0.4.14",
  "num_cpus",
 <<<<<<< HEAD
+<<<<<<< HEAD
  "rand 0.7.3",
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -6938,6 +7060,7 @@ checksum = "13a4ec180a2de59b57434704ccfad967f789b12737738798fa08798cd5824c16"
 [[package]]
 name = "textwrap"
 <<<<<<< HEAD
+<<<<<<< HEAD
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
@@ -6949,6 +7072,8 @@ dependencies = [
 name = "textwrap"
 version = "0.14.2"
 =======
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 version = "0.15.0"
 >>>>>>> 9db7104e4 (chore: bump clap from 2.33.3 to 3.1.8 (#206))
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7298,7 +7423,6 @@ checksum = "9e99e1983e5d376cd8eb4b66604d2e99e79f5bd988c3055891dcd8c9e2604cc0"
 dependencies = [
  "bytes 1.1.0",
  "futures-core",
- "futures-io",
  "futures-sink",
  "log 0.4.14",
  "pin-project-lite",
@@ -7314,6 +7438,7 @@ checksum = "0edfdeb067411dba2044da6d1cb2df793dd35add7888d73c16e3381ded401764"
 dependencies = [
  "bytes 1.1.0",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",
@@ -7694,12 +7819,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
+<<<<<<< HEAD
 name = "version_check"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "914b1a6776c4c929a602fafd8bc742e06365d4bcbe48c30f9cca5824f70dc9dd"
 
 [[package]]
+=======
+>>>>>>> 0d773bd13 (chore: bump tokio-util from 0.6.9 to 0.7.1 (#213))
 name = "version_check"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

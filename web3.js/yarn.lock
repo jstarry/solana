@@ -1782,8 +1782,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@>=12", "@types/node@^17.0.24":
-  version "17.0.29"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-17.0.29.tgz#7f2e1159231d4a077bb660edab0fde373e375a3d"
+  version "17.0.30"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-17.0.30.tgz#2c6e8512acac70815e8176aa30c38025067880ef"
 
 "@types/node@^12.12.54":
   version "12.20.47"

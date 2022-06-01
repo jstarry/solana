@@ -1,5 +1,6 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
+
 use {
     crate::{
         stake_account,
@@ -89,12 +90,12 @@ impl StakesCache {
                     }
                     Err(_) => {
                         let mut stakes = self.0.write().unwrap();
-                        stakes.remove_vote_account(pubkey)
+                        stakes.remove_vote_account(pubkey);
                     }
                 }
             } else {
                 let mut stakes = self.0.write().unwrap();
-                stakes.remove_vote_account(pubkey)
+                stakes.remove_vote_account(pubkey);
             };
         } else if solana_stake_program::check_id(owner) {
             match StakeAccount::try_from(account.clone()) {
@@ -120,9 +121,10 @@ impl StakesCache {
         invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
         invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
         current_slot: Slot,
-    ) {
+    ) -> u64 {
+        let mut pruned_balance = 0;
         if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
-            return;
+            return pruned_balance;
         }
 
         // Prune invalid stake delegations and vote accounts that were
@@ -130,24 +132,30 @@ impl StakesCache {
         let mut stakes = self.0.write().unwrap();
 
         for (stake_pubkey, reason) in invalid_stake_keys {
-            stakes.remove_stake_delegation(&stake_pubkey);
-            datapoint_warn!(
-                "bank-stake_delegation_accounts-invalid-account",
-                ("slot", current_slot as i64, i64),
-                ("stake-address", format!("{:?}", stake_pubkey), String),
-                ("reason", reason.to_i64().unwrap_or_default(), i64),
-            );
+            if let Some(stake_delegation) = stakes.remove_stake_delegation(&stake_pubkey) {
+                pruned_balance = pruned_balance.saturating_add(stake_delegation.lamports());
+                datapoint_warn!(
+                    "bank-stake_delegation_accounts-invalid-account",
+                    ("slot", current_slot as i64, i64),
+                    ("stake-address", format!("{:?}", stake_pubkey), String),
+                    ("reason", reason.to_i64().unwrap_or_default(), i64),
+                );
+            }
         }
 
         for (vote_pubkey, reason) in invalid_vote_keys {
-            stakes.remove_vote_account(&vote_pubkey);
-            datapoint_warn!(
-                "bank-stake_delegation_accounts-invalid-account",
-                ("slot", current_slot as i64, i64),
-                ("vote-address", format!("{:?}", vote_pubkey), String),
-                ("reason", reason.to_i64().unwrap_or_default(), i64),
-            );
+            if let Some(vote_account) = stakes.remove_vote_account(&vote_pubkey) {
+                pruned_balance = pruned_balance.saturating_add(vote_account.lamports());
+                datapoint_warn!(
+                    "bank-stake_delegation_accounts-invalid-account",
+                    ("slot", current_slot as i64, i64),
+                    ("vote-address", format!("{:?}", vote_pubkey), String),
+                    ("reason", reason.to_i64().unwrap_or_default(), i64),
+                );
+            }
         }
+
+        pruned_balance
     }
 }
 
@@ -311,17 +319,22 @@ impl Stakes<StakeAccount> {
             + self.vote_accounts.iter().map(get_lamports).sum::<u64>()
     }
 
-    fn remove_vote_account(&mut self, vote_pubkey: &Pubkey) {
-        self.vote_accounts.remove(vote_pubkey);
+    fn remove_vote_account(&mut self, vote_pubkey: &Pubkey) -> Option<VoteAccount> {
+        self.vote_accounts
+            .remove(vote_pubkey)
+            .map(|(_stake, vote_account)| vote_account)
     }
 
-    fn remove_stake_delegation(&mut self, stake_pubkey: &Pubkey) {
-        if let Some(stake_account) = self.stake_delegations.remove(stake_pubkey) {
-            let removed_delegation = stake_account.delegation();
-            let removed_stake = removed_delegation.stake(self.epoch, Some(&self.stake_history));
-            self.vote_accounts
-                .sub_stake(&removed_delegation.voter_pubkey, removed_stake);
-        }
+    fn remove_stake_delegation(&mut self, stake_pubkey: &Pubkey) -> Option<StakeAccount> {
+        self.stake_delegations
+            .remove(stake_pubkey)
+            .map(|stake_account| {
+                let removed_delegation = stake_account.delegation();
+                let removed_stake = removed_delegation.stake(self.epoch, Some(&self.stake_history));
+                self.vote_accounts
+                    .sub_stake(&removed_delegation.voter_pubkey, removed_stake);
+                stake_account
+            })
     }
 
     fn upsert_vote_account(&mut self, vote_pubkey: &Pubkey, vote_account: VoteAccount) {

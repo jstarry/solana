@@ -2730,7 +2730,7 @@ impl Bank {
             .feature_set
             .is_active(&feature_set::update_rewards_from_cached_accounts::id());
 
-        self.pay_validator_rewards_with_thread_pool(
+        let pruned_balance = self.pay_validator_rewards_with_thread_pool(
             prev_epoch,
             validator_rewards,
             reward_calc_tracer,
@@ -2741,7 +2741,8 @@ impl Bank {
         );
 
         let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-        let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
+        let validator_rewards_paid =
+            new_vote_balance_and_staked - old_vote_balance_and_staked - pruned_balance;
         assert_eq!(
             validator_rewards_paid,
             u64::try_from(
@@ -3059,9 +3060,9 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
-    ) -> f64 {
+    ) -> u64 {
         let stake_history = self.stakes_cache.stakes().history().clone();
-        let vote_with_stake_delegations_map = {
+        let (vote_with_stake_delegations_map, pruned_balance) = {
             let mut m = Measure::start("load_vote_and_stake_accounts_us");
             let LoadVoteAndStakeAccountsResult {
                 vote_with_stake_delegations_map,
@@ -3085,12 +3086,12 @@ impl Bank {
             metrics.invalid_cached_vote_accounts += invalid_cached_vote_accounts;
             metrics.invalid_cached_stake_accounts += invalid_cached_stake_accounts;
             metrics.vote_accounts_cache_miss_count += vote_accounts_cache_miss_count;
-            self.stakes_cache.handle_invalid_keys(
+            let pruned_balance = self.stakes_cache.handle_invalid_keys(
                 invalid_stake_keys,
                 invalid_vote_keys,
                 self.slot(),
             );
-            vote_with_stake_delegations_map
+            (vote_with_stake_delegations_map, pruned_balance)
         };
 
         let mut m = Measure::start("calculate_points");
@@ -3122,7 +3123,7 @@ impl Bank {
         metrics.calculate_points_us.fetch_add(m.as_us(), Relaxed);
 
         if points == 0 {
-            return 0.0;
+            return pruned_balance;
         }
 
         // pay according to point value
@@ -3252,7 +3253,7 @@ impl Bank {
             rewards.append(&mut stake_rewards);
         }
 
-        point_value.rewards as f64 / point_value.points as f64
+        pruned_balance
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {

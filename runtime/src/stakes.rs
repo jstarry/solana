@@ -37,6 +37,12 @@ pub enum Error {
     StakeAccountNotFound(Pubkey),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct InvalidCacheEntry {
+    pub balance: u64,
+    pub reason: InvalidCacheEntryReason,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, ToPrimitive)]
 pub enum InvalidCacheEntryReason {
     Missing,
@@ -118,44 +124,47 @@ impl StakesCache {
 
     pub fn handle_invalid_keys(
         &self,
-        invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
-        invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+        invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntry>,
+        invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntry>,
         current_slot: Slot,
-    ) -> u64 {
-        let mut pruned_balance = 0;
+    ) {
         if invalid_stake_keys.is_empty() && invalid_vote_keys.is_empty() {
-            return pruned_balance;
+            return;
         }
 
         // Prune invalid stake delegations and vote accounts that were
         // not properly evicted in normal operation.
         let mut stakes = self.0.write().unwrap();
 
-        for (stake_pubkey, reason) in invalid_stake_keys {
+        for (stake_pubkey, invalid_entry) in invalid_stake_keys {
             if let Some(stake_delegation) = stakes.remove_stake_delegation(&stake_pubkey) {
-                pruned_balance = pruned_balance.saturating_add(stake_delegation.lamports());
                 datapoint_warn!(
                     "bank-stake_delegation_accounts-invalid-account",
                     ("slot", current_slot as i64, i64),
                     ("stake-address", format!("{:?}", stake_pubkey), String),
-                    ("reason", reason.to_i64().unwrap_or_default(), i64),
+                    (
+                        "reason",
+                        invalid_entry.reason.to_i64().unwrap_or_default(),
+                        i64
+                    ),
                 );
             }
         }
 
-        for (vote_pubkey, reason) in invalid_vote_keys {
+        for (vote_pubkey, invalid_entry) in invalid_vote_keys {
             if let Some(vote_account) = stakes.remove_vote_account(&vote_pubkey) {
-                pruned_balance = pruned_balance.saturating_add(vote_account.lamports());
                 datapoint_warn!(
                     "bank-stake_delegation_accounts-invalid-account",
                     ("slot", current_slot as i64, i64),
                     ("vote-address", format!("{:?}", vote_pubkey), String),
-                    ("reason", reason.to_i64().unwrap_or_default(), i64),
+                    (
+                        "reason",
+                        invalid_entry.reason.to_i64().unwrap_or_default(),
+                        i64
+                    ),
                 );
             }
         }
-
-        pruned_balance
     }
 }
 

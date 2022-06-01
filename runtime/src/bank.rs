@@ -559,6 +559,7 @@ pub struct BankRc {
     pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
+use crate::stakes::InvalidCacheEntry;
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 
@@ -1377,8 +1378,8 @@ struct VoteWithStakeDelegations {
 
 struct LoadVoteAndStakeAccountsResult {
     vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
-    invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
-    invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
+    invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntry>,
+    invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntry>,
     invalid_cached_vote_accounts: usize,
     invalid_cached_stake_accounts: usize,
     vote_accounts_cache_miss_count: usize,

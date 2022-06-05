@@ -82,6 +82,7 @@ mod bigtable;
 use bigtable::*;
 mod ledger_path;
 use ledger_path::*;
+mod nonce_query;
 
 #[derive(PartialEq)]
 enum LedgerOutputMethod {
@@ -1416,6 +1417,13 @@ fn main() {
                     .conflicts_with("no_snapshot")
             )
         ).subcommand(
+            SubCommand::with_name("nonce-query")
+            .about("Print account stats and contents after processing the ledger")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&accountsdb_skip_shrink)
+        ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
@@ -1627,6 +1635,31 @@ fn main() {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
         match matches.subcommand() {
+            ("nonce-query", Some(arg_matches)) => {
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::TryPrimaryThenSecondary,
+                    wal_recovery_mode,
+                );
+                let (bank_forks, ..) = load_bank_forks(
+                    arg_matches,
+                    &genesis_config,
+                    &blockstore,
+                    ProcessOptions {
+                        accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
+                        ..ProcessOptions::default()
+                    },
+                    snapshot_archive_path,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                });
+
+                let bank = bank_forks.working_bank();
+                nonce_query::process_command(bank)
+            }
             ("print", Some(arg_matches)) => {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);

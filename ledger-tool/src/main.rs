@@ -90,6 +90,7 @@ use {
 
 mod bigtable;
 mod ledger_path;
+mod nonce_query;
 
 #[derive(PartialEq, Eq)]
 enum LedgerOutputMethod {
@@ -1599,6 +1600,20 @@ fn main() {
                     .help("Snapshot archive format to use.")
             )
     ).subcommand(
+            SubCommand::with_name("nonce-query")
+            .about("Print account stats and contents after processing the ledger")
+            .arg(&no_snapshot_arg)
+            .arg(&account_paths_arg)
+            .arg(
+                Arg::with_name("rpc_bigtable_instance_name")
+                    .long("rpc-bigtable-instance-name")
+                    .takes_value(true)
+                    .value_name("INSTANCE_NAME")
+                    .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
+                    .help("Name of the target Bigtable instance")
+            )
+            .arg(&max_genesis_archive_unpacked_size_arg)
+    ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
@@ -1834,6 +1849,27 @@ fn main() {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
         match matches.subcommand() {
+            ("nonce-query", Some(arg_matches)) => {
+                let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                let blockstore =
+                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let (bank_forks, ..) = load_bank_forks(
+                    arg_matches,
+                    &genesis_config,
+                    &blockstore,
+                    ProcessOptions::default(),
+                    snapshot_archive_path,
+                    incremental_snapshot_archive_path,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Failed to load ledger: {:?}", err);
+                    exit(1);
+                });
+
+                let bank = bank_forks.read().unwrap().working_bank();
+                let instance_name = value_t_or_exit!(matches, "rpc_bigtable_instance_name", String);
+                nonce_query::process_command(bank, instance_name)
+            }
             ("print", Some(arg_matches)) => {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);

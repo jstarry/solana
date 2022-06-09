@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@blockworks-foundation/mango-client": "^3.5.3",
+    "@blockworks-foundation/mango-client": "^3.5.5",
     "@bonfida/bot": "^0.5.3",
     "@bonfida/spl-name-service": "^0.1.33",
     "@cloudflare/stream-react": "^1.8.0",

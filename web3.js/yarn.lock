@@ -1809,8 +1809,8 @@
   resolved "https://registry.npmjs.org/@types/estree/-/estree-0.0.39.tgz"
 
 "@types/express-serve-static-core@^4.17.21", "@types/express-serve-static-core@^4.17.9":
-  version "4.17.28"
-  resolved "https://registry.npmjs.org/@types/express-serve-static-core/-/express-serve-static-core-4.17.28.tgz"
+  version "4.17.29"
+  resolved "https://registry.yarnpkg.com/@types/express-serve-static-core/-/express-serve-static-core-4.17.29.tgz#2a1795ea8e9e9c91b4a4bbe475034b20c1ec711c"
   dependencies:
     "@types/node" "*"
     "@types/qs" "*"

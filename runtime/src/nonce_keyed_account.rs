@@ -268,9 +268,14 @@ pub fn authorize_nonce_account(
                 );
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            // Safe to unwrap here because state is known to be Initialized.
-            let state = state.authorize(*nonce_authority).unwrap();
-            account.set_state(&state)
+
+            let new_data = nonce::state::Data::new(
+                *nonce_authority,
+                data.durable_nonce,
+                data.get_lamports_per_signature(),
+            );
+
+            account.set_state(&state.update(Box::new(State::Initialized(new_data))))
         }
         State::Uninitialized => {
             ic_msg!(

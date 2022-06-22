@@ -3,7 +3,7 @@
 mod current;
 pub use current::{Data, DurableNonce, State};
 use {
-    crate::{hash::Hash, pubkey::Pubkey},
+    crate::hash::Hash,
     serde_derive::{Deserialize, Serialize},
 };
 
@@ -65,25 +65,13 @@ impl Versions {
         }
     }
 
-    /// Updates authority pubkey on the nonce account.
-    /// Returns None if the nonce account state in Uninitialized.
-    pub fn authorize(self, authority: Pubkey) -> Option<Self> {
-        let data = match self.state() {
-            State::Uninitialized => return None,
-            State::Initialized(data) => data,
-        };
-        let data = Data::new(
-            authority,
-            data.durable_nonce,
-            data.get_lamports_per_signature(),
-        );
-        let state = Box::new(State::Initialized(data));
+    pub fn update(self, state: Box<State>) -> Self {
         // Preserve Version variant since cannot
         // change durable_nonce field here.
-        Some(match self {
+        match self {
             Self::Legacy(_) => Self::Legacy(state),
             Self::Current(_) => Self::Current(state),
-        })
+        }
     }
 }
 

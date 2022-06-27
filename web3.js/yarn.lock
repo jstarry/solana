@@ -3025,9 +3025,9 @@ destroy@~1.0.4:
   version "1.0.4"
   resolved "https://registry.npmjs.org/destroy/-/destroy-1.0.4.tgz"
 
-devtools-protocol@0.0.1001819:
-  version "0.0.1001819"
-  resolved "https://registry.yarnpkg.com/devtools-protocol/-/devtools-protocol-0.0.1001819.tgz#0a98f44cefdb02cc684f3d5e6bd898a1690231d9"
+devtools-protocol@0.0.1011705:
+  version "0.0.1011705"
+  resolved "https://registry.yarnpkg.com/devtools-protocol/-/devtools-protocol-0.0.1011705.tgz#2582ed29f84848df83fba488122015540a744539"
 
 dezalgo@^1.0.0:
   version "1.0.3"
@@ -6037,12 +6037,12 @@ punycode@^2.1.0:
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
 puppeteer@^15.0.1:
-  version "15.0.1"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-15.0.1.tgz#50dbed2c0c6ea70b22289442b96d3a3c116347a2"
+  version "15.1.1"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-15.1.1.tgz#f995fc3e5794649c4689b87ad29bd083065e53c7"
   dependencies:
     cross-fetch "3.1.5"
     debug "4.3.4"
-    devtools-protocol "0.0.1001819"
+    devtools-protocol "0.0.1011705"
     extract-zip "2.0.1"
     https-proxy-agent "5.0.1"
     pkg-dir "4.2.0"

@@ -1136,19 +1136,19 @@
     debug "^4.3.1"
     socks "^2.6.1"
 
-"@httptoolkit/subscriptions-transport-ws@^0.9.19":
-  version "0.9.19"
-  resolved "https://registry.npmjs.org/@httptoolkit/subscriptions-transport-ws/-/subscriptions-transport-ws-0.9.19.tgz"
+"@httptoolkit/subscriptions-transport-ws@^0.11.2":
+  version "0.11.2"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/subscriptions-transport-ws/-/subscriptions-transport-ws-0.11.2.tgz#514663c926264e2de7f6cd33d09f81675c35b9e3"
   dependencies:
     backo2 "^1.0.2"
     eventemitter3 "^3.1.0"
     iterall "^1.2.1"
     symbol-observable "^1.0.4"
-    ws "^7.4.6"
+    ws "^8.8.0"
 
-"@httptoolkit/websocket-stream@^6.0.0":
-  version "6.0.0"
-  resolved "https://registry.npmjs.org/@httptoolkit/websocket-stream/-/websocket-stream-6.0.0.tgz"
+"@httptoolkit/websocket-stream@^6.0.1":
+  version "6.0.1"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/websocket-stream/-/websocket-stream-6.0.1.tgz#8d732f1509860236276f6b0759db4cc9859bbb62"
   dependencies:
     "@types/ws" "*"
     duplexify "^3.5.1"
@@ -5164,14 +5164,14 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.1.0"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.1.0.tgz#3104bf64ae3d010e35d2472b6ef31c3e006a8fcb"
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.2.0.tgz#db695cf233d26978fbaa5f982ab49edce61eee88"
   dependencies:
     "@graphql-tools/schema" "^8.3.10"
     "@httptoolkit/httpolyglot" "^2.0.1"
     "@httptoolkit/proxy-agent" "^5.0.1-socks-lookup-fix.0"
-    "@httptoolkit/subscriptions-transport-ws" "^0.9.19"
-    "@httptoolkit/websocket-stream" "^6.0.0"
+    "@httptoolkit/subscriptions-transport-ws" "^0.11.2"
+    "@httptoolkit/websocket-stream" "^6.0.1"
     "@types/cors" "^2.8.6"
     "@types/node" "*"
     base64-arraybuffer "^0.1.5"
@@ -5198,7 +5198,7 @@ mockttp@^3.0.0:
     portfinder "^1.0.23"
     typed-error "^3.0.2"
     uuid "^8.3.2"
-    ws "^7.3.1"
+    ws "^8.8.0"
 
 modify-values@^1.0.0:
   version "1.0.1"
@@ -7440,11 +7440,11 @@ write-file-atomic@^4.0.0, write-file-atomic@^4.0.1:
     imurmurhash "^0.1.4"
     signal-exit "^3.0.7"
 
-ws@*, ws@8.8.0, ws@^8.5.0:
+ws@*, ws@8.8.0, ws@^8.5.0, ws@^8.8.0:
   version "8.8.0"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.8.0.tgz#8e71c75e2f6348dbf8d78005107297056cb77769"
 
-ws@^7.3.1, ws@^7.4.5, ws@^7.4.6:
+ws@^7.4.5:
   version "7.5.7"
   resolved "https://registry.npmjs.org/ws/-/ws-7.5.7.tgz"
 

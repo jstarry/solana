@@ -1862,8 +1862,8 @@
     "@types/node" "*"
 
 "@types/sinon@^10.0.0":
-  version "10.0.11"
-  resolved "https://registry.npmjs.org/@types/sinon/-/sinon-10.0.11.tgz"
+  version "10.0.12"
+  resolved "https://registry.yarnpkg.com/@types/sinon/-/sinon-10.0.12.tgz#fb7009ea71f313a9da4644ba73b94e44d6b84f7f"
   dependencies:
     "@types/sinonjs__fake-timers" "*"
 

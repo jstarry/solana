@@ -6006,8 +6006,8 @@ punycode@^2.1.0:
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
 puppeteer@^15.0.1:
-  version "15.2.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-15.2.0.tgz#9cd81334f9c6a2e1c972b5a7ecf3f18ab3bfb978"
+  version "15.3.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-15.3.0.tgz#2d79200cb72d938dfc7af4fdedaa03c04e7ace14"
   dependencies:
     cross-fetch "3.1.5"
     debug "4.3.4"
@@ -7017,8 +7017,8 @@ trim-newlines@^3.0.0:
   resolved "https://registry.npmjs.org/trim-newlines/-/trim-newlines-3.0.1.tgz"
 
 ts-node@^10.0.0, ts-node@^10.7.0:
-  version "10.8.1"
-  resolved "https://registry.yarnpkg.com/ts-node/-/ts-node-10.8.1.tgz#ea2bd3459011b52699d7e88daa55a45a1af4f066"
+  version "10.8.2"
+  resolved "https://registry.yarnpkg.com/ts-node/-/ts-node-10.8.2.tgz#3185b75228cef116bf82ffe8762594f54b2a23f2"
   dependencies:
     "@cspotcode/source-map-support" "^0.8.0"
     "@tsconfig/node10" "^1.0.7"
@@ -7119,8 +7119,8 @@ typedarray-to-buffer@^3.1.5:
     is-typedarray "^1.0.0"
 
 typedoc@^0.23.1:
-  version "0.23.2"
-  resolved "https://registry.yarnpkg.com/typedoc/-/typedoc-0.23.2.tgz#c5f82752530749c8b541ff9b17883f6fb9e72f14"
+  version "0.23.5"
+  resolved "https://registry.yarnpkg.com/typedoc/-/typedoc-0.23.5.tgz#a28a3eeca739b6ae9ca6081f429bfe52dc28423b"
   dependencies:
     lunr "^2.3.9"
     marked "^4.0.16"

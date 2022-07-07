@@ -87,23 +87,18 @@ impl SigVerifier for TransactionSigVerifier {
     type SendType = BankingPacketBatch;
 
     #[inline(always)]
-    fn process_received_packet(
-        &mut self,
-        packet: &mut Packet,
-        removed_before_sigverify_stage: bool,
-        is_dup: bool,
-    ) {
+    fn process_received_packet(&mut self, packet: &mut Packet, is_dup: Option<bool>) {
         sigverify::check_for_tracer_packet(packet);
         if packet.meta.is_tracer_packet() {
-            if removed_before_sigverify_stage {
-                self.tracer_packet_stats
-                    .total_removed_before_sigverify_stage += 1;
-            } else {
+            if let Some(is_dup) = is_dup {
                 self.tracer_packet_stats
                     .total_tracer_packets_received_in_sigverify_stage += 1;
                 if is_dup {
                     self.tracer_packet_stats.total_tracer_packets_deduped += 1;
                 }
+            } else {
+                self.tracer_packet_stats
+                    .total_removed_before_sigverify_stage += 1;
             }
         }
     }

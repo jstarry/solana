@@ -57,13 +57,7 @@ pub struct SigVerifyStage {
 pub trait SigVerifier {
     type SendType: std::fmt::Debug;
     fn verify_batches(&self, batches: Vec<PacketBatch>, valid_packets: usize) -> Vec<PacketBatch>;
-    fn process_received_packet(
-        &mut self,
-        _packet: &mut Packet,
-        _removed_before_sigverify_stage: bool,
-        _is_dup: bool,
-    ) {
-    }
+    fn process_received_packet(&mut self, _packet: &mut Packet, _is_dup: Option<bool>) {}
     fn process_excess_packet(&mut self, _packet: &Packet) {}
     fn process_passed_sigverify_packet(&mut self, _packet: &Packet) {}
     fn send_packets(&mut self, packet_batches: Vec<PacketBatch>) -> Result<(), Self::SendType>;
@@ -234,7 +228,7 @@ impl SigVerifier for DisabledSigVerifier {
 
 struct DedupInfo {
     dedup_time: Measure,
-    discard_or_dedup_fail: usize,
+    num_duplicates: usize,
     num_unique: usize,
 }
 
@@ -286,22 +280,18 @@ impl SigVerifyStage {
         num_packets_to_dedup: usize,
     ) -> DedupInfo {
         let mut dedup_time = Measure::start("sigverify_dedup_time");
-        let discard_or_dedup_fail = deduper.dedup_packets_and_count_discards(
+        let num_duplicates = deduper.dedup_packets(
             packet_batches,
             #[inline(always)]
-            |received_packet, removed_before_sigverify_stage, is_dup| {
-                verifier.process_received_packet(
-                    received_packet,
-                    removed_before_sigverify_stage,
-                    is_dup,
-                );
+            |received_packet, is_dup| {
+                verifier.process_received_packet(received_packet, is_dup);
             },
         ) as usize;
         dedup_time.stop();
         DedupInfo {
             dedup_time,
-            discard_or_dedup_fail,
-            num_unique: num_packets_to_dedup.saturating_sub(discard_or_dedup_fail),
+            num_duplicates,
+            num_unique: num_packets_to_dedup.saturating_sub(num_duplicates),
         }
     }
 
@@ -347,7 +337,7 @@ impl SigVerifyStage {
 
         let DedupInfo {
             dedup_time,
-            discard_or_dedup_fail,
+            num_duplicates,
             num_unique,
         } = Self::dedup_packets(deduper, verifier, &mut batches, non_discarded_packets);
 
@@ -411,7 +401,7 @@ impl SigVerifyStage {
         stats.packets_hist.increment(num_packets as u64).unwrap();
         stats.total_batches += batches_len;
         stats.total_packets += num_packets;
-        stats.total_dedup += discard_or_dedup_fail;
+        stats.total_dedup += num_duplicates;
         stats.total_valid_packets += num_valid_packets;
         stats.total_discard_random_time_us += discard_random_time.as_us() as usize;
         stats.total_discard_random += num_discarded_randomly;
@@ -516,7 +506,7 @@ mod tests {
 
         let deduper = Deduper::new(100, Duration::from_secs(10));
         let DedupInfo {
-            discard_or_dedup_fail,
+            num_duplicates,
             num_unique,
             ..
         } = SigVerifyStage::dedup_packets(
@@ -526,7 +516,7 @@ mod tests {
             num_packets_to_dedup,
         );
 
-        assert_eq!(discard_or_dedup_fail, 9);
+        assert_eq!(num_duplicates, num_packets_to_dedup - 1);
         assert_eq!(num_unique, 1);
     }
 

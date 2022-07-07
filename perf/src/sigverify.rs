@@ -533,11 +533,11 @@ impl Deduper {
         (h, pos)
     }
 
-    // Deduplicates packets and returns 1 if packet is to be discarded. Else, 0.
-    fn dedup_packet(&self, packet: &mut Packet) -> u64 {
-        // If this packet was already marked as discard, drop it
+    // De-duplicates a packet if it isn't already marked discarded.
+    fn dedup_packet(&self, packet: &mut Packet) -> Option<bool> {
+        // If this packet was already marked as discard, return early
         if packet.meta.discard() {
-            return 1;
+            return None;
         }
         let (hash, pos) = self.compute_hash(packet);
         // saturate each position with or
@@ -547,30 +547,30 @@ impl Deduper {
             //reset this value
             self.filter[pos].store(hash, Ordering::Relaxed);
         }
-        if hash == prev & hash {
+        let is_dup = hash == prev & hash;
+        if is_dup {
             packet.meta.set_discard(true);
-            return 1;
         }
-        0
+        Some(is_dup)
     }
 
-    pub fn dedup_packets_and_count_discards(
+    // Return the number of packets that were detected to be duplicates
+    pub fn dedup_packets(
         &self,
         batches: &mut [PacketBatch],
-        mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
+        mut process_received_packet: impl FnMut(&mut Packet, Option<bool>),
     ) -> u64 {
-        let mut num_removed: u64 = 0;
+        let mut num_duplicates: u64 = 0;
         batches.iter_mut().for_each(|batch| {
             batch.iter_mut().for_each(|p| {
-                let removed_before_sigverify = p.meta.discard();
                 let is_duplicate = self.dedup_packet(p);
-                if is_duplicate == 1 {
-                    saturating_add_assign!(num_removed, 1);
+                if is_duplicate == Some(true) {
+                    saturating_add_assign!(num_duplicates, 1);
                 }
-                process_received_packet(p, removed_before_sigverify, is_duplicate == 1);
+                process_received_packet(p, is_duplicate);
             })
         });
-        num_removed
+        num_duplicates
     }
 }
 
@@ -1511,12 +1511,9 @@ mod tests {
         let packet_count = sigverify::count_packets_in_batches(&batches);
         let filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut num_deduped = 0;
-        let discard = filter.dedup_packets_and_count_discards(
-            &mut batches,
-            |_deduped_packet, _removed_before_sigverify_stage, _is_dup| {
-                num_deduped += 1;
-            },
-        ) as usize;
+        let discard = filter.dedup_packets(&mut batches, |_deduped_packet, _is_dup| {
+            num_deduped += 1;
+        }) as usize;
         assert_eq!(num_deduped, discard + 1);
         assert_eq!(packet_count, discard + 1);
     }
@@ -1525,7 +1522,7 @@ mod tests {
     fn test_dedup_diff() {
         let mut filter = Deduper::new(1_000_000, Duration::from_millis(0));
         let mut batches = to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-        let discard = filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+        let discard = filter.dedup_packets(&mut batches, |_, _| ()) as usize;
         // because dedup uses a threadpool, there maybe up to N threads of txs that go through
         assert_eq!(discard, 0);
         filter.reset();
@@ -1543,7 +1540,7 @@ mod tests {
         for i in 0..1000 {
             let mut batches =
                 to_packet_batches(&(0..1000).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+            discard += filter.dedup_packets(&mut batches, |_, _| ()) as usize;
             trace!("{} {}", i, discard);
             if filter.saturated.load(Ordering::Relaxed) {
                 break;
@@ -1559,7 +1556,7 @@ mod tests {
         for i in 0..10 {
             let mut batches =
                 to_packet_batches(&(0..1024).map(|_| test_tx()).collect::<Vec<_>>(), 128);
-            discard += filter.dedup_packets_and_count_discards(&mut batches, |_, _, _| ()) as usize;
+            discard += filter.dedup_packets(&mut batches, |_, _| ()) as usize;
             debug!("false positive rate: {}/{}", discard, i * 1024);
         }
         //allow for 1 false positive even if extremely unlikely

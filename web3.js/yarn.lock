@@ -1812,8 +1812,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@>=12", "@types/node@^18.0.0":
-  version "18.0.4"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.0.4.tgz#48aedbf35efb3af1248e4cd4d792c730290cd5d6"
+  version "18.0.6"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.0.6.tgz#0ba49ac517ad69abe7a1508bc9b3a5483df9d5d7"
 
 "@types/node@^12.12.54":
   version "12.20.47"

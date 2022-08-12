@@ -1822,7 +1822,7 @@
   version "0.0.39"
   resolved "https://registry.npmjs.org/@types/estree/-/estree-0.0.39.tgz"
 
-"@types/express-serve-static-core@^4.17.21", "@types/express-serve-static-core@^4.17.9":
+"@types/express-serve-static-core@^4.17.21":
   version "4.17.30"
   resolved "https://registry.yarnpkg.com/@types/express-serve-static-core/-/express-serve-static-core-4.17.30.tgz#0f2f99617fa8f9696170c46152ccf7500b34ac04"
   dependencies:
@@ -1837,10 +1837,6 @@
 "@types/json5@^0.0.29":
   version "0.0.29"
   resolved "https://registry.npmjs.org/@types/json5/-/json5-0.0.29.tgz"
-
-"@types/lodash@^4.14.159":
-  version "4.14.180"
-  resolved "https://registry.npmjs.org/@types/lodash/-/lodash-4.14.180.tgz"
 
 "@types/minimist@^1.2.0":
   version "1.2.2"
@@ -4506,12 +4502,10 @@ java-properties@^1.0.0:
   resolved "https://registry.npmjs.org/java-properties/-/java-properties-1.0.2.tgz"
 
 jayson@^3.4.4:
-  version "3.6.6"
-  resolved "https://registry.npmjs.org/jayson/-/jayson-3.6.6.tgz"
+  version "3.7.0"
+  resolved "https://registry.yarnpkg.com/jayson/-/jayson-3.7.0.tgz#b735b12d06d348639ae8230d7a1e2916cb078f25"
   dependencies:
     "@types/connect" "^3.4.33"
-    "@types/express-serve-static-core" "^4.17.9"
-    "@types/lodash" "^4.14.159"
     "@types/node" "^12.12.54"
     "@types/ws" "^7.4.4"
     JSONStream "^1.3.5"

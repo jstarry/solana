@@ -1853,8 +1853,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@>=12", "@types/node@^18.0.0":
-  version "18.7.12"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.7.12.tgz#18caab95fbcd03573661d1d0e709093ba8cb7682"
+  version "18.7.13"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.7.13.tgz#23e6c5168333480d454243378b69e861ab5c011a"
 
 "@types/node@^12.12.54":
   version "12.20.47"

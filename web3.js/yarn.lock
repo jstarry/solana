@@ -6072,9 +6072,9 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer@^16.0.0:
-  version "16.2.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-16.2.0.tgz#3fc9cc0c461d3166a98562a7dcd0bf3424a0523c"
+puppeteer@^17.0.0:
+  version "17.0.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-17.0.0.tgz#85fea801a7b8b8c9e2913b1491e98c867be49a6b"
   dependencies:
     cross-fetch "3.1.5"
     debug "4.3.4"

@@ -1149,27 +1149,6 @@
   dependencies:
     "@types/node" "^16.7.10"
 
-"@httptoolkit/proxy-agent@^5.0.1-socks-lookup-fix.0":
-  version "5.0.1-socks-lookup-fix.0"
-  resolved "https://registry.npmjs.org/@httptoolkit/proxy-agent/-/proxy-agent-5.0.1-socks-lookup-fix.0.tgz"
-  dependencies:
-    "@httptoolkit/socks-proxy-agent" "^6.1.1-use-request-lookup-fix.0"
-    agent-base "^6.0.0"
-    debug "4"
-    http-proxy-agent "^4.0.0"
-    https-proxy-agent "^5.0.0"
-    lru-cache "^5.1.1"
-    pac-proxy-agent "^5.0.0"
-    proxy-from-env "^1.0.0"
-
-"@httptoolkit/socks-proxy-agent@^6.1.1-use-request-lookup-fix.0":
-  version "6.1.1-use-request-lookup-fix.0"
-  resolved "https://registry.npmjs.org/@httptoolkit/socks-proxy-agent/-/socks-proxy-agent-6.1.1-use-request-lookup-fix.0.tgz"
-  dependencies:
-    agent-base "^6.0.2"
-    debug "^4.3.1"
-    socks "^2.6.1"
-
 "@httptoolkit/subscriptions-transport-ws@^0.11.2":
   version "0.11.2"
   resolved "https://registry.yarnpkg.com/@httptoolkit/subscriptions-transport-ws/-/subscriptions-transport-ws-0.11.2.tgz#514663c926264e2de7f6cd33d09f81675c35b9e3"
@@ -2040,7 +2019,7 @@ acorn@^8.4.1, acorn@^8.5.0, acorn@^8.7.0:
   version "8.7.0"
   resolved "https://registry.npmjs.org/acorn/-/acorn-8.7.0.tgz"
 
-agent-base@6, agent-base@^6.0.0, agent-base@^6.0.2:
+agent-base@6, agent-base@^6.0.2:
   version "6.0.2"
   resolved "https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz"
   dependencies:
@@ -4117,7 +4096,7 @@ http2-wrapper@2.0.5:
     quick-lru "^5.1.1"
     resolve-alpn "^1.1.1"
 
-https-proxy-agent@5, https-proxy-agent@5.0.1, https-proxy-agent@^5.0.0:
+https-proxy-agent@5, https-proxy-agent@5.0.1, https-proxy-agent@^5.0.0, https-proxy-agent@^5.0.1:
   version "5.0.1"
   resolved "https://registry.yarnpkg.com/https-proxy-agent/-/https-proxy-agent-5.0.1.tgz#c59ef224a04fe8b754f3db0063a25ea30d0005d6"
   dependencies:
@@ -4893,21 +4872,15 @@ loupe@^2.3.1:
   dependencies:
     get-func-name "^2.0.0"
 
-lru-cache@^5.1.1:
-  version "5.1.1"
-  resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-5.1.1.tgz"
-  dependencies:
-    yallist "^3.0.2"
-
 lru-cache@^6.0.0:
   version "6.0.0"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-6.0.0.tgz"
   dependencies:
     yallist "^4.0.0"
 
-lru-cache@^7.4.4, lru-cache@^7.5.1, lru-cache@^7.7.1:
-  version "7.8.1"
-  resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-7.8.1.tgz#68ee3f4807a57d2ba185b7fd90827d5c21ce82bb"
+lru-cache@^7.14.0, lru-cache@^7.4.4, lru-cache@^7.5.1, lru-cache@^7.7.1:
+  version "7.14.0"
+  resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-7.14.0.tgz#21be64954a4680e303a09e9468f880b98a0b3c7f"
 
 lunr@^2.3.9:
   version "2.3.9"
@@ -5212,13 +5185,12 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.3.1"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.3.1.tgz#dfd2fe4805c747f912da7d187d178058bc18cc21"
+  version "3.4.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.4.0.tgz#92b575332c03cd10a08b904ef76482d7459cbff2"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
     "@httptoolkit/httpolyglot" "^2.0.1"
-    "@httptoolkit/proxy-agent" "^5.0.1-socks-lookup-fix.0"
     "@httptoolkit/subscriptions-transport-ws" "^0.11.2"
     "@httptoolkit/websocket-stream" "^6.0.1"
     "@types/cors" "^2.8.6"
@@ -5238,13 +5210,17 @@ mockttp@^3.0.0:
     graphql-tag "^2.12.6"
     http-encoding "^1.5.1"
     http2-wrapper "2.0.5"
+    https-proxy-agent "^5.0.1"
     isomorphic-ws "^4.0.1"
     lodash "^4.16.4"
+    lru-cache "^7.14.0"
     native-duplexpair "^1.0.0"
     node-forge "^1.2.1"
-    parse-multipart-data "^1.3.0"
+    pac-proxy-agent "^5.0.0"
+    parse-multipart-data "^1.4.0"
     performance-now "^2.1.0"
     portfinder "1.0.28"
+    socks-proxy-agent "^7.0.0"
     typed-error "^3.0.2"
     uuid "^8.3.2"
     ws "^8.8.0"
@@ -5867,9 +5843,9 @@ parse-json@^5.0.0:
     json-parse-even-better-errors "^2.3.0"
     lines-and-columns "^1.1.6"
 
-parse-multipart-data@^1.3.0:
-  version "1.3.0"
-  resolved "https://registry.yarnpkg.com/parse-multipart-data/-/parse-multipart-data-1.3.0.tgz#052b5da3866cdc73c5d11727cbe9a6e33acf3feb"
+parse-multipart-data@^1.4.0:
+  version "1.5.0"
+  resolved "https://registry.yarnpkg.com/parse-multipart-data/-/parse-multipart-data-1.5.0.tgz#ab894cc6c40229d0a2042500e120df7562d94b87"
 
 parseurl@~1.3.3:
   version "1.3.3"
@@ -6060,7 +6036,7 @@ proxy-addr@~2.0.7:
     forwarded "0.2.0"
     ipaddr.js "1.9.1"
 
-proxy-from-env@1.1.0, proxy-from-env@^1.0.0:
+proxy-from-env@1.1.0:
   version "1.1.0"
   resolved "https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-1.1.0.tgz"
 
@@ -6684,7 +6660,15 @@ socks-proxy-agent@^6.1.1:
     debug "^4.3.3"
     socks "^2.6.2"
 
-socks@^2.3.3, socks@^2.6.1, socks@^2.6.2:
+socks-proxy-agent@^7.0.0:
+  version "7.0.0"
+  resolved "https://registry.yarnpkg.com/socks-proxy-agent/-/socks-proxy-agent-7.0.0.tgz#dc069ecf34436621acb41e3efa66ca1b5fed15b6"
+  dependencies:
+    agent-base "^6.0.2"
+    debug "^4.3.3"
+    socks "^2.6.2"
+
+socks@^2.3.3, socks@^2.6.2:
   version "2.6.2"
   resolved "https://registry.npmjs.org/socks/-/socks-2.6.2.tgz"
   dependencies:
@@ -7532,10 +7516,6 @@ y18n@^4.0.0:
 y18n@^5.0.5:
   version "5.0.8"
   resolved "https://registry.npmjs.org/y18n/-/y18n-5.0.8.tgz"
-
-yallist@^3.0.2:
-  version "3.1.1"
-  resolved "https://registry.npmjs.org/yallist/-/yallist-3.1.1.tgz"
 
 yallist@^4.0.0:
   version "4.0.0"

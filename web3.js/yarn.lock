@@ -1574,10 +1574,10 @@
     "@rollup/pluginutils" "^4.2.1"
 
 "@rollup/plugin-multi-entry@^5.0.0":
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/@rollup/plugin-multi-entry/-/plugin-multi-entry-5.0.0.tgz#7c7f02806a90db2efd83241c7e8221929e434cd8"
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/@rollup/plugin-multi-entry/-/plugin-multi-entry-5.0.1.tgz#84d9f9124470386f0a9b77243776978f278611e7"
   dependencies:
-    "@rollup/plugin-virtual" "^2.0.3"
+    "@rollup/plugin-virtual" "^3.0.0"
     matched "^5.0.1"
 
 "@rollup/plugin-node-resolve@^15.0.0":
@@ -1598,9 +1598,9 @@
     "@rollup/pluginutils" "^4.2.1"
     magic-string "^0.26.4"
 
-"@rollup/plugin-virtual@^2.0.3":
-  version "2.1.0"
-  resolved "https://registry.npmjs.org/@rollup/plugin-virtual/-/plugin-virtual-2.1.0.tgz"
+"@rollup/plugin-virtual@^3.0.0":
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/@rollup/plugin-virtual/-/plugin-virtual-3.0.1.tgz#cea7e489481cc0ca91516c047f8c53c1cfb1adf6"
 
 "@rollup/pluginutils@^4.2.1":
   version "4.2.1"

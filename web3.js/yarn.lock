@@ -1557,8 +1557,8 @@
     "@rollup/pluginutils" "^4.2.1"
 
 "@rollup/plugin-commonjs@^23.0.0":
-  version "23.0.1"
-  resolved "https://registry.yarnpkg.com/@rollup/plugin-commonjs/-/plugin-commonjs-23.0.1.tgz#b867a0ea412b7e06c4b7357fb1052872c7402061"
+  version "23.0.2"
+  resolved "https://registry.yarnpkg.com/@rollup/plugin-commonjs/-/plugin-commonjs-23.0.2.tgz#3a3a5b7b1b1cb29037eb4992edcaae997d7ebd92"
   dependencies:
     "@rollup/pluginutils" "^5.0.1"
     commondir "^1.0.1"

@@ -1602,13 +1602,6 @@
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/@rollup/plugin-virtual/-/plugin-virtual-3.0.1.tgz#cea7e489481cc0ca91516c047f8c53c1cfb1adf6"
 
-"@rollup/pluginutils@^4.2.1":
-  version "4.2.1"
-  resolved "https://registry.yarnpkg.com/@rollup/pluginutils/-/pluginutils-4.2.1.tgz#e6c6c3aba0744edce3fb2074922d3776c0af2a6d"
-  dependencies:
-    estree-walker "^2.0.1"
-    picomatch "^2.2.2"
-
 "@rollup/pluginutils@^5.0.1":
   version "5.0.1"
   resolved "https://registry.yarnpkg.com/@rollup/pluginutils/-/pluginutils-5.0.1.tgz#63def51f5a76dadd984689d33c7f000164152a97"
@@ -1869,8 +1862,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@^18.0.0":
-  version "18.11.4"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.11.4.tgz#7017a52e18dfaad32f55eebd539993014441949c"
+  version "18.11.5"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.11.5.tgz#1bc94cf2f9ab5fe33353bc7c79c797dcc5325bef"
 
 "@types/node@^12.12.54":
   version "12.20.47"
@@ -3412,7 +3405,7 @@ estree-walker@^0.6.1:
   version "0.6.1"
   resolved "https://registry.npmjs.org/estree-walker/-/estree-walker-0.6.1.tgz"
 
-estree-walker@^2.0.1, estree-walker@^2.0.2:
+estree-walker@^2.0.2:
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/estree-walker/-/estree-walker-2.0.2.tgz#52f010178c2a4c117a7757cfe942adb7d2da4cac"
 
@@ -5932,7 +5925,7 @@ picocolors@^1.0.0:
   version "1.0.0"
   resolved "https://registry.npmjs.org/picocolors/-/picocolors-1.0.0.tgz"
 
-picomatch@^2.0.4, picomatch@^2.2.1, picomatch@^2.2.2, picomatch@^2.3.1:
+picomatch@^2.0.4, picomatch@^2.2.1, picomatch@^2.3.1:
   version "2.3.1"
   resolved "https://registry.npmjs.org/picomatch/-/picomatch-2.3.1.tgz"
 

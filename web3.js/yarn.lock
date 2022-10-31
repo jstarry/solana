@@ -1153,9 +1153,9 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
-"@httptoolkit/httpolyglot@^2.0.1":
-  version "2.0.1"
-  resolved "https://registry.npmjs.org/@httptoolkit/httpolyglot/-/httpolyglot-2.0.1.tgz"
+"@httptoolkit/httpolyglot@^2.1.0":
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/httpolyglot/-/httpolyglot-2.1.0.tgz#61eaf272bad880e8d61a1e32d58127ba46045e4f"
   dependencies:
     "@types/node" "^16.7.10"
 
@@ -3039,6 +3039,12 @@ deprecation@^2.0.0, deprecation@^2.3.1:
 destroy@~1.0.4:
   version "1.0.4"
   resolved "https://registry.npmjs.org/destroy/-/destroy-1.0.4.tgz"
+
+destroyable-server@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/destroyable-server/-/destroyable-server-1.0.0.tgz#aa2d3aecff7c99b0290ef4654b94a1983e57966b"
+  dependencies:
+    "@types/node" "*"
 
 devtools-protocol@0.0.1056733:
   version "0.0.1056733"
@@ -5193,12 +5199,12 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.4.0"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.4.0.tgz#92b575332c03cd10a08b904ef76482d7459cbff2"
+  version "3.5.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.5.0.tgz#1d20cc88a84e6dd55ab3b7749254a962beb95c33"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
-    "@httptoolkit/httpolyglot" "^2.0.1"
+    "@httptoolkit/httpolyglot" "^2.1.0"
     "@httptoolkit/subscriptions-transport-ws" "^0.11.2"
     "@httptoolkit/websocket-stream" "^6.0.1"
     "@types/cors" "^2.8.6"
@@ -5211,6 +5217,7 @@ mockttp@^3.0.0:
     cors "^2.8.4"
     cors-gate "^1.1.3"
     cross-fetch "^3.1.5"
+    destroyable-server "^1.0.0"
     express "^4.14.0"
     express-graphql "^0.11.0"
     graphql "^14.0.2 || ^15.5"
@@ -5228,6 +5235,7 @@ mockttp@^3.0.0:
     parse-multipart-data "^1.4.0"
     performance-now "^2.1.0"
     portfinder "1.0.28"
+    read-tls-client-hello "^1.0.0"
     socks-proxy-agent "^7.0.0"
     typed-error "^3.0.2"
     uuid "^8.3.2"
@@ -6201,6 +6209,12 @@ read-pkg@^5.0.0, read-pkg@^5.2.0:
     normalize-package-data "^2.5.0"
     parse-json "^5.0.0"
     type-fest "^0.6.0"
+
+read-tls-client-hello@^1.0.0:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/read-tls-client-hello/-/read-tls-client-hello-1.0.1.tgz#b4d37bc8751d3d8b86ff74cc60d878d25a1d3698"
+  dependencies:
+    "@types/node" "*"
 
 read@1, read@^1.0.7, read@~1.0.7:
   version "1.0.7"
@@ -7515,11 +7529,7 @@ write-file-atomic@^4.0.0, write-file-atomic@^4.0.1:
     imurmurhash "^0.1.4"
     signal-exit "^3.0.7"
 
-ws@*, ws@^8.5.0, ws@^8.8.0:
-  version "8.8.1"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.8.1.tgz#5dbad0feb7ade8ecc99b830c1d77c913d4955ff0"
-
-ws@8.10.0:
+ws@*, ws@8.10.0, ws@^8.5.0, ws@^8.8.0:
   version "8.10.0"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.10.0.tgz#00a28c09dfb76eae4eb45c3b565f771d6951aa51"
 

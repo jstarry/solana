@@ -894,8 +894,8 @@
     source-map-support "^0.5.16"
 
 "@babel/runtime@^7.12.5", "@babel/runtime@^7.17.2", "@babel/runtime@^7.8.4":
-  version "7.20.0"
-  resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.20.0.tgz#824a9ef325ffde6f78056059db3168c08785e24a"
+  version "7.20.1"
+  resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.20.1.tgz#1148bb33ab252b165a06698fde7576092a78b4a9"
   dependencies:
     regenerator-runtime "^0.13.10"
 

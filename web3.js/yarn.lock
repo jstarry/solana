@@ -2220,11 +2220,11 @@ async@^2.6.2:
   dependencies:
     lodash "^4.17.14"
 
-axios@^0.21.1:
-  version "0.21.4"
-  resolved "https://registry.npmjs.org/axios/-/axios-0.21.4.tgz"
+axios@^0.25.0:
+  version "0.25.0"
+  resolved "https://registry.yarnpkg.com/axios/-/axios-0.25.0.tgz#349cfbb31331a9b4453190791760a8d35b093e0a"
   dependencies:
-    follow-redirects "^1.14.0"
+    follow-redirects "^1.14.7"
 
 babel-plugin-polyfill-corejs2@^0.3.3:
   version "0.3.3"
@@ -3684,9 +3684,13 @@ flatted@^3.1.0:
   version "3.2.5"
   resolved "https://registry.npmjs.org/flatted/-/flatted-3.2.5.tgz"
 
-follow-redirects@^1.0.0, follow-redirects@^1.14.0:
+follow-redirects@^1.0.0:
   version "1.14.9"
   resolved "https://registry.npmjs.org/follow-redirects/-/follow-redirects-1.14.9.tgz"
+
+follow-redirects@^1.14.7:
+  version "1.15.2"
+  resolved "https://registry.yarnpkg.com/follow-redirects/-/follow-redirects-1.15.2.tgz#b460864144ba63f2681096f274c4e57026da2c13"
 
 foreground-child@^2.0.0:
   version "2.0.0"
@@ -4564,9 +4568,9 @@ jest-worker@^26.2.1:
     merge-stream "^2.0.0"
     supports-color "^7.0.0"
 
-joi@^17.4.0:
-  version "17.6.0"
-  resolved "https://registry.npmjs.org/joi/-/joi-17.6.0.tgz"
+joi@^17.6.0:
+  version "17.7.0"
+  resolved "https://registry.yarnpkg.com/joi/-/joi-17.7.0.tgz#591a33b1fe1aca2bc27f290bcad9b9c1c570a6b3"
   dependencies:
     "@hapi/hoek" "^9.0.0"
     "@hapi/topo" "^5.0.0"
@@ -6499,9 +6503,9 @@ run-parallel@^1.1.9:
   dependencies:
     queue-microtask "^1.2.2"
 
-rxjs@^7.1.0:
-  version "7.5.5"
-  resolved "https://registry.npmjs.org/rxjs/-/rxjs-7.5.5.tgz"
+rxjs@^7.5.4:
+  version "7.6.0"
+  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.6.0.tgz#361da5362b6ddaa691a2de0b4f2d32028f1eb5a2"
   dependencies:
     tslib "^2.1.0"
 
@@ -6844,8 +6848,8 @@ ssri@^9.0.0:
     minipass "^3.1.1"
 
 start-server-and-test@^1.12.0:
-  version "1.15.1"
-  resolved "https://registry.yarnpkg.com/start-server-and-test/-/start-server-and-test-1.15.1.tgz#8e28e48a31884b7c7b19950502e92161eec6293b"
+  version "1.15.2"
+  resolved "https://registry.yarnpkg.com/start-server-and-test/-/start-server-and-test-1.15.2.tgz#3c4f9b358a0dc5ae03a96dd7d7ae9e25a3b24165"
   dependencies:
     arg "^5.0.2"
     bluebird "3.7.2"
@@ -6854,7 +6858,7 @@ start-server-and-test@^1.12.0:
     execa "5.1.1"
     lazy-ass "1.6.0"
     ps-tree "1.2.0"
-    wait-on "6.0.0"
+    wait-on "6.0.1"
 
 "statuses@>= 1.5.0 < 2", statuses@~1.5.0:
   version "1.5.0"
@@ -7443,15 +7447,15 @@ vscode-textmate@^6.0.0:
   version "6.0.0"
   resolved "https://registry.yarnpkg.com/vscode-textmate/-/vscode-textmate-6.0.0.tgz#a3777197235036814ac9a92451492f2748589210"
 
-wait-on@6.0.0:
-  version "6.0.0"
-  resolved "https://registry.npmjs.org/wait-on/-/wait-on-6.0.0.tgz"
+wait-on@6.0.1:
+  version "6.0.1"
+  resolved "https://registry.yarnpkg.com/wait-on/-/wait-on-6.0.1.tgz#16bbc4d1e4ebdd41c5b4e63a2e16dbd1f4e5601e"
   dependencies:
-    axios "^0.21.1"
-    joi "^17.4.0"
+    axios "^0.25.0"
+    joi "^17.6.0"
     lodash "^4.17.21"
     minimist "^1.2.5"
-    rxjs "^7.1.0"
+    rxjs "^7.5.4"
 
 walk-up-path@^1.0.0:
   version "1.0.0"

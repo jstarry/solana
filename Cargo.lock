@@ -1319,7 +1319,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4504e955d596cc27543aa77ecb075dec41c7b0c7749fe6b5536a82548f5073b1"
 dependencies = [
  "http",
- "prost",
+ "prost 0.10.4",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -3130,12 +3130,22 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.10.0"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bd5316aa8f5c82add416dfbc25116b84b748a21153f512917e8143640a71bbd"
+checksum = "71adf41db68aa0daaefc69bb30bcd68ded9b9abaad5d1fbb6304c4fb390e083e"
 dependencies = [
  "bytes",
- "prost-derive",
+ "prost-derive 0.10.0",
+]
+
+[[package]]
+name = "prost"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c01db6702aa05baa3f57dec92b8eeeeb4cb19e894e73996b32a4093289e54592"
+dependencies = [
+ "bytes",
+ "prost-derive 0.11.5",
 ]
 
 [[package]]
@@ -3153,7 +3163,7 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost",
+ "prost 0.10.4",
  "prost-types",
  "regex",
  "tempfile",
@@ -3174,13 +3184,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8842bad1a5419bca14eac663ba798f6bc19c413c2fdceb5f3ba3b0932d96720"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.91",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "926681c118ae6e512a3ccefd4abbe5521a14f4cc1e207356d4d00c0b7f2006fd"
 dependencies = [
  "bytes",
- "prost",
+ "prost 0.10.4",
 ]
 
 [[package]]
@@ -5038,7 +5061,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_cpus",
- "prost",
+ "prost 0.11.5",
  "rand 0.8.5",
  "rand_chacha 0.2.2",
  "rayon",
@@ -5806,7 +5829,7 @@ dependencies = [
  "goauth",
  "log",
  "openssl",
- "prost",
+ "prost 0.11.5",
  "prost-types",
  "serde",
  "serde_derive",
@@ -5827,7 +5850,7 @@ dependencies = [
  "bincode",
  "bs58",
  "enum-iterator",
- "prost",
+ "prost 0.11.5",
  "serde",
  "solana-account-decoder",
  "solana-sdk 1.11.0",
@@ -6848,8 +6871,8 @@ dependencies = [
  "hyper-timeout",
  "percent-encoding 2.1.0",
  "pin-project",
- "prost",
- "prost-derive",
+ "prost 0.10.4",
+ "prost-derive 0.10.0",
  "rustls-pemfile 0.3.0",
  "tokio",
  "tokio-rustls",

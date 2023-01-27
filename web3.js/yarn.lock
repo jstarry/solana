@@ -6450,9 +6450,9 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@19.6.0:
-  version "19.6.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-19.6.0.tgz#7f1708a66d6901cd71c28f6e105c9aff73d0ec57"
+puppeteer-core@19.6.1:
+  version "19.6.1"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-19.6.1.tgz#952726a364f3acff8cd8df8def798555962dbfe0"
   dependencies:
     cross-fetch "3.1.5"
     debug "4.3.4"
@@ -6466,14 +6466,14 @@ puppeteer-core@19.6.0:
     ws "8.11.0"
 
 puppeteer@^19.0.0:
-  version "19.6.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-19.6.0.tgz#89a0bfa7da3db12b40ff9fe6c48cbc0eb149e03b"
+  version "19.6.1"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-19.6.1.tgz#25d0a188d44b99d8ea3870f89ea1931a48def189"
   dependencies:
     cosmiconfig "8.0.0"
     https-proxy-agent "5.0.1"
     progress "2.0.3"
     proxy-from-env "1.1.0"
-    puppeteer-core "19.6.0"
+    puppeteer-core "19.6.1"
 
 q@^1.5.1:
   version "1.5.1"

@@ -930,12 +930,12 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^17.4.2":
-  version "17.4.2"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.4.2.tgz#8600c83abb7e84191fd59528fc14f436496fb00b"
+"@commitlint/cli@^17.4.3":
+  version "17.4.3"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.4.3.tgz#49583a7946b4030e7e6d9caafac44307835fb05e"
   dependencies:
     "@commitlint/format" "^17.4.0"
-    "@commitlint/lint" "^17.4.2"
+    "@commitlint/lint" "^17.4.3"
     "@commitlint/load" "^17.4.2"
     "@commitlint/read" "^17.4.2"
     "@commitlint/types" "^17.4.0"
@@ -987,13 +987,13 @@
     "@commitlint/types" "^17.4.0"
     semver "7.3.8"
 
-"@commitlint/lint@^17.4.2":
-  version "17.4.2"
-  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-17.4.2.tgz#1277cb4d5395e9d6c39cbc351984bac9dcc6b7cd"
+"@commitlint/lint@^17.4.3":
+  version "17.4.3"
+  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-17.4.3.tgz#20be03992b33edd26ba8d07e210c08173069371e"
   dependencies:
     "@commitlint/is-ignored" "^17.4.2"
     "@commitlint/parse" "^17.4.2"
-    "@commitlint/rules" "^17.4.2"
+    "@commitlint/rules" "^17.4.3"
     "@commitlint/types" "^17.4.0"
 
 "@commitlint/load@^17.4.2":
@@ -1048,9 +1048,9 @@
     resolve-from "^5.0.0"
     resolve-global "^1.0.0"
 
-"@commitlint/rules@^17.4.2":
-  version "17.4.2"
-  resolved "https://registry.yarnpkg.com/@commitlint/rules/-/rules-17.4.2.tgz#cdf203bc82af979cb319210ef9215cb1de216a9b"
+"@commitlint/rules@^17.4.3":
+  version "17.4.3"
+  resolved "https://registry.yarnpkg.com/@commitlint/rules/-/rules-17.4.3.tgz#e5e7bf472102447a283b7643ca7240d757a72bb7"
   dependencies:
     "@commitlint/ensure" "^17.4.0"
     "@commitlint/message" "^17.4.2"
@@ -1069,10 +1069,10 @@
     find-up "^5.0.0"
 
 "@commitlint/travis-cli@^17.0.0":
-  version "17.4.2"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.4.2.tgz#093a495514641df546ce97d48f85e62bf3e8fafd"
+  version "17.4.3"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.4.3.tgz#394e4d9fae44aeb9ba0bec8abade8f2730b20202"
   dependencies:
-    "@commitlint/cli" "^17.4.2"
+    "@commitlint/cli" "^17.4.3"
     execa "^5.0.0"
 
 "@commitlint/types@^17.4.0":

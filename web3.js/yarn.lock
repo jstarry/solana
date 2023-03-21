@@ -3428,8 +3428,8 @@ escodegen@^1.8.1:
     source-map "~0.6.1"
 
 eslint-config-prettier@^8.0.0:
-  version "8.7.0"
-  resolved "https://registry.yarnpkg.com/eslint-config-prettier/-/eslint-config-prettier-8.7.0.tgz#f1cc58a8afebc50980bd53475451df146c13182d"
+  version "8.8.0"
+  resolved "https://registry.yarnpkg.com/eslint-config-prettier/-/eslint-config-prettier-8.8.0.tgz#bfda738d412adc917fd7b038857110efe98c9348"
 
 eslint-import-resolver-node@^0.3.7:
   version "0.3.7"

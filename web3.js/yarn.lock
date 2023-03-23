@@ -975,13 +975,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^17.4.4":
-  version "17.4.4"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.4.4.tgz#36df08bfa31dbb9a2b6b1d7187a31e578f001a06"
+"@commitlint/cli@^17.5.0":
+  version "17.5.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.5.0.tgz#045bf46fc38bb4246da30b462d8db66f48c28f9a"
   dependencies:
     "@commitlint/format" "^17.4.4"
     "@commitlint/lint" "^17.4.4"
-    "@commitlint/load" "^17.4.4"
+    "@commitlint/load" "^17.5.0"
     "@commitlint/read" "^17.4.4"
     "@commitlint/types" "^17.4.4"
     execa "^5.0.0"
@@ -1041,9 +1041,9 @@
     "@commitlint/rules" "^17.4.4"
     "@commitlint/types" "^17.4.4"
 
-"@commitlint/load@^17.4.4":
-  version "17.4.4"
-  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-17.4.4.tgz#13fcb553572f265339801cde6dd10ee5eea07f5e"
+"@commitlint/load@^17.5.0":
+  version "17.5.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-17.5.0.tgz#be45dbbb50aaf5eb7e8e940e1e0d6171d1426bab"
   dependencies:
     "@commitlint/config-validator" "^17.4.4"
     "@commitlint/execute-rule" "^17.4.0"
@@ -1058,7 +1058,7 @@
     lodash.uniq "^4.5.0"
     resolve-from "^5.0.0"
     ts-node "^10.8.1"
-    typescript "^4.6.4"
+    typescript "^4.6.4 || ^5.0.0"
 
 "@commitlint/message@^17.4.2":
   version "17.4.2"
@@ -1114,10 +1114,10 @@
     find-up "^5.0.0"
 
 "@commitlint/travis-cli@^17.0.0":
-  version "17.4.4"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.4.4.tgz#5b4c231e84878db9387733b7d6f4831164e2e41c"
+  version "17.5.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.5.0.tgz#ece21d08941d64d4f562001930c40910658120c4"
   dependencies:
-    "@commitlint/cli" "^17.4.4"
+    "@commitlint/cli" "^17.5.0"
     execa "^5.0.0"
 
 "@commitlint/types@^17.4.4":
@@ -7798,9 +7798,13 @@ typedoc@^0.23.1:
     minimatch "^7.1.3"
     shiki "^0.14.1"
 
-typescript@^4.3.2, typescript@^4.6.4:
+typescript@^4.3.2:
   version "4.9.5"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.9.5.tgz#095979f9bcc0d09da324d58d03ce8f8374cbe65a"
+
+"typescript@^4.6.4 || ^5.0.0":
+  version "5.0.2"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.0.2.tgz#891e1a90c5189d8506af64b9ef929fca99ba1ee5"
 
 uglify-js@^3.1.4:
   version "3.15.3"

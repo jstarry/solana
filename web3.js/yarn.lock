@@ -5299,11 +5299,7 @@ lru-cache@^6.0.0:
   dependencies:
     yallist "^4.0.0"
 
-lru-cache@^7.14.0, lru-cache@^7.4.4, lru-cache@^7.5.1, lru-cache@^7.7.1:
-  version "7.14.0"
-  resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-7.14.0.tgz#21be64954a4680e303a09e9468f880b98a0b3c7f"
-
-lru-cache@^7.14.1:
+lru-cache@^7.14.0, lru-cache@^7.14.1, lru-cache@^7.4.4, lru-cache@^7.5.1, lru-cache@^7.7.1:
   version "7.18.1"
   resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-7.18.1.tgz#4716408dec51d5d0104732647f584d1f6738b109"
 
@@ -5675,8 +5671,8 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.7.0"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.0.tgz#8e62858ec2745cbc79b107dfe44b0563d772845d"
+  version "3.7.1"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.1.tgz#806563abe7e878f6138cb689651c996e63d02ede"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
@@ -8281,11 +8277,7 @@ write-file-atomic@^5.0.0:
     imurmurhash "^0.1.4"
     signal-exit "^3.0.7"
 
-ws@*, ws@^8.5.0, ws@^8.8.0:
-  version "8.11.0"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.11.0.tgz#6a0d36b8edfd9f96d8b25683db2f8d7de6e8e143"
-
-ws@8.13.0:
+ws@*, ws@8.13.0, ws@^8.5.0, ws@^8.8.0:
   version "8.13.0"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.13.0.tgz#9a9fb92f93cf41512a0735c8f4dd09b8a1211cd0"
 

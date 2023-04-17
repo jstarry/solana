@@ -1939,8 +1939,8 @@
     "@types/node" "*"
 
 "@types/sinon@^10.0.0":
-  version "10.0.13"
-  resolved "https://registry.yarnpkg.com/@types/sinon/-/sinon-10.0.13.tgz#60a7a87a70d9372d0b7b38cc03e825f46981fb83"
+  version "10.0.14"
+  resolved "https://registry.yarnpkg.com/@types/sinon/-/sinon-10.0.14.tgz#6bd18b088ea5ef1e5153fa37d0b68e91eff09e22"
   dependencies:
     "@types/sinonjs__fake-timers" "*"
 

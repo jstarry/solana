@@ -2684,9 +2684,9 @@ chownr@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/chownr/-/chownr-2.0.0.tgz"
 
-chromium-bidi@0.4.6:
-  version "0.4.6"
-  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.4.6.tgz#a082151834083ed002624f12fa35e748817b2ee5"
+chromium-bidi@0.4.7:
+  version "0.4.7"
+  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.4.7.tgz#4c022c2b0fb1d1c9b571fadf373042160e71d236"
   dependencies:
     mitt "3.0.0"
 
@@ -6652,12 +6652,12 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@19.10.1:
-  version "19.10.1"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-19.10.1.tgz#b16263e201612e9145d063092e6cdf994584ad7c"
+puppeteer-core@19.11.0:
+  version "19.11.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-19.11.0.tgz#2b98bfa8a3fa31daa8e6f816d0014a772470cd9e"
   dependencies:
     "@puppeteer/browsers" "0.5.0"
-    chromium-bidi "0.4.6"
+    chromium-bidi "0.4.7"
     cross-fetch "3.1.5"
     debug "4.3.4"
     devtools-protocol "0.0.1107588"
@@ -6669,15 +6669,15 @@ puppeteer-core@19.10.1:
     ws "8.13.0"
 
 puppeteer@^19.0.0:
-  version "19.10.1"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-19.10.1.tgz#1d2bf9e1f1440dbe55dbeb6743191657a6b9878b"
+  version "19.11.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-19.11.0.tgz#1aa5c9d12ff0b8e533a04ee95ce910e36f328956"
   dependencies:
     "@puppeteer/browsers" "0.5.0"
     cosmiconfig "8.1.3"
     https-proxy-agent "5.0.1"
     progress "2.0.3"
     proxy-from-env "1.1.0"
-    puppeteer-core "19.10.1"
+    puppeteer-core "19.11.0"
 
 q@^1.5.1:
   version "1.5.1"

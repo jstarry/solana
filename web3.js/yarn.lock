@@ -1163,9 +1163,9 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
-"@httptoolkit/httpolyglot@^2.1.0":
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@httptoolkit/httpolyglot/-/httpolyglot-2.1.0.tgz#61eaf272bad880e8d61a1e32d58127ba46045e4f"
+"@httptoolkit/httpolyglot@^2.1.1":
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/httpolyglot/-/httpolyglot-2.1.1.tgz#c48737e68bc61a7bc8fa3a38f6bb7878921df850"
   dependencies:
     "@types/node" "^16.7.10"
 
@@ -5681,12 +5681,12 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.7.1"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.1.tgz#806563abe7e878f6138cb689651c996e63d02ede"
+  version "3.7.3"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.3.tgz#520856dc0403736c4de672508c873aae16a2531f"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
-    "@httptoolkit/httpolyglot" "^2.1.0"
+    "@httptoolkit/httpolyglot" "^2.1.1"
     "@httptoolkit/subscriptions-transport-ws" "^0.11.2"
     "@httptoolkit/websocket-stream" "^6.0.1"
     "@types/cors" "^2.8.6"

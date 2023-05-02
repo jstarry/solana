@@ -5692,8 +5692,8 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.7.3"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.3.tgz#520856dc0403736c4de672508c873aae16a2531f"
+  version "3.7.4"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.4.tgz#3b66cccda41d196d1d4bca5cd9cf539f552284ca"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
@@ -5729,6 +5729,7 @@ mockttp@^3.0.0:
     performance-now "^2.1.0"
     portfinder "1.0.28"
     read-tls-client-hello "^1.0.0"
+    semver "^5.7.1"
     socks-proxy-agent "^7.0.0"
     typed-error "^3.0.2"
     uuid "^8.3.2"
@@ -7199,7 +7200,7 @@ semver-regex@^4.0.5:
   version "4.0.5"
   resolved "https://registry.yarnpkg.com/semver-regex/-/semver-regex-4.0.5.tgz#fbfa36c7ba70461311f5debcb3928821eb4f9180"
 
-"semver@2 || 3 || 4 || 5", semver@^5.5.0, semver@^5.6.0:
+"semver@2 || 3 || 4 || 5", semver@^5.5.0, semver@^5.6.0, semver@^5.7.1:
   version "5.7.1"
   resolved "https://registry.npmjs.org/semver/-/semver-5.7.1.tgz"
 

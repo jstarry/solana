@@ -15,7 +15,7 @@
     "@sentry/react": "^7.53.1",
     "@solana/buffer-layout": "^4.0.1",
     "@solana/spl-token-registry": "^0.2.4574",
-    "@solana/web3.js": "^1.77.1",
+    "@solana/web3.js": "^1.77.2",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^14.0.0",
     "@testing-library/user-event": "^14.4.3",

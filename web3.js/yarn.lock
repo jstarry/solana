@@ -252,13 +252,7 @@
   dependencies:
     "@babel/types" "^7.22.5"
 
-"@babel/helper-module-imports@^7.18.6", "@babel/helper-module-imports@^7.21.4":
-  version "7.21.4"
-  resolved "https://registry.yarnpkg.com/@babel/helper-module-imports/-/helper-module-imports-7.21.4.tgz#ac88b2f76093637489e718a90cec6cf8a9b029af"
-  dependencies:
-    "@babel/types" "^7.21.4"
-
-"@babel/helper-module-imports@^7.22.5":
+"@babel/helper-module-imports@^7.18.6", "@babel/helper-module-imports@^7.22.5":
   version "7.22.5"
   resolved "https://registry.yarnpkg.com/@babel/helper-module-imports/-/helper-module-imports-7.22.5.tgz#1a8f4c9f4027d23f520bd76b364d44434a72660c"
   dependencies:
@@ -873,11 +867,11 @@
     "@babel/helper-plugin-utils" "^7.18.6"
 
 "@babel/plugin-transform-runtime@^7.12.10":
-  version "7.22.4"
-  resolved "https://registry.yarnpkg.com/@babel/plugin-transform-runtime/-/plugin-transform-runtime-7.22.4.tgz#f8353f313f18c3ce1315688631ec48657b97af42"
+  version "7.22.5"
+  resolved "https://registry.yarnpkg.com/@babel/plugin-transform-runtime/-/plugin-transform-runtime-7.22.5.tgz#ca975fb5e260044473c8142e1b18b567d33c2a3b"
   dependencies:
-    "@babel/helper-module-imports" "^7.21.4"
-    "@babel/helper-plugin-utils" "^7.21.5"
+    "@babel/helper-module-imports" "^7.22.5"
+    "@babel/helper-plugin-utils" "^7.22.5"
     babel-plugin-polyfill-corejs2 "^0.4.3"
     babel-plugin-polyfill-corejs3 "^0.8.1"
     babel-plugin-polyfill-regenerator "^0.5.0"
@@ -1098,7 +1092,7 @@
     debug "^4.1.0"
     globals "^11.1.0"
 
-"@babel/types@^7.18.10", "@babel/types@^7.18.6", "@babel/types@^7.18.9", "@babel/types@^7.20.0", "@babel/types@^7.20.7", "@babel/types@^7.21.0", "@babel/types@^7.21.4", "@babel/types@^7.22.0", "@babel/types@^7.22.3", "@babel/types@^7.22.4", "@babel/types@^7.22.5", "@babel/types@^7.4.4":
+"@babel/types@^7.18.10", "@babel/types@^7.18.6", "@babel/types@^7.18.9", "@babel/types@^7.20.0", "@babel/types@^7.20.7", "@babel/types@^7.21.0", "@babel/types@^7.22.0", "@babel/types@^7.22.3", "@babel/types@^7.22.4", "@babel/types@^7.22.5", "@babel/types@^7.4.4":
   version "7.22.5"
   resolved "https://registry.yarnpkg.com/@babel/types/-/types-7.22.5.tgz#cd93eeaab025880a3a47ec881f4b096a5b786fbe"
   dependencies:

@@ -3066,9 +3066,9 @@ cosmiconfig-typescript-loader@^4.0.0:
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/cosmiconfig-typescript-loader/-/cosmiconfig-typescript-loader-4.0.0.tgz#4a6d856c1281135197346a6f64dfa73a9cd9fefa"
 
-cosmiconfig@8.1.3, cosmiconfig@^8.0.0:
-  version "8.1.3"
-  resolved "https://registry.yarnpkg.com/cosmiconfig/-/cosmiconfig-8.1.3.tgz#0e614a118fcc2d9e5afc2f87d53cd09931015689"
+cosmiconfig@8.2.0, cosmiconfig@^8.0.0:
+  version "8.2.0"
+  resolved "https://registry.yarnpkg.com/cosmiconfig/-/cosmiconfig-8.2.0.tgz#f7d17c56a590856cd1e7cee98734dca272b0d8fd"
   dependencies:
     import-fresh "^3.2.1"
     js-yaml "^4.1.0"
@@ -3259,9 +3259,9 @@ destroyable-server@^1.0.0:
   dependencies:
     "@types/node" "*"
 
-devtools-protocol@0.0.1120988:
-  version "0.0.1120988"
-  resolved "https://registry.yarnpkg.com/devtools-protocol/-/devtools-protocol-0.0.1120988.tgz#8fe49088919ae3b8df7235774633763f1f925066"
+devtools-protocol@0.0.1135028:
+  version "0.0.1135028"
+  resolved "https://registry.yarnpkg.com/devtools-protocol/-/devtools-protocol-0.0.1135028.tgz#b2c667c301cb6da9ba3ed0989fe1fb88b660ee0a"
 
 diff@5.0.0:
   version "5.0.0"
@@ -6864,24 +6864,24 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@20.5.0:
-  version "20.5.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-20.5.0.tgz#4b9ccd6c4ca35fe02373bf2147dc75b42ebd22c4"
+puppeteer-core@20.6.0:
+  version "20.6.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-20.6.0.tgz#ab47cbad9362d81dd082e8460647f14dd5a8c54a"
   dependencies:
     "@puppeteer/browsers" "1.4.1"
     chromium-bidi "0.4.11"
     cross-fetch "3.1.6"
     debug "4.3.4"
-    devtools-protocol "0.0.1120988"
+    devtools-protocol "0.0.1135028"
     ws "8.13.0"
 
 puppeteer@^20.0.0:
-  version "20.5.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-20.5.0.tgz#453f42edb2cb085bb237914c2bcda7938b7ab1c2"
+  version "20.6.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-20.6.0.tgz#b96974cd98232adb26a58734fd12033dd5fe7b94"
   dependencies:
     "@puppeteer/browsers" "1.4.1"
-    cosmiconfig "8.1.3"
-    puppeteer-core "20.5.0"
+    cosmiconfig "8.2.0"
+    puppeteer-core "20.6.0"
 
 q@^1.5.1:
   version "1.5.1"

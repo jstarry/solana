@@ -15,17 +15,13 @@
   dependencies:
     "@babel/highlight" "^7.10.4"
 
-"@babel/code-frame@^7.0.0", "@babel/code-frame@^7.10.4", "@babel/code-frame@^7.18.6", "@babel/code-frame@^7.22.5":
+"@babel/code-frame@^7.0.0", "@babel/code-frame@^7.10.4", "@babel/code-frame@^7.18.6", "@babel/code-frame@^7.21.4", "@babel/code-frame@^7.22.5":
   version "7.22.5"
   resolved "https://registry.yarnpkg.com/@babel/code-frame/-/code-frame-7.22.5.tgz#234d98e1551960604f1246e6475891a570ad5658"
   dependencies:
     "@babel/highlight" "^7.22.5"
 
 "@babel/compat-data@^7.17.7", "@babel/compat-data@^7.22.5", "@babel/compat-data@^7.22.6":
-  version "7.22.6"
-  resolved "https://registry.yarnpkg.com/@babel/compat-data/-/compat-data-7.22.6.tgz#15606a20341de59ba02cd2fcc5086fcbe73bf544"
-
-"@babel/compat-data@^7.22.6":
   version "7.22.6"
   resolved "https://registry.yarnpkg.com/@babel/compat-data/-/compat-data-7.22.6.tgz#15606a20341de59ba02cd2fcc5086fcbe73bf544"
 
@@ -3413,7 +3409,7 @@ err-code@^2.0.2:
   version "2.0.3"
   resolved "https://registry.npmjs.org/err-code/-/err-code-2.0.3.tgz"
 
-error-ex@^1.3.1:
+error-ex@^1.3.1, error-ex@^1.3.2:
   version "1.3.2"
   resolved "https://registry.npmjs.org/error-ex/-/error-ex-1.3.2.tgz"
   dependencies:
@@ -5340,6 +5336,10 @@ lines-and-columns@^1.1.6:
   version "1.2.4"
   resolved "https://registry.npmjs.org/lines-and-columns/-/lines-and-columns-1.2.4.tgz"
 
+lines-and-columns@^2.0.3:
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/lines-and-columns/-/lines-and-columns-2.0.3.tgz#b2f0badedb556b747020ab8ea7f0373e22efac1b"
+
 load-json-file@^4.0.0:
   version "4.0.0"
   resolved "https://registry.npmjs.org/load-json-file/-/load-json-file-4.0.0.tgz"
@@ -6618,6 +6618,16 @@ parse-json@^5.0.0, parse-json@^5.2.0:
     json-parse-even-better-errors "^2.3.0"
     lines-and-columns "^1.1.6"
 
+parse-json@^7.0.0:
+  version "7.0.0"
+  resolved "https://registry.yarnpkg.com/parse-json/-/parse-json-7.0.0.tgz#51c0713f233b804eb5adee3ef1e75d3243e0ff06"
+  dependencies:
+    "@babel/code-frame" "^7.21.4"
+    error-ex "^1.3.2"
+    json-parse-even-better-errors "^3.0.0"
+    lines-and-columns "^2.0.3"
+    type-fest "^3.8.0"
+
 parse-multipart-data@^1.4.0:
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/parse-multipart-data/-/parse-multipart-data-1.5.0.tgz#ab894cc6c40229d0a2042500e120df7562d94b87"
@@ -6991,6 +7001,14 @@ read-package-json@^6.0.0:
     normalize-package-data "^5.0.0"
     npm-normalize-package-bin "^3.0.0"
 
+read-pkg-up@^10.0.0:
+  version "10.0.0"
+  resolved "https://registry.yarnpkg.com/read-pkg-up/-/read-pkg-up-10.0.0.tgz#0542d21ff1001d2bfff1f6eac8b4d1d1dc486617"
+  dependencies:
+    find-up "^6.3.0"
+    read-pkg "^8.0.0"
+    type-fest "^3.12.0"
+
 read-pkg-up@^7.0.1:
   version "7.0.1"
   resolved "https://registry.npmjs.org/read-pkg-up/-/read-pkg-up-7.0.1.tgz"
@@ -6999,7 +7017,7 @@ read-pkg-up@^7.0.1:
     read-pkg "^5.2.0"
     type-fest "^0.8.1"
 
-read-pkg-up@^9.0.0, read-pkg-up@^9.1.0:
+read-pkg-up@^9.0.0:
   version "9.1.0"
   resolved "https://registry.yarnpkg.com/read-pkg-up/-/read-pkg-up-9.1.0.tgz#38ca48e0bc6c6b260464b14aad9bcd4e5b1fbdc3"
   dependencies:
@@ -7032,6 +7050,15 @@ read-pkg@^7.0.0, read-pkg@^7.1.0:
     normalize-package-data "^3.0.2"
     parse-json "^5.2.0"
     type-fest "^2.0.0"
+
+read-pkg@^8.0.0:
+  version "8.0.0"
+  resolved "https://registry.yarnpkg.com/read-pkg/-/read-pkg-8.0.0.tgz#78b93774c15a3f151b56d5790d5127a5cb9fc507"
+  dependencies:
+    "@types/normalize-package-data" "^2.4.1"
+    normalize-package-data "^5.0.0"
+    parse-json "^7.0.0"
+    type-fest "^3.8.0"
 
 read-tls-client-hello@^1.0.0:
   version "1.0.1"
@@ -7360,8 +7387,8 @@ secure-compare@3.0.1:
   resolved "https://registry.npmjs.org/secure-compare/-/secure-compare-3.0.1.tgz"
 
 semantic-release@^21.0.0:
-  version "21.0.6"
-  resolved "https://registry.yarnpkg.com/semantic-release/-/semantic-release-21.0.6.tgz#096fd47630716461f4f634d13c9d7dfea92fe5a1"
+  version "21.0.7"
+  resolved "https://registry.yarnpkg.com/semantic-release/-/semantic-release-21.0.7.tgz#deac6f4908bbd3c03c9a3ba41ae402b4305bf115"
   dependencies:
     "@semantic-release/commit-analyzer" "^10.0.0"
     "@semantic-release/error" "^4.0.0"
@@ -7385,7 +7412,7 @@ semantic-release@^21.0.0:
     micromatch "^4.0.2"
     p-each-series "^3.0.0"
     p-reduce "^3.0.0"
-    read-pkg-up "^9.1.0"
+    read-pkg-up "^10.0.0"
     resolve-from "^5.0.0"
     semver "^7.3.2"
     semver-diff "^4.0.0"
@@ -8176,6 +8203,10 @@ type-fest@^1.0.1, type-fest@^1.0.2:
 type-fest@^2.0.0, type-fest@^2.12.2, type-fest@^2.5.0:
   version "2.19.0"
   resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-2.19.0.tgz#88068015bb33036a598b952e55e9311a60fd3a9b"
+
+type-fest@^3.12.0, type-fest@^3.8.0:
+  version "3.12.0"
+  resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-3.12.0.tgz#4ce26edc1ccc59fc171e495887ef391fe1f5280e"
 
 type-is@~1.6.18:
   version "1.6.18"

@@ -25,10 +25,6 @@
   version "7.22.6"
   resolved "https://registry.yarnpkg.com/@babel/compat-data/-/compat-data-7.22.6.tgz#15606a20341de59ba02cd2fcc5086fcbe73bf544"
 
-"@babel/compat-data@^7.22.6":
-  version "7.22.6"
-  resolved "https://registry.yarnpkg.com/@babel/compat-data/-/compat-data-7.22.6.tgz#15606a20341de59ba02cd2fcc5086fcbe73bf544"
-
 "@babel/core@^7.12.13", "@babel/core@^7.7.5":
   version "7.22.6"
   resolved "https://registry.yarnpkg.com/@babel/core/-/core-7.22.6.tgz#aafafbe86e9a1679d876b99dc46382964ef72494"
@@ -5874,8 +5870,8 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.7.5"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.5.tgz#08a41e9dcffd6b0fa6a5ac453dad0f25bc2066d0"
+  version "3.7.6"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.7.6.tgz#19cc089a5404d1141f562d23660a76546c034a51"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"

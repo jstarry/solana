@@ -3091,21 +3091,15 @@ cross-env@7.0.3:
   dependencies:
     cross-spawn "^7.0.1"
 
-cross-fetch@3.1.6:
-  version "3.1.6"
-  resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-3.1.6.tgz#bae05aa31a4da760969756318feeee6e70f15d6c"
+cross-fetch@4.0.0, cross-fetch@^4.0.0:
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-4.0.0.tgz#f037aef1580bb3a1a35164ea2a848ba81b445983"
   dependencies:
-    node-fetch "^2.6.11"
+    node-fetch "^2.6.12"
 
 cross-fetch@^3.1.5:
   version "3.1.8"
   resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-3.1.8.tgz#0327eba65fd68a7d119f8fb2bf9334a1a7956f82"
-  dependencies:
-    node-fetch "^2.6.12"
-
-cross-fetch@^4.0.0:
-  version "4.0.0"
-  resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-4.0.0.tgz#f037aef1580bb3a1a35164ea2a848ba81b445983"
   dependencies:
     node-fetch "^2.6.12"
 
@@ -6001,7 +5995,7 @@ node-emoji@^1.11.0:
   dependencies:
     lodash "^4.17.21"
 
-node-fetch@2, node-fetch@^2.6.1, node-fetch@^2.6.11, node-fetch@^2.6.12, node-fetch@^2.6.7:
+node-fetch@2, node-fetch@^2.6.1, node-fetch@^2.6.12, node-fetch@^2.6.7:
   version "2.6.12"
   resolved "https://registry.yarnpkg.com/node-fetch/-/node-fetch-2.6.12.tgz#02eb8e22074018e3d5a83016649d04df0e348fba"
   dependencies:
@@ -6896,24 +6890,24 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@20.7.4:
-  version "20.7.4"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-20.7.4.tgz#4ea245aa8746873584f620222fc31a1781394b32"
+puppeteer-core@20.8.0:
+  version "20.8.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-20.8.0.tgz#b20073fc31869c0373714a9c827679686819290c"
   dependencies:
     "@puppeteer/browsers" "1.4.3"
     chromium-bidi "0.4.16"
-    cross-fetch "3.1.6"
+    cross-fetch "4.0.0"
     debug "4.3.4"
     devtools-protocol "0.0.1135028"
     ws "8.13.0"
 
 puppeteer@^20.0.0:
-  version "20.7.4"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-20.7.4.tgz#6c27aebcd64d4c1f3b1d79bcd370af8f6490acf4"
+  version "20.8.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-20.8.0.tgz#933e5bfc354d5829fed1a0b91f2c9820e4b79965"
   dependencies:
     "@puppeteer/browsers" "1.4.3"
     cosmiconfig "8.2.0"
-    puppeteer-core "20.7.4"
+    puppeteer-core "20.8.0"
 
 q@^1.5.1:
   version "1.5.1"

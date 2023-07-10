@@ -1979,8 +1979,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@^20.0.0":
-  version "20.4.0"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.4.0.tgz#01d637d1891e419bc85763b46f42809cd2d5addb"
+  version "20.4.1"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.4.1.tgz#a6033a8718653c50ac4962977e14d0f984d9527d"
 
 "@types/node@^12.12.54":
   version "12.20.47"
@@ -2390,7 +2390,7 @@ b4a@^1.6.4:
   version "1.6.4"
   resolved "https://registry.yarnpkg.com/b4a/-/b4a-1.6.4.tgz#ef1c1422cae5ce6535ec191baeed7567443f36c9"
 
-babel-plugin-polyfill-corejs2@^0.4.3, babel-plugin-polyfill-corejs2@^0.4.4:
+babel-plugin-polyfill-corejs2@^0.4.4:
   version "0.4.4"
   resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-corejs2/-/babel-plugin-polyfill-corejs2-0.4.4.tgz#9f9a0e1cd9d645cc246a5e094db5c3aa913ccd2b"
   dependencies:
@@ -2398,14 +2398,14 @@ babel-plugin-polyfill-corejs2@^0.4.3, babel-plugin-polyfill-corejs2@^0.4.4:
     "@babel/helper-define-polyfill-provider" "^0.4.1"
     "@nicolo-ribaudo/semver-v6" "^6.3.3"
 
-babel-plugin-polyfill-corejs3@^0.8.1, babel-plugin-polyfill-corejs3@^0.8.2:
+babel-plugin-polyfill-corejs3@^0.8.2:
   version "0.8.2"
   resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-corejs3/-/babel-plugin-polyfill-corejs3-0.8.2.tgz#d406c5738d298cd9c66f64a94cf8d5904ce4cc5e"
   dependencies:
     "@babel/helper-define-polyfill-provider" "^0.4.1"
     core-js-compat "^3.31.0"
 
-babel-plugin-polyfill-regenerator@^0.5.0, babel-plugin-polyfill-regenerator@^0.5.1:
+babel-plugin-polyfill-regenerator@^0.5.1:
   version "0.5.1"
   resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-regenerator/-/babel-plugin-polyfill-regenerator-0.5.1.tgz#ace7a5eced6dff7d5060c335c52064778216afd3"
   dependencies:

@@ -25,10 +25,6 @@
   version "7.22.9"
   resolved "https://registry.yarnpkg.com/@babel/compat-data/-/compat-data-7.22.9.tgz#71cdb00a1ce3a329ce4cbec3a44f9fef35669730"
 
-"@babel/compat-data@^7.22.9":
-  version "7.22.9"
-  resolved "https://registry.yarnpkg.com/@babel/compat-data/-/compat-data-7.22.9.tgz#71cdb00a1ce3a329ce4cbec3a44f9fef35669730"
-
 "@babel/core@^7.12.13", "@babel/core@^7.7.5":
   version "7.22.9"
   resolved "https://registry.yarnpkg.com/@babel/core/-/core-7.22.9.tgz#bd96492c68822198f33e8a256061da3cf391f58f"
@@ -1657,8 +1653,8 @@
     "@rollup/pluginutils" "^5.0.1"
 
 "@rollup/plugin-commonjs@^25.0.0":
-  version "25.0.2"
-  resolved "https://registry.yarnpkg.com/@rollup/plugin-commonjs/-/plugin-commonjs-25.0.2.tgz#7ed37d00a12fc7fdd3aadba5fa0de52f2372bbbb"
+  version "25.0.3"
+  resolved "https://registry.yarnpkg.com/@rollup/plugin-commonjs/-/plugin-commonjs-25.0.3.tgz#eb5217ebae43d63a172b516655be270ed258bdcc"
   dependencies:
     "@rollup/pluginutils" "^5.0.1"
     commondir "^1.0.1"

@@ -1624,9 +1624,9 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@1.4.6":
-  version "1.4.6"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-1.4.6.tgz#1f70fd23d5d2ccce9d29b038e5039d7a1049ca77"
+"@puppeteer/browsers@1.5.0":
+  version "1.5.0"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-1.5.0.tgz#2c445f7e41133d4aa23f776748d70211ea4e98ed"
   dependencies:
     debug "4.3.4"
     extract-zip "2.0.1"
@@ -2817,11 +2817,11 @@ chownr@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/chownr/-/chownr-2.0.0.tgz"
 
-chromium-bidi@0.4.16:
-  version "0.4.16"
-  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.4.16.tgz#8a67bfdf6bb8804efc22765a82859d20724b46ab"
+chromium-bidi@0.4.20:
+  version "0.4.20"
+  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.4.20.tgz#1cd56426638452b40b29b7054e83c379e7e2b20a"
   dependencies:
-    mitt "3.0.0"
+    mitt "3.0.1"
 
 ci-info@^3.6.1, ci-info@^3.7.1, ci-info@^3.8.0:
   version "3.8.0"
@@ -5898,9 +5898,9 @@ minizlib@^2.1.1, minizlib@^2.1.2:
     minipass "^3.0.0"
     yallist "^4.0.0"
 
-mitt@3.0.0:
-  version "3.0.0"
-  resolved "https://registry.yarnpkg.com/mitt/-/mitt-3.0.0.tgz#69ef9bd5c80ff6f57473e8d89326d01c414be0bd"
+mitt@3.0.1:
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/mitt/-/mitt-3.0.1.tgz#ea36cf0cc30403601ae074c8f77b7092cdab36d1"
 
 mkdirp-classic@^0.5.2:
   version "0.5.3"
@@ -6950,24 +6950,24 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@20.9.0:
-  version "20.9.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-20.9.0.tgz#6f4b420001b64419deab38d398a4d9cd071040e6"
+puppeteer-core@21.0.0:
+  version "21.0.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-21.0.0.tgz#8ac560138b2ec171f3d1b3991ddd1a5cf6ac4fdf"
   dependencies:
-    "@puppeteer/browsers" "1.4.6"
-    chromium-bidi "0.4.16"
+    "@puppeteer/browsers" "1.5.0"
+    chromium-bidi "0.4.20"
     cross-fetch "4.0.0"
     debug "4.3.4"
     devtools-protocol "0.0.1147663"
     ws "8.13.0"
 
-puppeteer@^20.0.0:
-  version "20.9.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-20.9.0.tgz#7bfb9e37deab9728e13b02ea3fb499b5560c79a7"
+puppeteer@^21.0.0:
+  version "21.0.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-21.0.0.tgz#9091fc1f8d5010c6df121f6fd03a40e6929d94b0"
   dependencies:
-    "@puppeteer/browsers" "1.4.6"
+    "@puppeteer/browsers" "1.5.0"
     cosmiconfig "8.2.0"
-    puppeteer-core "20.9.0"
+    puppeteer-core "21.0.0"
 
 q@^1.5.1:
   version "1.5.1"

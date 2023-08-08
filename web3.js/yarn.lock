@@ -123,9 +123,9 @@
     regexpu-core "^5.3.1"
     semver "^6.3.0"
 
-"@babel/helper-define-polyfill-provider@^0.4.1":
-  version "0.4.1"
-  resolved "https://registry.yarnpkg.com/@babel/helper-define-polyfill-provider/-/helper-define-polyfill-provider-0.4.1.tgz#af1429c4a83ac316a6a8c2cc8ff45cb5d2998d3a"
+"@babel/helper-define-polyfill-provider@^0.4.2":
+  version "0.4.2"
+  resolved "https://registry.yarnpkg.com/@babel/helper-define-polyfill-provider/-/helper-define-polyfill-provider-0.4.2.tgz#82c825cadeeeee7aad237618ebbe8fa1710015d7"
   dependencies:
     "@babel/helper-compilation-targets" "^7.22.6"
     "@babel/helper-plugin-utils" "^7.22.5"
@@ -754,14 +754,14 @@
     "@babel/helper-plugin-utils" "^7.22.5"
 
 "@babel/plugin-transform-runtime@^7.12.10":
-  version "7.22.9"
-  resolved "https://registry.yarnpkg.com/@babel/plugin-transform-runtime/-/plugin-transform-runtime-7.22.9.tgz#a87b11e170cbbfb018e6a2bf91f5c6e533b9e027"
+  version "7.22.10"
+  resolved "https://registry.yarnpkg.com/@babel/plugin-transform-runtime/-/plugin-transform-runtime-7.22.10.tgz#89eda6daf1d3af6f36fb368766553054c8d7cd46"
   dependencies:
     "@babel/helper-module-imports" "^7.22.5"
     "@babel/helper-plugin-utils" "^7.22.5"
-    babel-plugin-polyfill-corejs2 "^0.4.4"
-    babel-plugin-polyfill-corejs3 "^0.8.2"
-    babel-plugin-polyfill-regenerator "^0.5.1"
+    babel-plugin-polyfill-corejs2 "^0.4.5"
+    babel-plugin-polyfill-corejs3 "^0.8.3"
+    babel-plugin-polyfill-regenerator "^0.5.2"
     semver "^6.3.1"
 
 "@babel/plugin-transform-shorthand-properties@^7.22.5":
@@ -1341,10 +1341,6 @@
   dependencies:
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
-
-"@nicolo-ribaudo/semver-v6@^6.3.3":
-  version "6.3.3"
-  resolved "https://registry.yarnpkg.com/@nicolo-ribaudo/semver-v6/-/semver-v6-6.3.3.tgz#ea6d23ade78a325f7a52750aab1526b02b628c29"
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
@@ -2419,26 +2415,26 @@ b4a@^1.6.4:
   version "1.6.4"
   resolved "https://registry.yarnpkg.com/b4a/-/b4a-1.6.4.tgz#ef1c1422cae5ce6535ec191baeed7567443f36c9"
 
-babel-plugin-polyfill-corejs2@^0.4.4:
-  version "0.4.4"
-  resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-corejs2/-/babel-plugin-polyfill-corejs2-0.4.4.tgz#9f9a0e1cd9d645cc246a5e094db5c3aa913ccd2b"
+babel-plugin-polyfill-corejs2@^0.4.4, babel-plugin-polyfill-corejs2@^0.4.5:
+  version "0.4.5"
+  resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-corejs2/-/babel-plugin-polyfill-corejs2-0.4.5.tgz#8097b4cb4af5b64a1d11332b6fb72ef5e64a054c"
   dependencies:
     "@babel/compat-data" "^7.22.6"
-    "@babel/helper-define-polyfill-provider" "^0.4.1"
-    "@nicolo-ribaudo/semver-v6" "^6.3.3"
+    "@babel/helper-define-polyfill-provider" "^0.4.2"
+    semver "^6.3.1"
 
-babel-plugin-polyfill-corejs3@^0.8.2:
-  version "0.8.2"
-  resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-corejs3/-/babel-plugin-polyfill-corejs3-0.8.2.tgz#d406c5738d298cd9c66f64a94cf8d5904ce4cc5e"
+babel-plugin-polyfill-corejs3@^0.8.2, babel-plugin-polyfill-corejs3@^0.8.3:
+  version "0.8.3"
+  resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-corejs3/-/babel-plugin-polyfill-corejs3-0.8.3.tgz#b4f719d0ad9bb8e0c23e3e630c0c8ec6dd7a1c52"
   dependencies:
-    "@babel/helper-define-polyfill-provider" "^0.4.1"
+    "@babel/helper-define-polyfill-provider" "^0.4.2"
     core-js-compat "^3.31.0"
 
-babel-plugin-polyfill-regenerator@^0.5.1:
-  version "0.5.1"
-  resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-regenerator/-/babel-plugin-polyfill-regenerator-0.5.1.tgz#ace7a5eced6dff7d5060c335c52064778216afd3"
+babel-plugin-polyfill-regenerator@^0.5.1, babel-plugin-polyfill-regenerator@^0.5.2:
+  version "0.5.2"
+  resolved "https://registry.yarnpkg.com/babel-plugin-polyfill-regenerator/-/babel-plugin-polyfill-regenerator-0.5.2.tgz#80d0f3e1098c080c8b5a65f41e9427af692dc326"
   dependencies:
-    "@babel/helper-define-polyfill-provider" "^0.4.1"
+    "@babel/helper-define-polyfill-provider" "^0.4.2"
 
 backo2@^1.0.2:
   version "1.0.2"

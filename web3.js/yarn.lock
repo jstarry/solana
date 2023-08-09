@@ -1625,9 +1625,9 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@1.5.0":
-  version "1.5.0"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-1.5.0.tgz#2c445f7e41133d4aa23f776748d70211ea4e98ed"
+"@puppeteer/browsers@1.5.1":
+  version "1.5.1"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-1.5.1.tgz#90e26741467aad32faf78021a7fc02e98e18dd71"
   dependencies:
     debug "4.3.4"
     extract-zip "2.0.1"
@@ -6976,11 +6976,11 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@21.0.1:
-  version "21.0.1"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-21.0.1.tgz#bc20f3b2c1ee29936cb3413e560c7ca3cfdb0027"
+puppeteer-core@21.0.2:
+  version "21.0.2"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-21.0.2.tgz#1ce10a495c7f57a06e3de6e247e2faae4a33c2c2"
   dependencies:
-    "@puppeteer/browsers" "1.5.0"
+    "@puppeteer/browsers" "1.5.1"
     chromium-bidi "0.4.20"
     cross-fetch "4.0.0"
     debug "4.3.4"
@@ -6988,12 +6988,12 @@ puppeteer-core@21.0.1:
     ws "8.13.0"
 
 puppeteer@^21.0.0:
-  version "21.0.1"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-21.0.1.tgz#4c842509cea4dd7688bbf023c360969b4eefe52f"
+  version "21.0.2"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-21.0.2.tgz#d30b61d5d0c0be2d57677b177108daea376bcd50"
   dependencies:
-    "@puppeteer/browsers" "1.5.0"
+    "@puppeteer/browsers" "1.5.1"
     cosmiconfig "8.2.0"
-    puppeteer-core "21.0.1"
+    puppeteer-core "21.0.2"
 
 q@^1.5.1:
   version "1.5.1"

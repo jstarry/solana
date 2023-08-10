@@ -999,13 +999,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^17.7.0":
-  version "17.7.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.7.0.tgz#c62213abdf47764704c8dc3d2ca5f53fb1fa1371"
+"@commitlint/cli@^17.7.1":
+  version "17.7.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.7.1.tgz#f3ab35bd38d82fcd4ab03ec5a1e9db26d57fe1b0"
   dependencies:
     "@commitlint/format" "^17.4.4"
     "@commitlint/lint" "^17.7.0"
-    "@commitlint/load" "^17.7.0"
+    "@commitlint/load" "^17.7.1"
     "@commitlint/read" "^17.5.1"
     "@commitlint/types" "^17.4.4"
     execa "^5.0.0"
@@ -1065,21 +1065,24 @@
     "@commitlint/rules" "^17.7.0"
     "@commitlint/types" "^17.4.4"
 
-"@commitlint/load@^17.7.0":
-  version "17.7.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-17.7.0.tgz#2d69479bff3feec7966906988a39584aedd08574"
+"@commitlint/load@^17.7.1":
+  version "17.7.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-17.7.1.tgz#0723b11723a20043a304a74960602dead89b5cdd"
   dependencies:
     "@commitlint/config-validator" "^17.6.7"
     "@commitlint/execute-rule" "^17.4.0"
     "@commitlint/resolve-extends" "^17.6.7"
     "@commitlint/types" "^17.4.4"
+    "@types/node" "20.4.7"
     chalk "^4.1.0"
     cosmiconfig "^8.0.0"
-    cosmiconfig-typescript-loader "^5.0.0"
+    cosmiconfig-typescript-loader "^4.0.0"
     lodash.isplainobject "^4.0.6"
     lodash.merge "^4.6.2"
     lodash.uniq "^4.5.0"
     resolve-from "^5.0.0"
+    ts-node "^10.8.1"
+    typescript "^4.6.4 || ^5.0.0"
 
 "@commitlint/message@^17.4.2":
   version "17.4.2"
@@ -1135,10 +1138,10 @@
     find-up "^5.0.0"
 
 "@commitlint/travis-cli@^17.0.0":
-  version "17.7.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.7.0.tgz#86df1dbac4a60f5810ae2284fd0ef76502d59070"
+  version "17.7.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.7.1.tgz#a5469f5b27b1d08afc2a4008f55be790b41b0308"
   dependencies:
-    "@commitlint/cli" "^17.7.0"
+    "@commitlint/cli" "^17.7.1"
     execa "^5.0.0"
 
 "@commitlint/types@^17.4.4":
@@ -1983,6 +1986,10 @@
 "@types/node@*", "@types/node@^20.0.0":
   version "20.4.9"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-20.4.9.tgz#c7164e0f8d3f12dfae336af0b1f7fdec8c6b204f"
+
+"@types/node@20.4.7":
+  version "20.4.7"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.4.7.tgz#74d323a93f1391a63477b27b9aec56669c98b2ab"
 
 "@types/node@^12.12.54":
   version "12.20.47"
@@ -3114,11 +3121,9 @@ corser@^2.0.1:
   version "2.0.1"
   resolved "https://registry.npmjs.org/corser/-/corser-2.0.1.tgz"
 
-cosmiconfig-typescript-loader@^5.0.0:
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/cosmiconfig-typescript-loader/-/cosmiconfig-typescript-loader-5.0.0.tgz#0d3becfe022a871f7275ceb2397d692e06045dc8"
-  dependencies:
-    jiti "^1.19.1"
+cosmiconfig-typescript-loader@^4.0.0:
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/cosmiconfig-typescript-loader/-/cosmiconfig-typescript-loader-4.4.0.tgz#f3feae459ea090f131df5474ce4b1222912319f9"
 
 cosmiconfig@8.2.0, cosmiconfig@^8.0.0:
   version "8.2.0"
@@ -5187,10 +5192,6 @@ jest-worker@^26.2.1:
     "@types/node" "*"
     merge-stream "^2.0.0"
     supports-color "^7.0.0"
-
-jiti@^1.19.1:
-  version "1.19.1"
-  resolved "https://registry.yarnpkg.com/jiti/-/jiti-1.19.1.tgz#fa99e4b76a23053e0e7cde098efe1704a14c16f1"
 
 joi@^17.7.0:
   version "17.7.0"
@@ -8195,7 +8196,7 @@ trim-newlines@^3.0.0:
   version "3.0.1"
   resolved "https://registry.npmjs.org/trim-newlines/-/trim-newlines-3.0.1.tgz"
 
-ts-node@^10.0.0:
+ts-node@^10.0.0, ts-node@^10.8.1:
   version "10.9.1"
   resolved "https://registry.yarnpkg.com/ts-node/-/ts-node-10.9.1.tgz#e73de9102958af9e1f0b168a6ff320e25adcff4b"
   dependencies:
@@ -8349,6 +8350,10 @@ typedoc@^0.24.1:
 typescript@^4.3.2:
   version "4.9.5"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.9.5.tgz#095979f9bcc0d09da324d58d03ce8f8374cbe65a"
+
+"typescript@^4.6.4 || ^5.0.0":
+  version "5.1.6"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.1.6.tgz#02f8ac202b6dad2c0dd5e0913745b47a37998274"
 
 uglify-js@^3.1.4:
   version "3.15.3"

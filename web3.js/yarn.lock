@@ -5256,6 +5256,10 @@ js-sha3@^0.8.0:
   version "0.8.0"
   resolved "https://registry.npmjs.org/js-sha3/-/js-sha3-0.8.0.tgz"
 
+js-sha3@^0.9.1:
+  version "0.9.1"
+  resolved "https://registry.yarnpkg.com/js-sha3/-/js-sha3-0.9.1.tgz#bc84031591ebd9c47eeb49e9757561d19e22bd4a"
+
 js-tokens@^4.0.0:
   version "4.0.0"
   resolved "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz"

@@ -967,8 +967,8 @@
     "@babel/plugin-transform-typescript" "^7.22.11"
 
 "@babel/register@^7.12.13":
-  version "7.22.5"
-  resolved "https://registry.yarnpkg.com/@babel/register/-/register-7.22.5.tgz#e4d8d0f615ea3233a27b5c6ada6750ee59559939"
+  version "7.22.15"
+  resolved "https://registry.yarnpkg.com/@babel/register/-/register-7.22.15.tgz#c2c294a361d59f5fa7bcc8b97ef7319c32ecaec7"
   dependencies:
     clone-deep "^4.0.1"
     find-cache-dir "^2.0.0"

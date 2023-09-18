@@ -20,7 +20,7 @@
     "@testing-library/react": "^14.0.0",
     "@testing-library/user-event": "^14.5.0",
     "@types/bn.js": "^5.1.1",
-    "@types/bs58": "^4.0.1",
+    "@types/bs58": "^4.0.2",
     "@types/chai": "^4.3.6",
     "@types/chart.js": "^2.9.37",
     "@types/classnames": "^2.3.1",

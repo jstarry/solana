@@ -1961,8 +1961,8 @@
     "@types/node" "*"
 
 "@types/bs58@^4.0.1":
-  version "4.0.1"
-  resolved "https://registry.npmjs.org/@types/bs58/-/bs58-4.0.1.tgz"
+  version "4.0.2"
+  resolved "https://registry.yarnpkg.com/@types/bs58/-/bs58-4.0.2.tgz#2f266fb45d19aab4028a9488e7941aa39a537e9a"
   dependencies:
     base-x "^3.0.6"
 

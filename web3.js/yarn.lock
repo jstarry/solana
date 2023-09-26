@@ -3803,11 +3803,11 @@ eslint-plugin-import@2.28.1:
     tsconfig-paths "^3.14.2"
 
 eslint-plugin-mocha@^10.0.4:
-  version "10.1.0"
-  resolved "https://registry.yarnpkg.com/eslint-plugin-mocha/-/eslint-plugin-mocha-10.1.0.tgz#69325414f875be87fb2cb00b2ef33168d4eb7c8d"
+  version "10.2.0"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-mocha/-/eslint-plugin-mocha-10.2.0.tgz#15b05ce5be4b332bb0d76826ec1c5ebf67102ad6"
   dependencies:
     eslint-utils "^3.0.0"
-    rambda "^7.1.0"
+    rambda "^7.4.0"
 
 eslint-plugin-prettier@^4.0.0:
   version "4.2.1"
@@ -7268,9 +7268,9 @@ quick-lru@^5.1.1:
   version "5.1.1"
   resolved "https://registry.npmjs.org/quick-lru/-/quick-lru-5.1.1.tgz"
 
-rambda@^7.1.0:
-  version "7.1.4"
-  resolved "https://registry.yarnpkg.com/rambda/-/rambda-7.1.4.tgz#7faa9665a54c5d81773975532a942b3113bb4a56"
+rambda@^7.4.0:
+  version "7.5.0"
+  resolved "https://registry.yarnpkg.com/rambda/-/rambda-7.5.0.tgz#1865044c59bc0b16f63026c6e5a97e4b1bbe98fe"
 
 randombytes@^2.1.0:
   version "2.1.0"

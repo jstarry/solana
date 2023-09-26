@@ -2128,8 +2128,8 @@
   resolved "https://registry.yarnpkg.com/@types/resolve/-/resolve-1.20.2.tgz#97d26e00cd4a0423b4af620abecf3e6f442b7975"
 
 "@types/secp256k1@^4.0.1":
-  version "4.0.3"
-  resolved "https://registry.npmjs.org/@types/secp256k1/-/secp256k1-4.0.3.tgz"
+  version "4.0.4"
+  resolved "https://registry.yarnpkg.com/@types/secp256k1/-/secp256k1-4.0.4.tgz#33c760de627fce1f449c2d4270da07e4da54c830"
   dependencies:
     "@types/node" "*"
 

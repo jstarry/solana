@@ -2909,11 +2909,11 @@ chai-as-promised@^7.1.1:
     check-error "^1.0.2"
 
 chai@^4.3.0:
-  version "4.3.8"
-  resolved "https://registry.yarnpkg.com/chai/-/chai-4.3.8.tgz#40c59718ad6928da6629c70496fe990b2bb5b17c"
+  version "4.3.9"
+  resolved "https://registry.yarnpkg.com/chai/-/chai-4.3.9.tgz#c934ab542b11cc933a963617f0f890274c66c042"
   dependencies:
     assertion-error "^1.1.0"
-    check-error "^1.0.2"
+    check-error "^1.0.3"
     deep-eql "^4.1.2"
     get-func-name "^2.0.0"
     loupe "^2.3.1"
@@ -2943,9 +2943,11 @@ char-regex@^1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/char-regex/-/char-regex-1.0.2.tgz#d744358226217f981ed58f479b1d6bcc29545dcf"
 
-check-error@^1.0.2:
-  version "1.0.2"
-  resolved "https://registry.npmjs.org/check-error/-/check-error-1.0.2.tgz"
+check-error@^1.0.2, check-error@^1.0.3:
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/check-error/-/check-error-1.0.3.tgz#a6502e4312a7ee969f646e83bb3ddd56281bd694"
+  dependencies:
+    get-func-name "^2.0.2"
 
 check-more-types@2.24.0:
   version "2.24.0"
@@ -4394,9 +4396,9 @@ get-caller-file@^2.0.1, get-caller-file@^2.0.5:
   version "2.0.5"
   resolved "https://registry.npmjs.org/get-caller-file/-/get-caller-file-2.0.5.tgz"
 
-get-func-name@^2.0.0:
-  version "2.0.0"
-  resolved "https://registry.npmjs.org/get-func-name/-/get-func-name-2.0.0.tgz"
+get-func-name@^2.0.0, get-func-name@^2.0.2:
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/get-func-name/-/get-func-name-2.0.2.tgz#0d7cf20cd13fda808669ffa88f4ffc7a3943fc41"
 
 get-intrinsic@^1.0.2, get-intrinsic@^1.1.0, get-intrinsic@^1.1.1:
   version "1.1.1"

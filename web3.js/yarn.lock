@@ -1056,13 +1056,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^17.7.1":
-  version "17.7.1"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.7.1.tgz#f3ab35bd38d82fcd4ab03ec5a1e9db26d57fe1b0"
+"@commitlint/cli@^17.7.2":
+  version "17.7.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-17.7.2.tgz#3a0287373224db14968ab160b2b4988c693d3400"
   dependencies:
     "@commitlint/format" "^17.4.4"
     "@commitlint/lint" "^17.7.0"
-    "@commitlint/load" "^17.7.1"
+    "@commitlint/load" "^17.7.2"
     "@commitlint/read" "^17.5.1"
     "@commitlint/types" "^17.4.4"
     execa "^5.0.0"
@@ -1122,15 +1122,15 @@
     "@commitlint/rules" "^17.7.0"
     "@commitlint/types" "^17.4.4"
 
-"@commitlint/load@^17.7.1":
-  version "17.7.1"
-  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-17.7.1.tgz#0723b11723a20043a304a74960602dead89b5cdd"
+"@commitlint/load@^17.7.2":
+  version "17.7.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-17.7.2.tgz#85730900a501c50f0bc890bb50e4a2167ee3085a"
   dependencies:
     "@commitlint/config-validator" "^17.6.7"
     "@commitlint/execute-rule" "^17.4.0"
     "@commitlint/resolve-extends" "^17.6.7"
     "@commitlint/types" "^17.4.4"
-    "@types/node" "20.4.7"
+    "@types/node" "20.5.1"
     chalk "^4.1.0"
     cosmiconfig "^8.0.0"
     cosmiconfig-typescript-loader "^4.0.0"
@@ -1195,10 +1195,10 @@
     find-up "^5.0.0"
 
 "@commitlint/travis-cli@^17.0.0":
-  version "17.7.1"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.7.1.tgz#a5469f5b27b1d08afc2a4008f55be790b41b0308"
+  version "17.7.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-17.7.2.tgz#706baeb85ac335a0b42871a281f5ba6e30352ae8"
   dependencies:
-    "@commitlint/cli" "^17.7.1"
+    "@commitlint/cli" "^17.7.2"
     execa "^5.0.0"
 
 "@commitlint/types@^17.4.4":
@@ -2099,9 +2099,9 @@
   version "20.7.1"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-20.7.1.tgz#06d732ead0bd5ad978ef0ea9cbdeb24dc8717514"
 
-"@types/node@20.4.7":
-  version "20.4.7"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.4.7.tgz#74d323a93f1391a63477b27b9aec56669c98b2ab"
+"@types/node@20.5.1":
+  version "20.5.1"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.5.1.tgz#178d58ee7e4834152b0e8b4d30cbfab578b9bb30"
 
 "@types/node@^12.12.54":
   version "12.20.47"

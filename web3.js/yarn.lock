@@ -6151,8 +6151,8 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.9.3"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.9.3.tgz#7a6b500efb2da66ebbf16c7ac17a543376ede761"
+  version "3.9.4"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.9.4.tgz#9e140491a243298700cf72dc0a4aa4c02e5de2fa"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"

@@ -2095,8 +2095,8 @@
   resolved "https://registry.yarnpkg.com/@types/mocha/-/mocha-10.0.3.tgz#4804fe9cd39da26eb62fa65c15ea77615a187812"
 
 "@types/mz@^2.7.3":
-  version "2.7.5"
-  resolved "https://registry.yarnpkg.com/@types/mz/-/mz-2.7.5.tgz#6d7d6cf06a2a02b8203260a341744a76b5ecde9b"
+  version "2.7.6"
+  resolved "https://registry.yarnpkg.com/@types/mz/-/mz-2.7.6.tgz#20e076b3198878c139608432e7e4a2f0e0200986"
   dependencies:
     "@types/node" "*"
 

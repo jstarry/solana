@@ -7589,8 +7589,8 @@ rollup@2.79.1:
     fsevents "~2.3.2"
 
 rpc-websockets@^7.4.2, rpc-websockets@^7.5.0:
-  version "7.6.0"
-  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-7.6.0.tgz#d3f4c0dac108ca35566b0e31552c32e58928cd04"
+  version "7.6.1"
+  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-7.6.1.tgz#7d1dd00e5ad3e17bbe1d88ba6e66f4cb579cb66b"
   dependencies:
     "@babel/runtime" "^7.17.2"
     eventemitter3 "^4.0.7"

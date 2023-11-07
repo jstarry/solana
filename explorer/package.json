@@ -19,7 +19,7 @@
     "@testing-library/jest-dom": "^6.1.4",
     "@testing-library/react": "^14.0.0",
     "@testing-library/user-event": "^14.5.1",
-    "@types/bn.js": "^5.1.4",
+    "@types/bn.js": "^5.1.5",
     "@types/bs58": "^4.0.3",
     "@types/chai": "^4.3.9",
     "@types/chart.js": "^2.9.37",

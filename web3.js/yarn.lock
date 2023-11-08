@@ -2035,8 +2035,8 @@
     "@types/node" "*"
 
 "@types/bs58@^4.0.1":
-  version "4.0.3"
-  resolved "https://registry.yarnpkg.com/@types/bs58/-/bs58-4.0.3.tgz#0ccc90341c886acb7abeb42c6f848403a6a021af"
+  version "4.0.4"
+  resolved "https://registry.yarnpkg.com/@types/bs58/-/bs58-4.0.4.tgz#49fbcb0c7db5f7cea26f0e0f61dc4a41a2445aab"
   dependencies:
     "@types/node" "*"
     base-x "^3.0.6"

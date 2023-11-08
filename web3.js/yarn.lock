@@ -2048,8 +2048,8 @@
     "@types/chai" "*"
 
 "@types/chai@*", "@types/chai@^4.2.15":
-  version "4.3.9"
-  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-4.3.9.tgz#144d762491967db8c6dea38e03d2206c2623feec"
+  version "4.3.10"
+  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-4.3.10.tgz#2ad2959d1767edee5b0e4efb1a0cd2b500747317"
 
 "@types/connect@^3.4.33":
   version "3.4.35"

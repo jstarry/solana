@@ -2156,8 +2156,8 @@
     "@types/node" "*"
 
 "@types/sinon@^17.0.0":
-  version "17.0.0"
-  resolved "https://registry.yarnpkg.com/@types/sinon/-/sinon-17.0.0.tgz#c5e5ee3ca6ab825fe18ef4b0aa74fedf1250baa1"
+  version "17.0.1"
+  resolved "https://registry.yarnpkg.com/@types/sinon/-/sinon-17.0.1.tgz#f17816577ee61d462cb7bfcea6ff64fb05063256"
   dependencies:
     "@types/sinonjs__fake-timers" "*"
 

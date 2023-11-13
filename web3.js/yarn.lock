@@ -1016,13 +1016,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^18.4.0":
-  version "18.4.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-18.4.0.tgz#bbeca164b595473d3a67f1a9aac46bf557a05fb4"
+"@commitlint/cli@^18.4.1":
+  version "18.4.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-18.4.1.tgz#b008ff325f112da260ed92605ca9d9290e53ba81"
   dependencies:
     "@commitlint/format" "^18.4.0"
     "@commitlint/lint" "^18.4.0"
-    "@commitlint/load" "^18.4.0"
+    "@commitlint/load" "^18.4.1"
     "@commitlint/read" "^18.4.0"
     "@commitlint/types" "^18.4.0"
     execa "^5.0.0"
@@ -1082,9 +1082,9 @@
     "@commitlint/rules" "^18.4.0"
     "@commitlint/types" "^18.4.0"
 
-"@commitlint/load@^18.4.0":
-  version "18.4.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-18.4.0.tgz#81e8384ef804c2aba5decca82a643d35cbbc378e"
+"@commitlint/load@^18.4.1":
+  version "18.4.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-18.4.1.tgz#41097fe3b0eed33e61fab6ab6015e9c4bd17de1a"
   dependencies:
     "@commitlint/config-validator" "^18.4.0"
     "@commitlint/execute-rule" "^18.4.0"
@@ -1092,7 +1092,7 @@
     "@commitlint/types" "^18.4.0"
     "@types/node" "^18.11.9"
     chalk "^4.1.0"
-    cosmiconfig "^8.0.0"
+    cosmiconfig "^8.3.6"
     cosmiconfig-typescript-loader "^5.0.0"
     lodash.isplainobject "^4.0.6"
     lodash.merge "^4.6.2"
@@ -1153,10 +1153,10 @@
     find-up "^5.0.0"
 
 "@commitlint/travis-cli@^18.0.0":
-  version "18.4.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-18.4.0.tgz#39b16429fa9dc7812014b07276489742cef619a3"
+  version "18.4.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-18.4.1.tgz#9f80e7280f33da307c25aa20c2b994004551210e"
   dependencies:
-    "@commitlint/cli" "^18.4.0"
+    "@commitlint/cli" "^18.4.1"
     execa "^5.0.0"
 
 "@commitlint/types@^18.4.0":
@@ -3238,7 +3238,7 @@ cosmiconfig-typescript-loader@^5.0.0:
   dependencies:
     jiti "^1.19.1"
 
-cosmiconfig@8.3.6, cosmiconfig@^8.0.0:
+cosmiconfig@8.3.6, cosmiconfig@^8.0.0, cosmiconfig@^8.3.6:
   version "8.3.6"
   resolved "https://registry.yarnpkg.com/cosmiconfig/-/cosmiconfig-8.3.6.tgz#060a2b871d66dba6c8538ea1118ba1ac16f5fae3"
   dependencies:

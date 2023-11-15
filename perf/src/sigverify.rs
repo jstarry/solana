@@ -481,38 +481,49 @@ pub fn generate_offsets(
     )
 }
 
-//inplace shrink a batch of packets
+// in-place shrink a list of packet batches
 pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
-    let mut valid_batch_ix = 0;
-    let mut valid_packet_ix = 0;
-    let mut last_valid_batch = 0;
-    for batch_ix in 0..batches.len() {
-        for packet_ix in 0..batches[batch_ix].len() {
-            if batches[batch_ix][packet_ix].meta().discard() {
+    let mut to_batch_ix = 0;
+    let mut to_packet_ix = 0;
+
+    // move valid packets from the end of the batches list to the start
+    let mut num_valid_batches = batches.len();
+    'from_batch_loop: for from_batch_ix in (0..batches.len()).rev() {
+        for from_packet_ix in 0..batches[from_batch_ix].len() {
+            if batches[from_batch_ix][from_packet_ix].meta().discard() {
                 continue;
             }
-            last_valid_batch = batch_ix.saturating_add(1);
+
             let mut found_spot = false;
-            while valid_batch_ix < batch_ix && !found_spot {
-                while valid_packet_ix < batches[valid_batch_ix].len() {
-                    if batches[valid_batch_ix][valid_packet_ix].meta().discard() {
-                        batches[valid_batch_ix][valid_packet_ix] =
-                            batches[batch_ix][packet_ix].clone();
-                        batches[batch_ix][packet_ix].meta_mut().set_discard(true);
-                        last_valid_batch = valid_batch_ix.saturating_add(1);
+            'to_batch_loop: while to_batch_ix < from_batch_ix {
+                while to_packet_ix < batches[to_batch_ix].len() {
+                    // replace discarded packet with valid packet
+                    if batches[to_batch_ix][to_packet_ix].meta().discard() {
+                        batches[to_batch_ix][to_packet_ix] =
+                            batches[from_batch_ix][from_packet_ix].clone();
+                        batches[from_batch_ix][from_packet_ix]
+                            .meta_mut()
+                            .set_discard(true);
                         found_spot = true;
-                        break;
+                        break 'to_batch_loop;
                     }
-                    valid_packet_ix = valid_packet_ix.saturating_add(1);
+
+                    to_packet_ix = to_packet_ix.saturating_add(1);
                 }
-                if valid_packet_ix >= batches[valid_batch_ix].len() {
-                    valid_packet_ix = 0;
-                    valid_batch_ix = valid_batch_ix.saturating_add(1);
-                }
+
+                to_batch_ix = to_batch_ix.saturating_add(1);
+                to_packet_ix = 0;
+            }
+
+            if !found_spot {
+                break 'from_batch_loop;
             }
         }
+
+        num_valid_batches = num_valid_batches.saturating_sub(1);
     }
-    batches.truncate(last_valid_batch);
+
+    batches.truncate(num_valid_batches);
 }
 
 pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {

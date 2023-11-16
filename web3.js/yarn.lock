@@ -1016,13 +1016,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^18.4.1":
-  version "18.4.1"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-18.4.1.tgz#b008ff325f112da260ed92605ca9d9290e53ba81"
+"@commitlint/cli@^18.4.2":
+  version "18.4.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-18.4.2.tgz#b00e711c371f010447f0a37d464d27e2d1e6cf49"
   dependencies:
     "@commitlint/format" "^18.4.0"
-    "@commitlint/lint" "^18.4.0"
-    "@commitlint/load" "^18.4.1"
+    "@commitlint/lint" "^18.4.2"
+    "@commitlint/load" "^18.4.2"
     "@commitlint/read" "^18.4.0"
     "@commitlint/types" "^18.4.0"
     execa "^5.0.0"
@@ -1066,25 +1066,25 @@
     "@commitlint/types" "^18.4.0"
     chalk "^4.1.0"
 
-"@commitlint/is-ignored@^18.4.0":
-  version "18.4.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/is-ignored/-/is-ignored-18.4.0.tgz#a8cb3cbc49dc9460ada9ba0694f54ef12dafe712"
+"@commitlint/is-ignored@^18.4.2":
+  version "18.4.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/is-ignored/-/is-ignored-18.4.2.tgz#c0929ee7e88a95af7109563fb2e5c691eb934fd1"
   dependencies:
     "@commitlint/types" "^18.4.0"
     semver "7.5.4"
 
-"@commitlint/lint@^18.4.0":
-  version "18.4.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-18.4.0.tgz#bd865bbb25d3d44b4bacccc946d60b157693efdd"
+"@commitlint/lint@^18.4.2":
+  version "18.4.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-18.4.2.tgz#5a2f24ead427b9c9503ad12d135a295eb08f528b"
   dependencies:
-    "@commitlint/is-ignored" "^18.4.0"
+    "@commitlint/is-ignored" "^18.4.2"
     "@commitlint/parse" "^18.4.0"
     "@commitlint/rules" "^18.4.0"
     "@commitlint/types" "^18.4.0"
 
-"@commitlint/load@^18.4.1":
-  version "18.4.1"
-  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-18.4.1.tgz#41097fe3b0eed33e61fab6ab6015e9c4bd17de1a"
+"@commitlint/load@^18.4.2":
+  version "18.4.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-18.4.2.tgz#f3f213f8c0fd36ded1f8950880905add8ae5920b"
   dependencies:
     "@commitlint/config-validator" "^18.4.0"
     "@commitlint/execute-rule" "^18.4.0"
@@ -1153,10 +1153,10 @@
     find-up "^5.0.0"
 
 "@commitlint/travis-cli@^18.0.0":
-  version "18.4.1"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-18.4.1.tgz#9f80e7280f33da307c25aa20c2b994004551210e"
+  version "18.4.2"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-18.4.2.tgz#317bb6fd57e485db582203b275abfa9f496f7df1"
   dependencies:
-    "@commitlint/cli" "^18.4.1"
+    "@commitlint/cli" "^18.4.2"
     execa "^5.0.0"
 
 "@commitlint/types@^18.4.0":

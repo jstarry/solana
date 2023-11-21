@@ -2008,8 +2008,8 @@
     "@types/chai" "*"
 
 "@types/chai@*", "@types/chai@^4.2.15":
-  version "4.3.10"
-  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-4.3.10.tgz#2ad2959d1767edee5b0e4efb1a0cd2b500747317"
+  version "4.3.11"
+  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-4.3.11.tgz#e95050bf79a932cb7305dd130254ccdf9bde671c"
 
 "@types/connect@^3.4.33":
   version "3.4.35"

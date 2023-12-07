@@ -1235,11 +1235,11 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
-"@httptoolkit/httpolyglot@^2.1.1":
-  version "2.1.1"
-  resolved "https://registry.yarnpkg.com/@httptoolkit/httpolyglot/-/httpolyglot-2.1.1.tgz#c48737e68bc61a7bc8fa3a38f6bb7878921df850"
+"@httptoolkit/httpolyglot@^2.2.1":
+  version "2.2.1"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/httpolyglot/-/httpolyglot-2.2.1.tgz#311d1fed65c3ede75c718b1ad0580f1e4734c786"
   dependencies:
-    "@types/node" "^16.7.10"
+    "@types/node" "*"
 
 "@httptoolkit/subscriptions-transport-ws@^0.11.2":
   version "0.11.2"
@@ -2069,10 +2069,6 @@
 "@types/node@^12.12.54":
   version "12.20.47"
   resolved "https://registry.npmjs.org/@types/node/-/node-12.20.47.tgz"
-
-"@types/node@^16.7.10":
-  version "16.11.26"
-  resolved "https://registry.npmjs.org/@types/node/-/node-16.11.26.tgz"
 
 "@types/node@^18.11.9":
   version "18.18.6"
@@ -4760,9 +4756,9 @@ http-server@^14.0.0:
     union "~0.5.0"
     url-join "^4.0.1"
 
-http2-wrapper@^2.2.0:
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/http2-wrapper/-/http2-wrapper-2.2.0.tgz#b80ad199d216b7d3680195077bd7b9060fa9d7f3"
+http2-wrapper@^2.2.1:
+  version "2.2.1"
+  resolved "https://registry.yarnpkg.com/http2-wrapper/-/http2-wrapper-2.2.1.tgz#310968153dcdedb160d8b72114363ef5fce1f64a"
   dependencies:
     quick-lru "^5.1.1"
     resolve-alpn "^1.2.0"
@@ -6110,12 +6106,12 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.9.4"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.9.4.tgz#9e140491a243298700cf72dc0a4aa4c02e5de2fa"
+  version "3.10.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.10.0.tgz#b283e6711139b7ca24ab518f1d667ef8435fca91"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
-    "@httptoolkit/httpolyglot" "^2.1.1"
+    "@httptoolkit/httpolyglot" "^2.2.1"
     "@httptoolkit/subscriptions-transport-ws" "^0.11.2"
     "@httptoolkit/websocket-stream" "^6.0.1"
     "@types/cors" "^2.8.6"
@@ -6135,7 +6131,7 @@ mockttp@^3.0.0:
     graphql-subscriptions "^1.1.0"
     graphql-tag "^2.12.6"
     http-encoding "^1.5.1"
-    http2-wrapper "^2.2.0"
+    http2-wrapper "^2.2.1"
     https-proxy-agent "^5.0.1"
     isomorphic-ws "^4.0.1"
     lodash "^4.16.4"

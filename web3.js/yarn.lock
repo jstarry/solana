@@ -22,7 +22,7 @@
     "@babel/highlight" "^7.23.4"
     chalk "^2.4.2"
 
-"@babel/compat-data@^7.22.6", "@babel/compat-data@^7.22.9", "@babel/compat-data@^7.23.3", "@babel/compat-data@^7.23.5":
+"@babel/compat-data@^7.22.6", "@babel/compat-data@^7.23.3", "@babel/compat-data@^7.23.5":
   version "7.23.5"
   resolved "https://registry.yarnpkg.com/@babel/compat-data/-/compat-data-7.23.5.tgz#ffb878728bb6bdcb6f4510aa51b1be9afb8cfd98"
 
@@ -73,13 +73,13 @@
   dependencies:
     "@babel/types" "^7.22.15"
 
-"@babel/helper-compilation-targets@^7.22.15", "@babel/helper-compilation-targets@^7.22.6":
-  version "7.22.15"
-  resolved "https://registry.yarnpkg.com/@babel/helper-compilation-targets/-/helper-compilation-targets-7.22.15.tgz#0698fc44551a26cf29f18d4662d5bf545a6cfc52"
+"@babel/helper-compilation-targets@^7.22.15", "@babel/helper-compilation-targets@^7.22.6", "@babel/helper-compilation-targets@^7.23.6":
+  version "7.23.6"
+  resolved "https://registry.yarnpkg.com/@babel/helper-compilation-targets/-/helper-compilation-targets-7.23.6.tgz#4d79069b16cbcf1461289eccfbbd81501ae39991"
   dependencies:
-    "@babel/compat-data" "^7.22.9"
-    "@babel/helper-validator-option" "^7.22.15"
-    browserslist "^4.21.9"
+    "@babel/compat-data" "^7.23.5"
+    "@babel/helper-validator-option" "^7.23.5"
+    browserslist "^4.22.2"
     lru-cache "^5.1.1"
     semver "^6.3.1"
 
@@ -605,11 +605,12 @@
     "@babel/helper-plugin-utils" "^7.22.5"
     "@babel/plugin-syntax-export-namespace-from" "^7.8.3"
 
-"@babel/plugin-transform-for-of@^7.23.3":
-  version "7.23.3"
-  resolved "https://registry.yarnpkg.com/@babel/plugin-transform-for-of/-/plugin-transform-for-of-7.23.3.tgz#afe115ff0fbce735e02868d41489093c63e15559"
+"@babel/plugin-transform-for-of@^7.23.6":
+  version "7.23.6"
+  resolved "https://registry.yarnpkg.com/@babel/plugin-transform-for-of/-/plugin-transform-for-of-7.23.6.tgz#81c37e24171b37b370ba6aaffa7ac86bcb46f94e"
   dependencies:
     "@babel/helper-plugin-utils" "^7.22.5"
+    "@babel/helper-skip-transparent-expression-wrappers" "^7.22.5"
 
 "@babel/plugin-transform-function-name@^7.23.3":
   version "7.23.3"
@@ -855,11 +856,11 @@
     "@babel/helper-plugin-utils" "^7.22.5"
 
 "@babel/preset-env@^7.12.11":
-  version "7.23.5"
-  resolved "https://registry.yarnpkg.com/@babel/preset-env/-/preset-env-7.23.5.tgz#350a3aedfa9f119ad045b068886457e895ba0ca1"
+  version "7.23.6"
+  resolved "https://registry.yarnpkg.com/@babel/preset-env/-/preset-env-7.23.6.tgz#ad0ea799d5a3c07db5b9a172819bbd444092187a"
   dependencies:
     "@babel/compat-data" "^7.23.5"
-    "@babel/helper-compilation-targets" "^7.22.15"
+    "@babel/helper-compilation-targets" "^7.23.6"
     "@babel/helper-plugin-utils" "^7.22.5"
     "@babel/helper-validator-option" "^7.23.5"
     "@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression" "^7.23.3"
@@ -899,7 +900,7 @@
     "@babel/plugin-transform-dynamic-import" "^7.23.4"
     "@babel/plugin-transform-exponentiation-operator" "^7.23.3"
     "@babel/plugin-transform-export-namespace-from" "^7.23.4"
-    "@babel/plugin-transform-for-of" "^7.23.3"
+    "@babel/plugin-transform-for-of" "^7.23.6"
     "@babel/plugin-transform-function-name" "^7.23.3"
     "@babel/plugin-transform-json-strings" "^7.23.4"
     "@babel/plugin-transform-literals" "^7.23.3"
@@ -2679,15 +2680,6 @@ browser-stdout@1.3.1:
   version "1.3.1"
   resolved "https://registry.npmjs.org/browser-stdout/-/browser-stdout-1.3.1.tgz"
 
-browserslist@^4.21.9:
-  version "4.21.9"
-  resolved "https://registry.yarnpkg.com/browserslist/-/browserslist-4.21.9.tgz#e11bdd3c313d7e2a9e87e8b4b0c7872b13897635"
-  dependencies:
-    caniuse-lite "^1.0.30001503"
-    electron-to-chromium "^1.4.431"
-    node-releases "^2.0.12"
-    update-browserslist-db "^1.0.11"
-
 browserslist@^4.22.1:
   version "4.22.1"
   resolved "https://registry.yarnpkg.com/browserslist/-/browserslist-4.22.1.tgz#ba91958d1a59b87dab6fed8dfbcb3da5e2e9c619"
@@ -2695,6 +2687,15 @@ browserslist@^4.22.1:
     caniuse-lite "^1.0.30001541"
     electron-to-chromium "^1.4.535"
     node-releases "^2.0.13"
+    update-browserslist-db "^1.0.13"
+
+browserslist@^4.22.2:
+  version "4.22.2"
+  resolved "https://registry.yarnpkg.com/browserslist/-/browserslist-4.22.2.tgz#704c4943072bd81ea18997f3bd2180e89c77874b"
+  dependencies:
+    caniuse-lite "^1.0.30001565"
+    electron-to-chromium "^1.4.601"
+    node-releases "^2.0.14"
     update-browserslist-db "^1.0.13"
 
 bs58@^4.0.0, bs58@^4.0.1:
@@ -2864,13 +2865,13 @@ camelcase@^6.0.0:
   version "6.3.0"
   resolved "https://registry.npmjs.org/camelcase/-/camelcase-6.3.0.tgz"
 
-caniuse-lite@^1.0.30001503:
-  version "1.0.30001512"
-  resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001512.tgz#7450843fb581c39f290305a83523c7a9ef0d4cb4"
-
 caniuse-lite@^1.0.30001541:
   version "1.0.30001547"
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001547.tgz#d4f92efc488aab3c7f92c738d3977c2a3180472b"
+
+caniuse-lite@^1.0.30001565:
+  version "1.0.30001568"
+  resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001568.tgz#53fa9297273c9a977a560663f48cbea1767518b7"
 
 cardinal@^2.1.1:
   version "2.1.1"
@@ -3488,13 +3489,13 @@ ee-first@1.1.1:
   version "1.1.1"
   resolved "https://registry.npmjs.org/ee-first/-/ee-first-1.1.1.tgz"
 
-electron-to-chromium@^1.4.431:
-  version "1.4.449"
-  resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.4.449.tgz#79ffe4514c81c35d4eb13030a63ff3383a8cc655"
-
 electron-to-chromium@^1.4.535:
   version "1.4.551"
   resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.4.551.tgz#14db6660a88f66ce095ea2657abe5653bc7f42ed"
+
+electron-to-chromium@^1.4.601:
+  version "1.4.610"
+  resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.4.610.tgz#e17b22203f4aa2e1ed77759c720546d95a51186f"
 
 elliptic@^6.5.4:
   version "6.5.4"
@@ -6283,13 +6284,13 @@ node-preload@^0.2.1:
   dependencies:
     process-on-spawn "^1.0.0"
 
-node-releases@^2.0.12:
-  version "2.0.12"
-  resolved "https://registry.yarnpkg.com/node-releases/-/node-releases-2.0.12.tgz#35627cc224a23bfb06fb3380f2b3afaaa7eb1039"
-
 node-releases@^2.0.13:
   version "2.0.13"
   resolved "https://registry.yarnpkg.com/node-releases/-/node-releases-2.0.13.tgz#d5ed1627c23e3461e819b02e57b75e4899b1c81d"
+
+node-releases@^2.0.14:
+  version "2.0.14"
+  resolved "https://registry.yarnpkg.com/node-releases/-/node-releases-2.0.14.tgz#2ffb053bceb8b2be8495ece1ab6ce600c4461b0b"
 
 nopt@^5.0.0:
   version "5.0.0"
@@ -8685,13 +8686,6 @@ universalify@^2.0.0:
 unpipe@1.0.0, unpipe@~1.0.0:
   version "1.0.0"
   resolved "https://registry.npmjs.org/unpipe/-/unpipe-1.0.0.tgz"
-
-update-browserslist-db@^1.0.11:
-  version "1.0.11"
-  resolved "https://registry.yarnpkg.com/update-browserslist-db/-/update-browserslist-db-1.0.11.tgz#9a2a641ad2907ae7b3616506f4b977851db5b940"
-  dependencies:
-    escalade "^3.1.1"
-    picocolors "^1.0.0"
 
 update-browserslist-db@^1.0.13:
   version "1.0.13"

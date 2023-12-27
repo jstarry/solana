@@ -37,7 +37,7 @@
     "bs58": "^5.0.0",
     "chai": "^4.3.10",
     "chart.js": "^2.9.4",
-    "classnames": "2.3.3",
+    "classnames": "2.4.0",
     "coingecko-api": "^1.0.10",
     "cross-fetch": "^4.0.0",
     "humanize-duration-ts": "^2.1.1",

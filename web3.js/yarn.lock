@@ -959,13 +959,13 @@
     "@babel/plugin-transform-typescript" "^7.23.3"
 
 "@babel/register@^7.12.13":
-  version "7.22.15"
-  resolved "https://registry.yarnpkg.com/@babel/register/-/register-7.22.15.tgz#c2c294a361d59f5fa7bcc8b97ef7319c32ecaec7"
+  version "7.23.7"
+  resolved "https://registry.yarnpkg.com/@babel/register/-/register-7.23.7.tgz#485a5e7951939d21304cae4af1719fdb887bc038"
   dependencies:
     clone-deep "^4.0.1"
     find-cache-dir "^2.0.0"
     make-dir "^2.1.0"
-    pirates "^4.0.5"
+    pirates "^4.0.6"
     source-map-support "^0.5.16"
 
 "@babel/regjsgen@^0.8.0":
@@ -6975,9 +6975,9 @@ pify@^5.0.0:
   version "5.0.0"
   resolved "https://registry.yarnpkg.com/pify/-/pify-5.0.0.tgz#1f5eca3f5e87ebec28cc6d54a0e4aaf00acc127f"
 
-pirates@^4.0.5:
-  version "4.0.5"
-  resolved "https://registry.npmjs.org/pirates/-/pirates-4.0.5.tgz"
+pirates@^4.0.6:
+  version "4.0.6"
+  resolved "https://registry.yarnpkg.com/pirates/-/pirates-4.0.6.tgz#3018ae32ecfcff6c29ba2267cbf21166ac1f36b9"
 
 pkg-conf@^2.1.0:
   version "2.1.0"

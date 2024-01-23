@@ -1028,8 +1028,8 @@
     yargs "^17.0.0"
 
 "@commitlint/config-conventional@^18.0.0":
-  version "18.4.4"
-  resolved "https://registry.yarnpkg.com/@commitlint/config-conventional/-/config-conventional-18.4.4.tgz#ad9a4fc19a848821f01e79089ee01dc9ba71766b"
+  version "18.5.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/config-conventional/-/config-conventional-18.5.0.tgz#b50b317dfef81f34ff46ef581a5a4a11dafcae59"
   dependencies:
     conventional-changelog-conventionalcommits "^7.0.2"
 

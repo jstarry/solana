@@ -9,21 +9,23 @@
 //! [`v0`]: crate::message::v0
 //! [future message format]: https://docs.solanalabs.com/proposals/versioned-transactions
 
-use crate::{
-    address_lookup_table_account::AddressLookupTableAccount,
-    bpf_loader_upgradeable,
-    hash::Hash,
-    instruction::{CompiledInstruction, Instruction},
-    message::{
-        compiled_keys::{CompileError, CompiledKeys},
-        legacy::is_builtin_key_or_sysvar,
-        AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
-    },
-    pubkey::Pubkey,
-    sanitize::SanitizeError,
-    short_vec,
-};
 pub use loaded::*;
+use {
+    crate::{
+        address_lookup_table_account::AddressLookupTableAccount,
+        bpf_loader_upgradeable,
+        hash::Hash,
+        instruction::{CompiledInstruction, Instruction},
+        message::{
+            compiled_keys::{CompileError, CompiledKeys},
+            AccountKeys, MessageHeader, MESSAGE_VERSION_PREFIX,
+        },
+        pubkey::Pubkey,
+        sanitize::SanitizeError,
+        short_vec,
+    },
+    std::collections::HashSet,
+};
 
 mod loaded;
 
@@ -335,23 +337,38 @@ impl Message {
     }
 
     /// Returns true if the account at the specified index was requested as
-    /// writable. Before loading addresses and without the reserved account keys
-    /// set, we can't demote write locks properly so this should not be used by
-    /// the runtime.
-    pub fn is_maybe_writable(&self, key_index: usize) -> bool {
+    /// writable. Before loading addresses, we can't demote write locks properly
+    /// so this should not be used by the runtime.
+    pub fn is_maybe_writable(
+        &self,
+        key_index: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
         self.is_writable_index(key_index)
-            && !{
-                // demote reserved ids
-                self.account_keys
-                    .get(key_index)
-                    .map(is_builtin_key_or_sysvar)
-                    .unwrap_or_default()
-            }
+            && !self.is_account_maybe_reserved(key_index, reserved_account_keys)
             && !{
                 // demote program ids
                 self.is_key_called_as_program(key_index)
                     && !self.is_upgradeable_loader_in_static_keys()
             }
+    }
+
+    /// Returns true if the account at the specified index is in the reserved
+    /// account keys set. Before loading addresses, we can't detect reserved
+    /// account keys properly so this shouldn't be used by the runtime.
+    fn is_account_maybe_reserved(
+        &self,
+        key_index: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
+        if let Some(reserved_account_keys) = reserved_account_keys {
+            self.account_keys
+                .get(key_index)
+                .map(|key| reserved_account_keys.contains(key))
+                .unwrap_or_default()
+        } else {
+            false
+        }
     }
 }
 

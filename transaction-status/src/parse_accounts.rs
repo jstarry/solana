@@ -1,4 +1,10 @@
-use solana_sdk::message::{v0::LoadedMessage, Message};
+use {
+    solana_sdk::{
+        message::{v0::LoadedMessage, Message},
+        pubkey::Pubkey,
+    },
+    std::collections::HashSet,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -16,12 +22,15 @@ pub enum ParsedAccountSource {
     LookupTable,
 }
 
-pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
+pub fn parse_legacy_message_accounts(
+    message: &Message,
+    reserved_account_keys: &HashSet<Pubkey>,
+) -> Vec<ParsedAccount> {
     let mut accounts: Vec<ParsedAccount> = vec![];
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
-            writable: message.is_maybe_writable(i),
+            writable: message.is_maybe_writable(i, Some(reserved_account_keys)),
             signer: message.is_signer(i),
             source: Some(ParsedAccountSource::Transaction),
         });
@@ -64,18 +73,19 @@ mod test {
         let pubkey1 = Pubkey::new_unique();
         let pubkey2 = Pubkey::new_unique();
         let pubkey3 = Pubkey::new_unique();
+        let pubkey4 = Pubkey::new_unique();
         let message = Message {
             header: MessageHeader {
                 num_required_signatures: 2,
                 num_readonly_signed_accounts: 1,
                 num_readonly_unsigned_accounts: 1,
             },
-            account_keys: vec![pubkey0, pubkey1, pubkey2, pubkey3],
+            account_keys: vec![pubkey0, pubkey1, pubkey2, pubkey3, pubkey4],
             ..Message::default()
         };
 
         assert_eq!(
-            parse_legacy_message_accounts(&message),
+            parse_legacy_message_accounts(&message, &HashSet::from([pubkey3])),
             vec![
                 ParsedAccount {
                     pubkey: pubkey0.to_string(),
@@ -97,6 +107,12 @@ mod test {
                 },
                 ParsedAccount {
                     pubkey: pubkey3.to_string(),
+                    writable: false,
+                    signer: false,
+                    source: Some(ParsedAccountSource::Transaction),
+                },
+                ParsedAccount {
+                    pubkey: pubkey4.to_string(),
                     writable: false,
                     signer: false,
                     source: Some(ParsedAccountSource::Transaction),

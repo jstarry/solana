@@ -981,15 +981,17 @@ impl VersionedTransactionWithStatusMeta {
         show_rewards: bool,
     ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
         let version = self.validate_version(max_supported_transaction_version)?;
-        let reserved_account_keys = ReservedAccountKeys::new_all_activated();
+        let reserved_account_keys = ReservedAccountKeys::new_all_activated().active;
 
         let account_keys = match &self.transaction.message {
-            VersionedMessage::Legacy(message) => parse_legacy_message_accounts(message),
+            VersionedMessage::Legacy(message) => {
+                parse_legacy_message_accounts(message, &reserved_account_keys)
+            }
             VersionedMessage::V0(message) => {
                 let loaded_message = LoadedMessage::new_borrowed(
                     message,
                     &self.meta.loaded_addresses,
-                    &reserved_account_keys.active,
+                    &reserved_account_keys,
                 );
                 parse_v0_message_accounts(&loaded_message)
             }
@@ -1151,7 +1153,10 @@ impl JsonAccounts for Transaction {
     fn build_json_accounts(&self) -> Self::Encoded {
         EncodedTransaction::Accounts(UiAccountsList {
             signatures: self.signatures.iter().map(ToString::to_string).collect(),
-            account_keys: parse_legacy_message_accounts(&self.message),
+            account_keys: parse_legacy_message_accounts(
+                &self.message,
+                &ReservedAccountKeys::new_all_activated().active,
+            ),
         })
     }
 }
@@ -1200,7 +1205,10 @@ impl Encodable for Message {
         if encoding == UiTransactionEncoding::JsonParsed {
             let account_keys = AccountKeys::new(&self.account_keys, None);
             UiMessage::Parsed(UiParsedMessage {
-                account_keys: parse_legacy_message_accounts(self),
+                account_keys: parse_legacy_message_accounts(
+                    self,
+                    &ReservedAccountKeys::new_all_activated().active,
+                ),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
@@ -1233,13 +1241,10 @@ impl EncodableWithMeta for v0::Message {
         meta: &TransactionStatusMeta,
     ) -> Self::Encoded {
         if encoding == UiTransactionEncoding::JsonParsed {
-            let reserved_account_keys = ReservedAccountKeys::new_all_activated();
+            let reserved_account_keys = ReservedAccountKeys::new_all_activated().active;
             let account_keys = AccountKeys::new(&self.account_keys, Some(&meta.loaded_addresses));
-            let loaded_message = LoadedMessage::new_borrowed(
-                self,
-                &meta.loaded_addresses,
-                &reserved_account_keys.active,
-            );
+            let loaded_message =
+                LoadedMessage::new_borrowed(self, &meta.loaded_addresses, &reserved_account_keys);
             UiMessage::Parsed(UiParsedMessage {
                 account_keys: parse_v0_message_accounts(&loaded_message),
                 recent_blockhash: self.recent_blockhash.to_string(),

@@ -22,7 +22,7 @@ use {
         short_vec, system_instruction, system_program, sysvar, wasm_bindgen,
     },
     lazy_static::lazy_static,
-    std::{convert::TryFrom, str::FromStr},
+    std::{collections::HashSet, convert::TryFrom, str::FromStr},
 };
 
 lazy_static! {
@@ -58,6 +58,11 @@ lazy_static! {
     };
 }
 
+#[deprecated(
+    since = "2.0.0",
+    note = "please use solana_sdk::reserved_account_keys::ReservedAccountKeys instead"
+)]
+#[allow(deprecated)]
 pub fn is_builtin_key_or_sysvar(key: &Pubkey) -> bool {
     if MAYBE_BUILTIN_KEY_OR_SYSVAR[key.0[0] as usize] {
         return sysvar::is_sysvar_id(key) || BUILTIN_PROGRAMS_KEYS.contains(key);
@@ -563,6 +568,7 @@ impl Message {
     /// isn't used here to demote write locks, this shouldn't be used in the
     /// runtime.
     #[deprecated(since = "2.0.0", note = "Please use `is_maybe_writable` instead")]
+    #[allow(deprecated)]
     pub fn is_writable(&self, i: usize) -> bool {
         (self.is_writable_index(i))
             && !is_builtin_key_or_sysvar(&self.account_keys[i])
@@ -573,10 +579,32 @@ impl Message {
     /// instructions in this message. Since the dynamic set of reserved accounts
     /// isn't used here to demote write locks, this shouldn't be used in the
     /// runtime.
-    pub fn is_maybe_writable(&self, i: usize) -> bool {
+    pub fn is_maybe_writable(
+        &self,
+        i: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
         (self.is_writable_index(i))
-            && !is_builtin_key_or_sysvar(&self.account_keys[i])
+            && !self.is_account_maybe_reserved(i, reserved_account_keys)
             && !self.demote_program_id(i)
+    }
+
+    /// Returns true if the account at the specified index is in the reserved
+    /// account keys set. Before loading addresses, we can't detect reserved
+    /// account keys properly so this shouldn't be used by the runtime.
+    fn is_account_maybe_reserved(
+        &self,
+        key_index: usize,
+        reserved_account_keys: Option<&HashSet<Pubkey>>,
+    ) -> bool {
+        if let Some(reserved_account_keys) = reserved_account_keys {
+            self.account_keys
+                .get(key_index)
+                .map(|key| reserved_account_keys.contains(key))
+                .unwrap_or_default()
+        } else {
+            false
+        }
     }
 
     pub fn is_signer(&self, i: usize) -> bool {
@@ -588,7 +616,7 @@ impl Message {
         let mut writable_keys = vec![];
         let mut readonly_keys = vec![];
         for (i, key) in self.account_keys.iter().enumerate() {
-            if self.is_maybe_writable(i) {
+            if self.is_maybe_writable(i, None) {
                 writable_keys.push(key);
             } else {
                 readonly_keys.push(key);

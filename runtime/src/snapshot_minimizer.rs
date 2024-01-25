@@ -19,7 +19,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::Slot,
         pubkey::Pubkey,
-        sdk_ids,
+        reserved_account_keys::ReservedAccountKeys,
     },
     std::{
         collections::HashSet,
@@ -131,9 +131,9 @@ impl<'a> SnapshotMinimizer<'a> {
 
     /// Used to get sdk accounts in `minimize`
     fn get_sdk_accounts(&self) {
-        sdk_ids::SDK_IDS.iter().for_each(|pubkey| {
+        ReservedAccountKeys::all_keys_iter().for_each(|pubkey| {
             self.minimized_account_set.insert(*pubkey);
-        });
+        })
     }
 
     /// Used to get rent collection accounts in `minimize`

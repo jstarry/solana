@@ -2929,9 +2929,9 @@ chownr@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/chownr/-/chownr-2.0.0.tgz"
 
-chromium-bidi@0.5.6:
-  version "0.5.6"
-  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.5.6.tgz#a19e0aacda098878b49428939a39c477db0b4c45"
+chromium-bidi@0.5.8:
+  version "0.5.8"
+  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.5.8.tgz#5053038425c062ed34b9bc973e84e79de0a5cef0"
   dependencies:
     mitt "3.0.1"
     urlpattern-polyfill "10.0.0"
@@ -7125,24 +7125,24 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@21.10.0:
-  version "21.10.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-21.10.0.tgz#d1b61c44e258e51e0fa74f1110c540be096a3e28"
+puppeteer-core@21.11.0:
+  version "21.11.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-21.11.0.tgz#6c60ec350f1a3a2152179c68166da6edfce18a23"
   dependencies:
     "@puppeteer/browsers" "1.9.1"
-    chromium-bidi "0.5.6"
+    chromium-bidi "0.5.8"
     cross-fetch "4.0.0"
     debug "4.3.4"
     devtools-protocol "0.0.1232444"
     ws "8.16.0"
 
 puppeteer@^21.0.0:
-  version "21.10.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-21.10.0.tgz#0cfa8f57ca8d4d53a5f843715a270d36acd36b86"
+  version "21.11.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-21.11.0.tgz#46e64067b742b0e17a3b8dc668bc437f45cdd9f1"
   dependencies:
     "@puppeteer/browsers" "1.9.1"
     cosmiconfig "9.0.0"
-    puppeteer-core "21.10.0"
+    puppeteer-core "21.11.0"
 
 qrcode-terminal@^0.12.0:
   version "0.12.0"

@@ -2060,8 +2060,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@^20.0.0":
-  version "20.11.21"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.11.21.tgz#ad67e65652f7be15686e2df87a38076a81c5e9c5"
+  version "20.11.24"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.11.24.tgz#cc207511104694e84e9fb17f9a0c4c42d4517792"
   dependencies:
     undici-types "~5.26.4"
 

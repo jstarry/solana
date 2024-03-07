@@ -1711,8 +1711,13 @@ mod tests {
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+            // Hold onto poh lock so that workers cannot finish recording
+            // transactions and cannot unlock accounts immediately. This allows
+            // us to test having parallel workers that have account lock
+            // conflicts.
             let poh_lock = poh_recorder.write().unwrap();
+
+            let (replay_vote_sender, _replay_vote_receiver) = unbounded();
             let worker1 = {
                 let bank = bank.clone();
                 let committer = Committer::new(

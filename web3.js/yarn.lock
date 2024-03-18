@@ -1670,9 +1670,9 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@2.1.0":
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.1.0.tgz#2683d3c908ecfc9af6b63111b5037679d3cebfd8"
+"@puppeteer/browsers@2.2.0":
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.2.0.tgz#25b5c6d1c93eb91e7086ebc95b767fe7b3ee5ec4"
   dependencies:
     debug "4.3.4"
     extract-zip "2.0.1"
@@ -2966,12 +2966,13 @@ chownr@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/chownr/-/chownr-2.0.0.tgz"
 
-chromium-bidi@0.5.12:
-  version "0.5.12"
-  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.5.12.tgz#19f8576b5284169a340b7c38c9cd1e01f74fc695"
+chromium-bidi@0.5.13:
+  version "0.5.13"
+  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.5.13.tgz#e16512d77b161f2f92da91a48ea2ec4185668549"
   dependencies:
     mitt "3.0.1"
     urlpattern-polyfill "10.0.0"
+    zod "3.22.4"
 
 ci-info@^4.0.0:
   version "4.0.0"
@@ -3267,15 +3268,15 @@ cross-env@7.0.3:
   dependencies:
     cross-spawn "^7.0.1"
 
-cross-fetch@4.0.0, cross-fetch@^4.0.0:
-  version "4.0.0"
-  resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-4.0.0.tgz#f037aef1580bb3a1a35164ea2a848ba81b445983"
-  dependencies:
-    node-fetch "^2.6.12"
-
 cross-fetch@^3.1.5:
   version "3.1.8"
   resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-3.1.8.tgz#0327eba65fd68a7d119f8fb2bf9334a1a7956f82"
+  dependencies:
+    node-fetch "^2.6.12"
+
+cross-fetch@^4.0.0:
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-4.0.0.tgz#f037aef1580bb3a1a35164ea2a848ba81b445983"
   dependencies:
     node-fetch "^2.6.12"
 
@@ -7163,24 +7164,23 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@22.4.1:
-  version "22.4.1"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-22.4.1.tgz#b7c8b4041dac8d49e409a6130f3fa2a39395298a"
+puppeteer-core@22.5.0:
+  version "22.5.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-22.5.0.tgz#9d7767aaa5961f0e7fa0127ea38e1541e7f8c685"
   dependencies:
-    "@puppeteer/browsers" "2.1.0"
-    chromium-bidi "0.5.12"
-    cross-fetch "4.0.0"
+    "@puppeteer/browsers" "2.2.0"
+    chromium-bidi "0.5.13"
     debug "4.3.4"
     devtools-protocol "0.0.1249869"
     ws "8.16.0"
 
 puppeteer@^22.0.0:
-  version "22.4.1"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-22.4.1.tgz#00ce84a05d644d891657943d4f4c6669914a2f8b"
+  version "22.5.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-22.5.0.tgz#b20ac97aebf604f0e15068cfc9f18eeedfadf3cb"
   dependencies:
-    "@puppeteer/browsers" "2.1.0"
+    "@puppeteer/browsers" "2.2.0"
     cosmiconfig "9.0.0"
-    puppeteer-core "22.4.1"
+    puppeteer-core "22.5.0"
 
 qrcode-terminal@^0.12.0:
   version "0.12.0"
@@ -9035,6 +9035,10 @@ yocto-queue@^0.1.0:
 yocto-queue@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-1.0.0.tgz#7f816433fb2cbc511ec8bf7d263c3b58a1a3c251"
+
+zod@3.22.4:
+  version "3.22.4"
+  resolved "https://registry.yarnpkg.com/zod/-/zod-3.22.4.tgz#f31c3a9386f61b1f228af56faa9255e845cf3fff"
 
 zstd-codec@^0.1.4:
   version "0.1.4"

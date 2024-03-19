@@ -1012,14 +1012,14 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^19.2.0":
-  version "19.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-19.2.0.tgz#90a77b5b27b29d0f78960406b483e9d2da673e68"
+"@commitlint/cli@^19.2.1":
+  version "19.2.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-19.2.1.tgz#8f00d27a8b7c7780e75b06fd4658fdc1e9209f1b"
   dependencies:
     "@commitlint/format" "^19.0.3"
     "@commitlint/lint" "^19.1.0"
     "@commitlint/load" "^19.2.0"
-    "@commitlint/read" "^19.2.0"
+    "@commitlint/read" "^19.2.1"
     "@commitlint/types" "^19.0.3"
     execa "^8.0.1"
     yargs "^17.0.0"
@@ -1103,9 +1103,9 @@
     conventional-changelog-angular "^7.0.0"
     conventional-commits-parser "^5.0.0"
 
-"@commitlint/read@^19.2.0":
-  version "19.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/read/-/read-19.2.0.tgz#68b1ff24ed315b0078499615e97b8048e1b12b1a"
+"@commitlint/read@^19.2.1":
+  version "19.2.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/read/-/read-19.2.1.tgz#7296b99c9a989e60e5927fff8388a1dd44299c2f"
   dependencies:
     "@commitlint/top-level" "^19.0.0"
     "@commitlint/types" "^19.0.3"
@@ -1145,10 +1145,10 @@
     find-up "^7.0.0"
 
 "@commitlint/travis-cli@^19.0.3":
-  version "19.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-19.2.0.tgz#61f179a180e00c10c483bf05c0b7632311ccb725"
+  version "19.2.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-19.2.1.tgz#695a8af8e546827fe25cffca910c206cbec03baf"
   dependencies:
-    "@commitlint/cli" "^19.2.0"
+    "@commitlint/cli" "^19.2.1"
     execa "^8.0.1"
 
 "@commitlint/types@^19.0.3":

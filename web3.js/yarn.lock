@@ -3775,8 +3775,8 @@ eslint-plugin-import@2.29.1:
     tsconfig-paths "^3.15.0"
 
 eslint-plugin-mocha@^10.0.4:
-  version "10.4.2"
-  resolved "https://registry.yarnpkg.com/eslint-plugin-mocha/-/eslint-plugin-mocha-10.4.2.tgz#dfaed06d362506c5e4d561c534314e25b3b0f1f7"
+  version "10.4.3"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-mocha/-/eslint-plugin-mocha-10.4.3.tgz#bf641379d9f1c7d6a84646a3fc1a0baa50da8bfd"
   dependencies:
     eslint-utils "^3.0.0"
     globals "^13.24.0"

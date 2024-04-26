@@ -1674,9 +1674,9 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@2.2.2":
-  version "2.2.2"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.2.2.tgz#c43b00a9808370fec3e548779d81d1e0b972e8bb"
+"@puppeteer/browsers@2.2.3":
+  version "2.2.3"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.2.3.tgz#ad6b79129c50825e77ddaba082680f4dad0b674e"
   dependencies:
     debug "4.3.4"
     extract-zip "2.0.1"
@@ -2985,9 +2985,9 @@ chownr@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/chownr/-/chownr-2.0.0.tgz"
 
-chromium-bidi@0.5.17:
-  version "0.5.17"
-  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.5.17.tgz#04b66fa77f9ab80234b72206e71fc2af96fd08c4"
+chromium-bidi@0.5.19:
+  version "0.5.19"
+  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-0.5.19.tgz#e4f4951b7d9b20d668d6b387839f7b7bf2d69ef4"
   dependencies:
     mitt "3.0.1"
     urlpattern-polyfill "10.0.0"
@@ -7134,24 +7134,24 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@22.7.0:
-  version "22.7.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-22.7.0.tgz#a65edb63da7c30844ba8e8556f31e1e59825bdeb"
+puppeteer-core@22.7.1:
+  version "22.7.1"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-22.7.1.tgz#37ee06ac079510903fba96743a2d91231ea623ee"
   dependencies:
-    "@puppeteer/browsers" "2.2.2"
-    chromium-bidi "0.5.17"
+    "@puppeteer/browsers" "2.2.3"
+    chromium-bidi "0.5.19"
     debug "4.3.4"
     devtools-protocol "0.0.1273771"
     ws "8.16.0"
 
 puppeteer@^22.0.0:
-  version "22.7.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-22.7.0.tgz#7bf8d242c8c8ff41d75e2f89a06abb9ac5c99386"
+  version "22.7.1"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-22.7.1.tgz#a703d986069c1a383429da1ac9c68a99ae0940aa"
   dependencies:
-    "@puppeteer/browsers" "2.2.2"
+    "@puppeteer/browsers" "2.2.3"
     cosmiconfig "9.0.0"
     devtools-protocol "0.0.1273771"
-    puppeteer-core "22.7.0"
+    puppeteer-core "22.7.1"
 
 qrcode-terminal@^0.12.0:
   version "0.12.0"

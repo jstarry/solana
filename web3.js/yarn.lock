@@ -3467,9 +3467,9 @@ destroy@~1.0.4:
   version "1.0.4"
   resolved "https://registry.npmjs.org/destroy/-/destroy-1.0.4.tgz"
 
-destroyable-server@^1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/destroyable-server/-/destroyable-server-1.0.0.tgz#aa2d3aecff7c99b0290ef4654b94a1983e57966b"
+destroyable-server@^1.0.2:
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/destroyable-server/-/destroyable-server-1.0.2.tgz#5257867b2207b4ae45b1d23f816ee83e078290db"
   dependencies:
     "@types/node" "*"
 
@@ -6096,8 +6096,8 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.10.2"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.10.2.tgz#c4226f20d9c2528549863137515b2c3d4c8f0c3d"
+  version "3.11.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.11.0.tgz#599e0e6d28d289a0eb28d73b9ad4ea5927571c3b"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
@@ -6115,7 +6115,7 @@ mockttp@^3.0.0:
     cors "^2.8.4"
     cors-gate "^1.1.3"
     cross-fetch "^3.1.5"
-    destroyable-server "^1.0.0"
+    destroyable-server "^1.0.2"
     express "^4.14.0"
     graphql "^14.0.2 || ^15.5"
     graphql-http "^1.22.0"

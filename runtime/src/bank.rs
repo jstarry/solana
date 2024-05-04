@@ -156,7 +156,8 @@ use {
         timing::years_as_slots,
         transaction::{
             self, MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
-            TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
+            TransactionLockType, TransactionVerificationMode, VersionedTransaction,
+            MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{TransactionAccount, TransactionReturnData},
     },
@@ -347,8 +348,9 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub retryable_transaction_indexes: Vec<usize>,
     // Total number of transactions that were executed
     pub executed_transactions_count: usize,
-    // Number of non-vote transactions that were executed
-    pub executed_non_vote_transactions_count: usize,
+    // Number of non-vote transactions that were executed and returned
+    // success/not an error.
+    pub executed_with_successful_result_non_vote_count: usize,
     // Total number of the executed transactions that returned success/not
     // an error.
     pub executed_with_successful_result_count: usize,
@@ -875,7 +877,7 @@ struct PrevEpochInflationRewards {
 
 pub struct CommitTransactionCounts {
     pub committed_transactions_count: u64,
-    pub committed_non_vote_transactions_count: u64,
+    pub committed_successful_non_vote_transactions_count: u64,
     pub committed_with_failure_result_count: u64,
     pub signature_count: u64,
 }
@@ -3361,7 +3363,7 @@ impl Bank {
         // See a comment in SchedulingStateMachine::create_task().
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
-            .map(|_| ());
+            .map(|(lock_type, ..)| lock_type);
         let mut batch = TransactionBatch::new(
             vec![lock_result],
             self,
@@ -3419,10 +3421,10 @@ impl Bank {
         let post_simulation_accounts = loaded_transactions
             .into_iter()
             .next()
-            .and_then(|(loaded_transactions_res, _)| loaded_transactions_res.ok())
+            .and_then(|(loaded_transaction_res, _)| loaded_transaction_res.ok())
             .map(|loaded_transaction| {
                 loaded_transaction
-                    .accounts
+                    .into_accounts()
                     .into_iter()
                     .take(number_of_accounts)
                     .collect::<Vec<_>>()
@@ -3491,7 +3493,9 @@ impl Bank {
 
     pub fn unlock_accounts<'a>(
         &self,
-        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,
+        txs_and_results: impl Iterator<
+            Item = (&'a SanitizedTransaction, &'a Result<TransactionLockType>),
+        >,
     ) {
         self.rc.accounts.unlock_accounts(txs_and_results)
     }
@@ -3500,22 +3504,22 @@ impl Bank {
         self.rc.accounts.accounts_db.remove_unrooted_slots(slots)
     }
 
-    fn check_age(
+    fn check_age<T>(
         &self,
         sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
-        lock_results: &[Result<()>],
+        results: &[Result<T>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
-    ) -> Vec<TransactionCheckResult> {
+    ) -> Vec<TransactionCheckResult<T>> {
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
         let next_durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
 
         sanitized_txs
             .iter()
-            .zip(lock_results)
+            .zip(results)
             .map(|(tx, lock_res)| match lock_res {
-                Ok(()) => self.check_transaction_age(
+                Ok(_) => self.check_transaction_age(
                     tx.borrow(),
                     max_age,
                     &next_durable_nonce,
@@ -3537,21 +3541,28 @@ impl Bank {
     ) -> TransactionCheckResult {
         let recent_blockhash = tx.message().recent_blockhash();
         if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
-            (
-                Ok(()),
+            return (
+                Ok(tx_lock_type.clone()),
                 None,
                 hash_queue.get_lamports_per_signature(tx.message().recent_blockhash()),
-            )
-        } else if let Some((address, account)) =
-            self.check_transaction_for_nonce(tx, next_durable_nonce)
-        {
+            );
+        }
+
+        // Checking if the transaction uses a durable nonce requires loading the
+        // nonce account which may not be locked if only the fee payer is locked.
+        // So don't check for nonces for fee-payer-only locked transactions.
+        if let Some((address, account)) = self.check_transaction_for_nonce(tx, next_durable_nonce) {
             let nonce = NoncePartial::new(address, account);
             let lamports_per_signature = nonce.lamports_per_signature();
-            (Ok(()), Some(nonce), lamports_per_signature)
-        } else {
-            error_counters.blockhash_not_found += 1;
-            (Err(TransactionError::BlockhashNotFound), None, None)
+            return (
+                Ok(tx_lock_type.clone()),
+                Some(nonce),
+                lamports_per_signature,
+            );
         }
+
+        error_counters.blockhash_not_found += 1;
+        (Err(TransactionError::BlockhashNotFound), None, None)
     }
 
     fn is_transaction_already_processed(
@@ -3566,10 +3577,10 @@ impl Bank {
             .is_some()
     }
 
-    fn check_status_cache(
+    fn check_status_cache<T>(
         &self,
         sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
-        lock_results: Vec<TransactionCheckResult>,
+        lock_results: Vec<TransactionCheckResult<T>>,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
         let rcache = self.status_cache.read().unwrap();
@@ -3630,15 +3641,15 @@ impl Bank {
         }
     }
 
-    pub fn check_transactions(
+    pub fn check_transactions<T>(
         &self,
         sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
-        lock_results: &[Result<()>],
+        results: &[Result<T>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
-    ) -> Vec<TransactionCheckResult> {
-        let lock_results = self.check_age(sanitized_txs, lock_results, max_age, error_counters);
-        self.check_status_cache(sanitized_txs, lock_results, error_counters)
+    ) -> Vec<TransactionCheckResult<T>> {
+        let results = self.check_age(sanitized_txs, results, max_age, error_counters);
+        self.check_status_cache(sanitized_txs, results, error_counters)
     }
 
     pub fn collect_balances(&self, batch: &TransactionBatch) -> TransactionBalances {
@@ -3695,7 +3706,7 @@ impl Bank {
                     Some(index)
                 }
                 // following are non-retryable errors
-                Err(TransactionError::TooManyAccountLocks) => {
+                Ok(TransactionLockType::FeePayerOnly(TransactionError::TooManyAccountLocks)) => {
                     error_counters.too_many_account_locks += 1;
                     None
                 }
@@ -3732,7 +3743,7 @@ impl Bank {
         let mut signature_count = 0;
 
         let mut executed_transactions_count: usize = 0;
-        let mut executed_non_vote_transactions_count: usize = 0;
+        let mut executed_with_successful_result_non_vote_count: usize = 0;
         let mut executed_with_successful_result_count: usize = 0;
         let err_count = &mut error_counters.total;
         let transaction_log_collector_config =
@@ -3753,6 +3764,8 @@ impl Bank {
             let is_vote = tx.is_simple_vote_transaction();
 
             if execution_result.was_executed() // Skip log collection for unprocessed transactions
+                // this is redundant, fix in separate PR
+                && execution_result.details().and_then(|details| details.log_messages.as_ref()).is_some()
                 && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
             {
                 let mut filtered_mentioned_addresses = Vec::new();
@@ -3820,7 +3833,7 @@ impl Bank {
             match execution_result.flattened_result() {
                 Ok(()) => {
                     if !is_vote {
-                        executed_non_vote_transactions_count += 1;
+                        executed_with_successful_result_non_vote_count += 1;
                     }
                     executed_with_successful_result_count += 1;
                 }
@@ -3849,7 +3862,7 @@ impl Bank {
             execution_results: sanitized_output.execution_results,
             retryable_transaction_indexes,
             executed_transactions_count,
-            executed_non_vote_transactions_count,
+            executed_with_successful_result_non_vote_count,
             executed_with_successful_result_count,
             signature_count,
             error_counters,
@@ -4084,7 +4097,7 @@ impl Bank {
 
         let CommitTransactionCounts {
             committed_transactions_count,
-            committed_non_vote_transactions_count,
+            committed_successful_non_vote_transactions_count: committed_non_vote_transactions_count,
             committed_with_failure_result_count,
             signature_count,
         } = counts;
@@ -4140,7 +4153,7 @@ impl Bank {
         for execution_result in &execution_results {
             if let TransactionExecutionResult::Executed {
                 details,
-                programs_modified_by_tx,
+                programs_modified_by_tx: Some(programs_modified_by_tx),
             } = execution_result
             {
                 if details.status.is_ok() && !programs_modified_by_tx.is_empty() {
@@ -4211,8 +4224,8 @@ impl Bank {
                 if let (Ok(loaded_transaction), true) =
                     (load_result, execution_result.was_executed_successfully())
                 {
-                    collected_rent += loaded_transaction.rent;
-                    mem::take(&mut loaded_transaction.rent_debits)
+                    collected_rent += loaded_transaction.get_rent();
+                    mem::take(loaded_transaction.get_rent_debits_mut())
                 } else {
                     RentDebits::default()
                 }
@@ -4860,7 +4873,7 @@ impl Bank {
             mut loaded_transactions,
             execution_results,
             executed_transactions_count,
-            executed_non_vote_transactions_count,
+            executed_with_successful_result_non_vote_count: executed_non_vote_transactions_count,
             executed_with_successful_result_count,
             signature_count,
             ..
@@ -4884,7 +4897,8 @@ impl Bank {
             lamports_per_signature,
             CommitTransactionCounts {
                 committed_transactions_count: executed_transactions_count as u64,
-                committed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
+                committed_successful_non_vote_transactions_count:
+                    executed_non_vote_transactions_count as u64,
                 committed_with_failure_result_count: executed_transactions_count
                     .saturating_sub(executed_with_successful_result_count)
                     as u64,
@@ -6117,7 +6131,10 @@ impl Bank {
             .flat_map(|(tx, _, (load_result, _))| {
                 load_result.iter().flat_map(|loaded_transaction| {
                     let num_account_keys = tx.message().account_keys().len();
-                    loaded_transaction.accounts.iter().take(num_account_keys)
+                    loaded_transaction
+                        .get_accounts()
+                        .iter()
+                        .take(num_account_keys)
                 })
             })
             .for_each(|(pubkey, account)| {
@@ -6648,7 +6665,7 @@ impl Bank {
     pub fn check_transactions_with_forwarding_delay(
         &self,
         transactions: &[SanitizedTransaction],
-        filter: &[transaction::Result<()>],
+        filter: &[Result<TransactionLockType>],
         forward_transactions_to_leader_at_slot_offset: u64,
     ) -> Vec<TransactionCheckResult> {
         let mut error_counters = TransactionErrorMetrics::default();

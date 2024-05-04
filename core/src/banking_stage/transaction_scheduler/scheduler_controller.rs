@@ -32,7 +32,7 @@ use {
         clock::{FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, MAX_PROCESSING_AGE},
         fee::FeeBudgetLimits,
         saturating_add_assign,
-        transaction::SanitizedTransaction,
+        transaction::{SanitizedTransaction, TransactionLockType},
     },
     solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
@@ -209,7 +209,7 @@ impl SchedulerController {
         bank: &Bank,
         max_age: usize,
     ) {
-        let lock_results = vec![Ok(()); transactions.len()];
+        let lock_results = vec![Ok(TransactionLockType::Full); transactions.len()];
         let mut error_counters = TransactionErrorMetrics::default();
         let check_results =
             bank.check_transactions(transactions, &lock_results, max_age, &mut error_counters);
@@ -368,7 +368,7 @@ impl SchedulerController {
         let mut error_counters = TransactionErrorMetrics::default();
         let mut num_dropped_on_age_and_status: usize = 0;
         for chunk in transaction_ids.chunks(CHUNK_SIZE) {
-            let lock_results = vec![Ok(()); chunk.len()];
+            let lock_results = vec![Ok(TransactionLockType::Full); chunk.len()];
             let sanitized_txs: Vec<_> = chunk
                 .iter()
                 .map(|id| {
@@ -480,7 +480,7 @@ impl SchedulerController {
         let vote_only = bank.vote_only_bank();
 
         const CHUNK_SIZE: usize = 128;
-        let lock_results: [_; CHUNK_SIZE] = core::array::from_fn(|_| Ok(()));
+        let lock_results: [_; CHUNK_SIZE] = core::array::from_fn(|_| Ok(TransactionLockType::Full));
         let mut error_counts = TransactionErrorMetrics::default();
         for chunk in packets.chunks(CHUNK_SIZE) {
             let mut post_sanitization_count: usize = 0;

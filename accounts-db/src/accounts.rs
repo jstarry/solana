@@ -23,18 +23,19 @@ use {
         nonce_info::{NonceFull, NonceInfo},
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
-        transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
+        transaction::{
+            Result, SanitizedTransaction, TransactionAccountLocks, TransactionError,
+            TransactionLockType,
+        },
         transaction_context::TransactionAccount,
     },
     solana_svm::{
-        account_loader::TransactionLoadResult, transaction_results::TransactionExecutionResult,
+        account_loader::{LoadedTransaction, TransactionLoadResult},
+        transaction_results::TransactionExecutionResult,
     },
     std::{
         cmp::Reverse,
-        collections::{
-            hash_map::{self},
-            BinaryHeap, HashMap, HashSet,
-        },
+        collections::{hash_map, BinaryHeap, HashMap, HashSet},
         ops::RangeBounds,
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -594,7 +595,7 @@ impl Accounts {
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         tx_account_lock_limit: usize,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<TransactionLockType>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .map(|tx| tx.get_account_locks(tx_account_lock_limit))
             .collect();
@@ -608,7 +609,7 @@ impl Accounts {
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         results: impl Iterator<Item = Result<()>>,
         tx_account_lock_limit: usize,
-    ) -> Vec<Result<()>> {
+    ) -> Vec<Result<TransactionLockType>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
@@ -622,18 +623,21 @@ impl Accounts {
     #[must_use]
     fn lock_accounts_inner(
         &self,
-        tx_account_locks_results: Vec<Result<TransactionAccountLocks>>,
-    ) -> Vec<Result<()>> {
+        tx_account_locks_results: Vec<Result<(TransactionLockType, TransactionAccountLocks)>>,
+    ) -> Vec<Result<TransactionLockType>> {
         let account_locks = &mut self.account_locks.lock().unwrap();
         tx_account_locks_results
             .into_iter()
-            .map(|tx_account_locks_result| match tx_account_locks_result {
-                Ok(tx_account_locks) => self.lock_account(
+            .map(|tx_account_locks_result| {
+                let (tx_lock_type, tx_account_locks) = tx_account_locks_result?;
+
+                self.lock_account(
                     account_locks,
                     tx_account_locks.writable,
                     tx_account_locks.readonly,
-                ),
-                Err(err) => Err(err),
+                )?;
+
+                Ok(tx_lock_type)
             })
             .collect()
     }
@@ -642,11 +646,19 @@ impl Accounts {
     #[allow(clippy::needless_collect)]
     pub fn unlock_accounts<'a>(
         &self,
-        txs_and_results: impl Iterator<Item = (&'a SanitizedTransaction, &'a Result<()>)>,
+        txs_and_results: impl Iterator<
+            Item = (&'a SanitizedTransaction, &'a Result<TransactionLockType>),
+        >,
     ) {
         let keys: Vec<_> = txs_and_results
-            .filter(|(_, res)| res.is_ok())
-            .map(|(tx, _)| tx.get_account_locks_unchecked())
+            .filter_map(|(tx, res)| res.as_ref().ok().map(|lock_type| (tx, lock_type)))
+            .filter_map(|(tx, lock_type)| match lock_type {
+                TransactionLockType::Full => Some(tx.get_account_locks_unchecked()),
+                TransactionLockType::FeePayerOnly(_) => Some(TransactionAccountLocks {
+                    writable: vec![tx.fee_payer()],
+                    readonly: vec![],
+                }),
+            })
             .collect();
         if keys.is_empty() {
             return;
@@ -724,8 +736,17 @@ impl Accounts {
                 }
             };
 
+            let loaded_transaction = match tx_load_result.as_mut().unwrap() {
+                LoadedTransaction::Full(loaded_transaction) => loaded_transaction,
+                LoadedTransaction::FeePayerOnly(_) => {
+                    // Fee-payer-only transactions don't use durable nonces and
+                    // are never executed successfully so this should be
+                    // impossible to hit
+                    panic!("fee-payer-only transactions shouldn't be executed or use nonces");
+                }
+            };
+
             let message = tx.message();
-            let loaded_transaction = tx_load_result.as_mut().unwrap();
             let mut fee_payer_index = None;
             for (i, (address, account)) in (0..message.account_keys().len())
                 .zip(loaded_transaction.accounts.iter_mut())

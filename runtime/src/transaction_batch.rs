@@ -1,12 +1,12 @@
 use {
     crate::bank::Bank,
-    solana_sdk::transaction::{Result, SanitizedTransaction},
+    solana_sdk::transaction::{Result, SanitizedTransaction, TransactionLockType},
     std::borrow::Cow,
 };
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b> {
-    lock_results: Vec<Result<()>>,
+    lock_results: Vec<Result<TransactionLockType>>,
     bank: &'a Bank,
     sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     needs_unlock: bool,
@@ -14,7 +14,7 @@ pub struct TransactionBatch<'a, 'b> {
 
 impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<TransactionLockType>>,
         bank: &'a Bank,
         sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     ) -> Self {
@@ -27,7 +27,7 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         }
     }
 
-    pub fn lock_results(&self) -> &Vec<Result<()>> {
+    pub fn lock_results(&self) -> &Vec<Result<TransactionLockType>> {
         &self.lock_results
     }
 
@@ -77,7 +77,13 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
         // Record all new errors by overwriting lock results. Note that it's
         // not valid to update from err -> ok and the assertion above enforces
         // that validity constraint.
-        self.lock_results = transaction_results;
+        for (current_lock_result, new_lock_result) in
+            self.lock_results.iter_mut().zip(transaction_results)
+        {
+            if let Some(err) = new_lock_result.err() {
+                *current_lock_result = Err(err);
+            }
+        }
     }
 }
 

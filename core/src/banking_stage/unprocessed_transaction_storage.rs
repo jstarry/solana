@@ -20,8 +20,11 @@ use {
     solana_measure::{measure, measure_us},
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
-        saturating_add_assign, transaction::SanitizedTransaction,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET,
+        feature_set::FeatureSet,
+        hash::Hash,
+        saturating_add_assign,
+        transaction::{SanitizedTransaction, TransactionLockType},
     },
     solana_svm::transaction_error_metrics::TransactionErrorMetrics,
     std::{
@@ -796,7 +799,7 @@ impl ThreadLocalUnprocessedPackets {
         bank: &Bank,
         total_dropped_packets: &mut usize,
     ) -> Vec<usize> {
-        let filter = vec![Ok(()); transactions.len()];
+        let filter = vec![Ok(TransactionLockType::Full); transactions.len()];
         let results = bank.check_transactions_with_forwarding_delay(
             transactions,
             &filter,

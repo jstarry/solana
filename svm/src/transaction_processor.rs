@@ -1,7 +1,8 @@
 use {
     crate::{
         account_loader::{
-            load_accounts, LoadedTransaction, TransactionCheckResult, TransactionLoadResult,
+            load_accounts, LoadedTransaction, LoadedTransactionFull, TransactionCheckResult,
+            TransactionLoadResult,
         },
         account_overrides::AccountOverrides,
         message_processor::MessageProcessor,
@@ -235,7 +236,25 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             .zip(sanitized_txs.iter())
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
-                (Ok(loaded_transaction), nonce) => {
+                (Ok(LoadedTransaction::FeePayerOnly(loaded_transaction)), nonce) => {
+                    assert!(
+                        nonce.is_none(),
+                        "fee-payer-only transactions cannot use nonces"
+                    );
+                    TransactionExecutionResult::Executed {
+                        details: TransactionExecutionDetails {
+                            status: Err(loaded_transaction.lock_error.clone()),
+                            log_messages: None,
+                            inner_instructions: None,
+                            durable_nonce_fee: None,
+                            return_data: None,
+                            executed_units: 0,
+                            accounts_data_len_delta: 0,
+                        },
+                        programs_modified_by_tx: None,
+                    }
+                }
+                (Ok(LoadedTransaction::Full(loaded_transaction)), nonce) => {
                     let compute_budget =
                         if let Some(compute_budget) = self.runtime_config.compute_budget {
                             compute_budget
@@ -273,7 +292,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
                     if let TransactionExecutionResult::Executed {
                         details,
-                        programs_modified_by_tx,
+                        programs_modified_by_tx: Some(modified_programs),
                     } = &result
                     {
                         // Update batch specific cache of the loaded programs with the modifications
@@ -281,7 +300,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                         if details.status.is_ok() {
                             programs_loaded_for_tx_batch
                                 .borrow_mut()
-                                .merge(programs_modified_by_tx);
+                                .merge(modified_programs);
                         }
                     }
 
@@ -339,7 +358,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     ) -> HashMap<Pubkey, u64> {
         let mut result: HashMap<Pubkey, u64> = HashMap::new();
         check_results.iter_mut().zip(txs).for_each(|etx| {
-            if let ((Ok(()), _nonce, lamports_per_signature), tx) = etx {
+            if let ((Ok(_tx_lock_type), _nonce, lamports_per_signature), tx) = etx {
                 if lamports_per_signature.is_some() {
                     tx.message()
                         .account_keys()
@@ -468,7 +487,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         &self,
         callback: &CB,
         tx: &SanitizedTransaction,
-        loaded_transaction: &mut LoadedTransaction,
+        loaded_transaction: &mut LoadedTransactionFull,
         compute_budget: ComputeBudget,
         durable_nonce_fee: Option<DurableNonceFee>,
         recording_config: ExecutionRecordingConfig,
@@ -648,7 +667,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 executed_units,
                 accounts_data_len_delta,
             },
-            programs_modified_by_tx: Box::new(programs_modified_by_tx),
+            programs_modified_by_tx: Some(Box::new(programs_modified_by_tx)),
         }
     }
 

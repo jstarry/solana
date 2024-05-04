@@ -46,6 +46,12 @@ pub struct TransactionAccountLocks<'a> {
     pub writable: Vec<&'a Pubkey>,
 }
 
+#[derive(Debug, Clone)]
+pub enum TransactionLockType {
+    Full,
+    FeePayerOnly(TransactionError),
+}
+
 /// Type that represents whether the transaction message has been precomputed or
 /// not.
 pub enum MessageHash {
@@ -155,6 +161,18 @@ impl SanitizedTransaction {
         &self.signatures[0]
     }
 
+    /// Return the fee payer for this transaction.
+    ///
+    /// Notes:
+    ///
+    /// Sanitized transactions must have a fee payer because the number of
+    /// account keys must not be less than the number of signatures which must
+    /// be greater than or equal to the message header value
+    /// `num_required_signatures` which must be greater than 0 itself.
+    pub fn fee_payer(&self) -> &Pubkey {
+        self.message.fee_payer()
+    }
+
     /// Return the list of signatures for this transaction
     pub fn signatures(&self) -> &[Signature] {
         &self.signatures
@@ -195,9 +213,21 @@ impl SanitizedTransaction {
     pub fn get_account_locks(
         &self,
         tx_account_lock_limit: usize,
-    ) -> Result<TransactionAccountLocks> {
-        Self::validate_account_locks(self.message(), tx_account_lock_limit)?;
-        Ok(self.get_account_locks_unchecked())
+    ) -> Result<(TransactionLockType, TransactionAccountLocks)> {
+        match Self::validate_account_locks(self.message(), tx_account_lock_limit) {
+            Ok(()) => Ok((
+                TransactionLockType::Full,
+                self.get_account_locks_unchecked(),
+            )),
+            Err(err) if err.should_charge_fees_but_not_execute() => Ok((
+                TransactionLockType::FeePayerOnly(err),
+                TransactionAccountLocks {
+                    writable: vec![self.fee_payer()],
+                    readonly: vec![],
+                },
+            )),
+            Err(err) => Err(err),
+        }
     }
 
     /// Return the list of accounts that must be locked during processing this transaction.

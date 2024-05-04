@@ -9325,7 +9325,7 @@ fn test_tx_log_order() {
         .as_ref()
         .unwrap()[2]
         .contains(&"failed".to_string()));
-    assert!(!execution_results[2].was_executed());
+    assert!(!execution_results[2].committable());
 
     let stored_logs = &bank.transaction_log_collector.read().unwrap().logs;
     let success_log_info = stored_logs

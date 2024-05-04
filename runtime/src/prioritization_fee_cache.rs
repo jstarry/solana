@@ -205,13 +205,14 @@ impl PrioritizationFeeCache {
                     let round_compute_unit_price_enabled = false; // TODO: bank.feture_set.is_active(round_compute_unit_price)
                     let compute_budget_details = sanitized_transaction
                         .get_compute_budget_details(round_compute_unit_price_enabled);
-                    let account_locks = sanitized_transaction
+                    let tx_lock_result = sanitized_transaction
                         .get_account_locks(bank.get_transaction_account_lock_limit());
 
-                    if compute_budget_details.is_none() || account_locks.is_err() {
+                    let (Some(compute_budget_details), Ok((_tx_lock_type, tx_account_locks))) =
+                        (compute_budget_details, tx_lock_result)
+                    else {
                         continue;
-                    }
-                    let compute_budget_details = compute_budget_details.unwrap();
+                    };
 
                     // filter out any transaction that requests zero compute_unit_limit
                     // since its priority fee amount is not instructive
@@ -219,8 +220,7 @@ impl PrioritizationFeeCache {
                         continue;
                     }
 
-                    let writable_accounts = account_locks
-                        .unwrap()
+                    let writable_accounts = tx_account_locks
                         .writable
                         .iter()
                         .map(|key| **key)

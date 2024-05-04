@@ -29,7 +29,7 @@ use {
         message::SanitizedMessage,
         saturating_add_assign,
         timing::timestamp,
-        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
+        transaction::{AddressLoader, SanitizedTransaction, TransactionError, TransactionLockType},
     },
     solana_svm::{
         account_loader::{validate_fee_payer, TransactionCheckResult},
@@ -415,7 +415,7 @@ impl Consumer {
             bank.check_transactions(txs, &pre_results, MAX_PROCESSING_AGE, &mut error_counters);
         let check_results = check_results
             .into_iter()
-            .map(|(result, _nonce, _lamports)| result);
+            .map(|(result, _nonce, _lamports)| result.map(|_| ()));
         let mut output = self.process_and_record_transactions_with_pre_results(
             bank,
             txs,
@@ -607,7 +607,7 @@ impl Consumer {
             execution_results,
             mut retryable_transaction_indexes,
             executed_transactions_count,
-            executed_non_vote_transactions_count,
+            executed_with_successful_result_non_vote_count,
             executed_with_successful_result_count,
             signature_count,
             error_counters,
@@ -688,7 +688,7 @@ impl Consumer {
                 &mut execute_and_commit_timings,
                 signature_count,
                 executed_transactions_count,
-                executed_non_vote_transactions_count,
+                executed_with_successful_result_non_vote_count,
                 executed_with_successful_result_count,
             )
         } else {
@@ -807,9 +807,11 @@ impl Consumer {
     fn prepare_filter_for_pending_transactions(
         transactions_len: usize,
         pending_tx_indexes: &[usize],
-    ) -> Vec<transaction::Result<()>> {
+    ) -> Vec<Result<TransactionLockType, TransactionError>> {
         let mut mask = vec![Err(TransactionError::BlockhashNotFound); transactions_len];
-        pending_tx_indexes.iter().for_each(|x| mask[*x] = Ok(()));
+        pending_tx_indexes
+            .iter()
+            .for_each(|x| mask[*x] = Ok(TransactionLockType::Full));
         mask
     }
 

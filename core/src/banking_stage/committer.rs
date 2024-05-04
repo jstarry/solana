@@ -74,7 +74,7 @@ impl Committer {
         execute_and_commit_timings: &mut LeaderExecuteAndCommitTimings,
         signature_count: u64,
         executed_transactions_count: usize,
-        executed_non_vote_transactions_count: usize,
+        executed_with_successful_result_non_vote_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
         let executed_transactions = execution_results
@@ -91,7 +91,8 @@ impl Committer {
             lamports_per_signature,
             CommitTransactionCounts {
                 committed_transactions_count: executed_transactions_count as u64,
-                committed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
+                committed_successful_non_vote_transactions_count:
+                    executed_with_successful_result_non_vote_count as u64,
                 committed_with_failure_result_count: executed_transactions_count
                     .saturating_sub(executed_with_successful_result_count)
                     as u64,

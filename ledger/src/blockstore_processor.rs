@@ -54,8 +54,8 @@ use {
         signature::{Keypair, Signature},
         timing,
         transaction::{
-            Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
-            VersionedTransaction,
+            Result, SanitizedTransaction, TransactionError, TransactionLockType,
+            TransactionVerificationMode, VersionedTransaction,
         },
     },
     solana_svm::{
@@ -91,10 +91,10 @@ struct ReplayEntry {
     starting_index: usize,
 }
 
-fn first_err(results: &[Result<()>]) -> Result<()> {
-    for r in results {
-        if r.is_err() {
-            return r.clone();
+fn first_err<'a>(result_errs: impl Iterator<Item = Option<&'a TransactionError>>) -> Result<()> {
+    for r in result_errs {
+        if let Some(err) = r {
+            return Err(err.clone());
         }
     }
     Ok(())
@@ -304,7 +304,7 @@ fn execute_batches_internal(
     });
     execute_batches_elapsed.stop();
 
-    first_err(&results)?;
+    first_err(results.iter().map(|res| res.as_ref().err()))?;
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
@@ -380,7 +380,7 @@ fn schedule_batches_for_execution(
 }
 
 fn rebatch_transactions<'a>(
-    lock_results: &'a [Result<()>],
+    lock_results: &'a [Result<TransactionLockType>],
     bank: &'a Arc<Bank>,
     sanitized_txs: &'a [SanitizedTransaction],
     start: usize,
@@ -605,7 +605,8 @@ fn process_entries(
                 loop {
                     // try to lock the accounts
                     let batch = bank.prepare_sanitized_batch(transactions);
-                    let first_lock_err = first_err(batch.lock_results());
+                    let first_lock_err =
+                        first_err(batch.lock_results().iter().map(|res| res.as_ref().err()));
 
                     // if locking worked
                     if first_lock_err.is_ok() {

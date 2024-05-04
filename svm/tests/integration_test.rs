@@ -492,7 +492,7 @@ fn svm_integration() {
         .0
         .as_ref()
         .unwrap()
-        .accounts
+        .into_accounts
         .iter()
         .find(|key| key.0 == recipient_key)
         .unwrap();

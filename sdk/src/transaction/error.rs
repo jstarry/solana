@@ -8,6 +8,17 @@ use {
     thiserror::Error,
 };
 
+impl TransactionError {
+    /// returns true for any transaction errors that are recordable in the ledger
+    /// but are not executable
+    pub fn should_charge_fees_but_not_execute(&self) -> bool {
+        match self {
+            Self::AccountLoadedTwice | Self::TooManyAccountLocks => true,
+            _ => false,
+        }
+    }
+}
+
 /// Reasons a transaction might be rejected.
 #[derive(
     Error, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample, AbiEnumVisitor,

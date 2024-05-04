@@ -27,7 +27,7 @@ use {
         rent_debits::RentDebits,
         saturating_add_assign,
         sysvar::{self, instructions::construct_instructions_data},
-        transaction::{self, Result, SanitizedTransaction, TransactionError},
+        transaction::{Result, SanitizedTransaction, TransactionError, TransactionLockType},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
     solana_system_program::{get_system_account_kind, SystemAccountKind},
@@ -37,15 +37,61 @@ use {
 // for the load instructions
 pub(crate) type TransactionRent = u64;
 pub(crate) type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
-pub type TransactionCheckResult = (transaction::Result<()>, Option<NoncePartial>, Option<u64>);
+pub type TransactionCheckResult<T> = (Result<T>, Option<NoncePartial>, Option<u64>);
 pub type TransactionLoadResult = (Result<LoadedTransaction>, Option<NonceFull>);
 
 #[derive(PartialEq, Eq, Debug, Clone)]
-pub struct LoadedTransaction {
+pub struct LoadedTransactionFull {
     pub accounts: Vec<TransactionAccount>,
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct LoadedTransactionFeePayerOnly {
+    // Really just the fee payer for now but it's critical that the order of
+    // these accounts match up with the transaction message accounts
+    pub accounts: Vec<TransactionAccount>,
+    pub lock_error: TransactionError,
+    pub rent: TransactionRent,
+    pub rent_debits: RentDebits,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum LoadedTransaction {
+    Full(LoadedTransactionFull),
+    FeePayerOnly(LoadedTransactionFeePayerOnly),
+}
+
+impl LoadedTransaction {
+    pub fn get_accounts(&self) -> &[TransactionAccount] {
+        match self {
+            Self::Full(loaded_tx) => &loaded_tx.accounts,
+            Self::FeePayerOnly(loaded_tx) => &loaded_tx.accounts,
+        }
+    }
+
+    pub fn into_accounts(self) -> Vec<TransactionAccount> {
+        match self {
+            Self::Full(loaded_tx) => loaded_tx.accounts,
+            Self::FeePayerOnly(loaded_tx) => loaded_tx.accounts,
+        }
+    }
+
+    pub fn get_rent(&self) -> TransactionRent {
+        match self {
+            Self::Full(loaded_tx) => loaded_tx.rent,
+            Self::FeePayerOnly(loaded_tx) => loaded_tx.rent,
+        }
+    }
+
+    pub fn get_rent_debits_mut(&mut self) -> &mut RentDebits {
+        match self {
+            Self::Full(loaded_tx) => &mut loaded_tx.rent_debits,
+            Self::FeePayerOnly(loaded_tx) => &mut loaded_tx.rent_debits,
+        }
+    }
 }
 
 /// Check whether the payer_account is capable of paying the fee. The
@@ -119,59 +165,172 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
     let feature_set = callbacks.get_feature_set();
     txs.iter()
         .zip(check_results)
-        .map(|etx| match etx {
-            (tx, (Ok(()), nonce, lamports_per_signature)) => {
-                let message = tx.message();
-                let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                    fee_structure.calculate_fee(
-                        message,
-                        *lamports_per_signature,
-                        &process_compute_budget_instructions(message.program_instructions_iter())
-                            .unwrap_or_default()
-                            .into(),
-                        feature_set
-                            .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                        feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
-                    )
-                } else {
-                    return (Err(TransactionError::BlockhashNotFound), None);
-                };
+        .map(|(tx, (lock_result, nonce, lamports_per_signature))| {
+            let lock_type = match lock_result {
+                Ok(lock_type) => lock_type,
+                Err(err) => return (Err(err.clone()), None),
+            };
 
-                // load transactions
-                let loaded_transaction = match load_transaction_accounts(
-                    callbacks,
+            let message = tx.message();
+            let fee = if let Some(lamports_per_signature) = lamports_per_signature {
+                fee_structure.calculate_fee(
                     message,
-                    fee,
-                    error_counters,
-                    account_overrides,
-                    loaded_programs,
-                ) {
-                    Ok(loaded_transaction) => loaded_transaction,
-                    Err(e) => return (Err(e), None),
-                };
+                    *lamports_per_signature,
+                    &process_compute_budget_instructions(message.program_instructions_iter())
+                        .unwrap_or_default()
+                        .into(),
+                    feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                    feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
+                )
+            } else {
+                return (Err(TransactionError::BlockhashNotFound), None);
+            };
 
-                // Update nonce with fee-subtracted accounts
-                let nonce = if let Some(nonce) = nonce {
-                    match NonceFull::from_partial(
-                        nonce,
+            match lock_type {
+                TransactionLockType::Full => {
+                    let loaded_transaction = match load_transaction_accounts(
+                        callbacks,
                         message,
-                        &loaded_transaction.accounts,
-                        &loaded_transaction.rent_debits,
+                        fee,
+                        error_counters,
+                        account_overrides,
+                        loaded_programs,
                     ) {
-                        Ok(nonce) => Some(nonce),
-                        // This error branch is never reached, because `load_transaction_accounts`
-                        // already validates the fee payer account.
+                        Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
-                    }
-                } else {
-                    None
-                };
+                    };
 
-                (Ok(loaded_transaction), nonce)
+                    // Update nonce with fee-subtracted accounts
+                    let nonce = if let Some(nonce) = nonce {
+                        match NonceFull::from_partial(
+                            nonce,
+                            message,
+                            &loaded_transaction.accounts,
+                            &loaded_transaction.rent_debits,
+                        ) {
+                            Ok(nonce) => Some(nonce),
+                            // This error branch is never reached, because `load_transaction_accounts`
+                            // already validates the fee payer account.
+                            Err(e) => return (Err(e), None),
+                        }
+                    } else {
+                        None
+                    };
+
+                    (Ok(LoadedTransaction::Full(loaded_transaction)), nonce)
+                }
+                TransactionLockType::FeePayerOnly(lock_error) => {
+                    let loaded_transaction = match load_transaction_fee_payer_account(
+                        callbacks,
+                        message,
+                        &lock_error,
+                        fee,
+                        error_counters,
+                        account_overrides,
+                    ) {
+                        Ok(loaded_transaction) => loaded_transaction,
+                        Err(e) => return (Err(e), None),
+                    };
+
+                    // Fee-payer-only locked transactions cannot be durable nonce transactions
+                    assert!(nonce.is_none());
+
+                    (
+                        Ok(LoadedTransaction::FeePayerOnly(loaded_transaction)),
+                        None,
+                    )
+                }
             }
-            (_, (Err(e), _nonce, _lamports_per_signature)) => (Err(e.clone()), None),
         })
         .collect()
+}
+
+fn load_transaction_fee_payer_account<CB: TransactionProcessingCallback>(
+    callbacks: &CB,
+    message: &SanitizedMessage,
+    lock_error: &TransactionError,
+    fee: u64,
+    error_counters: &mut TransactionErrorMetrics,
+    account_overrides: Option<&AccountOverrides>,
+) -> Result<LoadedTransactionFeePayerOnly> {
+    let feature_set = callbacks.get_feature_set();
+
+    let mut tx_rent: TransactionRent = 0;
+    let mut rent_debits = RentDebits::default();
+    let rent_collector = callbacks.get_rent_collector();
+
+    let requested_loaded_accounts_data_size_limit =
+        get_requested_loaded_accounts_data_size_limit(message)?;
+    let mut accumulated_accounts_data_size: usize = 0;
+
+    let fee_payer_key = message.fee_payer();
+    let fee_payer_index = 0;
+    let (fee_payer_account_size, mut fee_payer_account, rent) = if let Some(account_override) =
+        account_overrides.and_then(|overrides| overrides.get(fee_payer_key))
+    {
+        (account_override.data().len(), account_override.clone(), 0)
+    } else {
+        let mut fee_payer_account = callbacks
+            .get_account_shared_data(fee_payer_key)
+            .ok_or_else(|| {
+                error_counters.account_not_found += 1;
+                TransactionError::AccountNotFound
+            })?;
+
+        // collect rent
+        let rent_due = if message.is_writable(fee_payer_index) {
+            if !feature_set.is_active(&feature_set::disable_rent_fees_collection::id()) {
+                rent_collector
+                    .collect_from_existing_account(fee_payer_key, &mut fee_payer_account)
+                    .rent_amount
+            } else {
+                // When rent fee collection is disabled, we won't collect rent for any account. If there
+                // are any rent paying accounts, their `rent_epoch` won't change either. However, if the
+                // account itself is rent-exempted but its `rent_epoch` is not u64::MAX, we will set its
+                // `rent_epoch` to u64::MAX. In such case, the behavior stays the same as before.
+                if fee_payer_account.rent_epoch() != RENT_EXEMPT_RENT_EPOCH
+                    && rent_collector.get_rent_due(
+                        fee_payer_account.lamports(),
+                        fee_payer_account.data().len(),
+                        fee_payer_account.rent_epoch(),
+                    ) == RentDue::Exempt
+                {
+                    fee_payer_account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+                }
+                0
+            }
+        } else {
+            0
+        };
+
+        (fee_payer_account.data().len(), fee_payer_account, rent_due)
+    };
+    accumulate_and_check_loaded_account_data_size(
+        &mut accumulated_accounts_data_size,
+        fee_payer_account_size,
+        requested_loaded_accounts_data_size_limit,
+        error_counters,
+    )?;
+
+    validate_fee_payer(
+        fee_payer_key,
+        &mut fee_payer_account,
+        fee_payer_index as IndexOfAccount,
+        error_counters,
+        rent_collector,
+        fee,
+    )?;
+
+    tx_rent += rent;
+    rent_debits.insert(fee_payer_key, rent, fee_payer_account.lamports());
+
+    Ok(LoadedTransactionFeePayerOnly {
+        accounts: vec![(*fee_payer_key, fee_payer_account)],
+        lock_error: lock_error.clone(),
+        rent: tx_rent,
+        rent_debits,
+    })
 }
 
 fn load_transaction_accounts<CB: TransactionProcessingCallback>(
@@ -181,7 +340,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     error_counters: &mut TransactionErrorMetrics,
     account_overrides: Option<&AccountOverrides>,
     loaded_programs: &ProgramCacheForTxBatch,
-) -> Result<LoadedTransaction> {
+) -> Result<LoadedTransactionFull> {
     let feature_set = callbacks.get_feature_set();
 
     // There is no way to predict what program will execute without an error
@@ -378,7 +537,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         })
         .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
 
-    Ok(LoadedTransaction {
+    Ok(LoadedTransactionFull {
         accounts,
         program_indices,
         rent: tx_rent,
@@ -799,7 +958,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let (load_res, _nonce) = &loaded_accounts[0];
         let loaded_transaction = load_res.as_ref().unwrap();
-        assert_eq!(loaded_transaction.accounts[0].1.lamports(), min_balance);
+        assert_eq!(
+            loaded_transaction.into_accounts[0].1.lamports(),
+            min_balance
+        );
 
         // Fee leaves zero balance fails
         accounts[0].1.set_lamports(lamports_per_signature);
@@ -867,8 +1029,8 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             (Ok(loaded_transaction), _nonce) => {
-                assert_eq!(loaded_transaction.accounts.len(), 3);
-                assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
+                assert_eq!(loaded_transaction.into_accounts.len(), 3);
+                assert_eq!(loaded_transaction.into_accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.program_indices.len(), 1);
                 assert_eq!(loaded_transaction.program_indices[0].len(), 0);
             }
@@ -991,8 +1153,8 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             (Ok(loaded_transaction), _nonce) => {
-                assert_eq!(loaded_transaction.accounts.len(), 4);
-                assert_eq!(loaded_transaction.accounts[0].1, accounts[0].1);
+                assert_eq!(loaded_transaction.into_accounts.len(), 4);
+                assert_eq!(loaded_transaction.into_accounts[0].1, accounts[0].1);
                 assert_eq!(loaded_transaction.program_indices.len(), 2);
                 assert_eq!(loaded_transaction.program_indices[0].len(), 1);
                 assert_eq!(loaded_transaction.program_indices[1].len(), 2);
@@ -1000,11 +1162,11 @@ mod tests {
                     for (i, program_index) in program_indices.iter().enumerate() {
                         // +1 to skip first not loader account
                         assert_eq!(
-                            loaded_transaction.accounts[*program_index as usize].0,
+                            loaded_transaction.into_accounts[*program_index as usize].0,
                             accounts[i + 1].0
                         );
                         assert_eq!(
-                            loaded_transaction.accounts[*program_index as usize].1,
+                            loaded_transaction.into_accounts[*program_index as usize].1,
                             accounts[i + 1].1
                         );
                     }
@@ -1085,9 +1247,9 @@ mod tests {
             load_accounts_no_store(&[(keypair.pubkey(), account)], tx, Some(&account_overrides));
         assert_eq!(loaded_accounts.len(), 1);
         let loaded_transaction = loaded_accounts[0].0.as_ref().unwrap();
-        assert_eq!(loaded_transaction.accounts[0].0, keypair.pubkey());
-        assert_eq!(loaded_transaction.accounts[1].0, slot_history_id);
-        assert_eq!(loaded_transaction.accounts[1].1.lamports(), 42);
+        assert_eq!(loaded_transaction.into_accounts[0].0, keypair.pubkey());
+        assert_eq!(loaded_transaction.into_accounts[1].0, slot_history_id);
+        assert_eq!(loaded_transaction.into_accounts[1].1.lamports(), 42);
     }
 
     #[test]
@@ -2032,7 +2194,7 @@ mod tests {
             compute_budget_processor::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
         ));
         let transaction_context = TransactionContext::new(
-            loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
+            loaded_txs[0].0.as_ref().unwrap().into_accounts.clone(),
             Rent::default(),
             compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,

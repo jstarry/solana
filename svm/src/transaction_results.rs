@@ -34,7 +34,7 @@ pub struct TransactionResults {
 pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
-        programs_modified_by_tx: Box<ProgramCacheForTxBatch>,
+        programs_modified_by_tx: Option<Box<ProgramCacheForTxBatch>>,
     },
     NotExecuted(TransactionError),
 }

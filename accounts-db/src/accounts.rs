@@ -726,9 +726,8 @@ impl Accounts {
 
             let message = tx.message();
             let loaded_transaction = tx_load_result.as_mut().unwrap();
-            for (i, (address, account)) in (0..message.account_keys().len())
-                .zip(loaded_transaction.accounts.iter_mut())
-                .filter(|(i, _)| message.is_non_loader_key(*i))
+            for (i, (address, account)) in
+                (0..message.account_keys().len()).zip(loaded_transaction.accounts.iter_mut())
             {
                 if message.is_writable(i) {
                     let is_fee_payer = i == 0;

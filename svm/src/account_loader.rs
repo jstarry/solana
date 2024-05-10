@@ -49,7 +49,7 @@ pub struct LoadedTransaction {
 }
 
 impl LoadedTransaction {
-    pub fn get_fee_payer_account(&self) -> Option<&TransactionAccount> {
+    pub fn fee_payer_account(&self) -> Option<&TransactionAccount> {
         self.accounts.first()
     }
 }
@@ -158,7 +158,7 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
 
                 // Update nonce with fee-subtracted accounts
                 let Some((fee_payer_address, fee_payer_account)) =
-                    loaded_transaction.get_fee_payer_account()
+                    loaded_transaction.fee_payer_account()
                 else {
                     // This error branch is never reached, because `load_transaction_accounts`
                     // already validates the fee payer account.

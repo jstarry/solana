@@ -719,11 +719,14 @@ impl Accounts {
                 TransactionExecutionResult::NotExecuted(_) => continue,
             };
 
-            let maybe_nonce = match (execution_status, &loaded_transaction.nonce) {
-                (Ok(_), _) => None, // Success, don't do any additional nonce processing
-                (Err(_), Some(nonce)) => {
-                    Some((nonce, true /* rollback */))
-                }
+            enum TransactionStatus<'a> {
+                Successful,
+                FailedWithNonce { nonce: &'a NonceFull },
+            }
+
+            let tx_status = match (execution_status, &loaded_transaction.nonce) {
+                (Ok(_), _) => TransactionStatus::Successful, // Success, don't do any additional nonce processing
+                (Err(_), Some(nonce)) => TransactionStatus::FailedWithNonce { nonce },
                 (Err(_), None) => {
                     // Fees for failed transactions which don't use durable nonces are
                     // deducted in Bank::filter_program_errors_and_collect_fee
@@ -753,18 +756,24 @@ impl Accounts {
                 .filter(|(i, _)| is_storable_account(message, *i))
             {
                 if message.is_writable(i) {
-                    let is_fee_payer = i == 0;
-                    let is_nonce_account = prepare_if_nonce_account(
-                        address,
-                        account,
-                        execution_status,
-                        is_fee_payer,
-                        maybe_nonce,
-                        durable_nonce,
-                        lamports_per_signature,
-                    );
+                    let should_store_account = match tx_status {
+                        TransactionStatus::Successful => true,
+                        TransactionStatus::FailedWithNonce { nonce } => {
+                            let is_fee_payer = i == 0;
+                            let is_nonce_account = prepare_if_nonce_account(
+                                address,
+                                account,
+                                is_fee_payer,
+                                nonce,
+                                durable_nonce,
+                                lamports_per_signature,
+                            );
 
-                    if execution_status.is_ok() || is_nonce_account || is_fee_payer {
+                            is_fee_payer || is_nonce_account
+                        }
+                    };
+
+                    if should_store_account {
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
                         transactions.push(Some(tx));
@@ -779,52 +788,42 @@ impl Accounts {
 fn prepare_if_nonce_account(
     address: &Pubkey,
     account: &mut AccountSharedData,
-    execution_result: &Result<()>,
     is_fee_payer: bool,
-    maybe_nonce: Option<(&NonceFull, bool)>,
+    nonce: &NonceFull,
     &durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) -> bool {
-    if let Some((nonce, rollback)) = maybe_nonce {
-        if address == nonce.address() {
-            if rollback {
-                // The transaction failed which would normally drop the account
-                // processing changes, since this account is now being included
-                // in the accounts written back to the db, roll it back to
-                // pre-processing state.
-                *account = nonce.account().clone();
-            }
+    if address == nonce.address() {
+        // The transaction failed which would normally drop the account
+        // processing changes, since this account is now being included
+        // in the accounts written back to the db, roll it back to
+        // pre-processing state.
+        *account = nonce.account().clone();
 
-            // Advance the stored blockhash to prevent fee theft by someone
-            // replaying nonce transactions that have failed with an
-            // `InstructionError`.
-            //
-            // Since we know we are dealing with a valid nonce account,
-            // unwrap is safe here
-            let nonce_versions = StateMut::<NonceVersions>::state(nonce.account()).unwrap();
-            if let NonceState::Initialized(ref data) = nonce_versions.state() {
-                let nonce_state = NonceState::new_initialized(
-                    &data.authority,
-                    durable_nonce,
-                    lamports_per_signature,
-                );
-                let nonce_versions = NonceVersions::new(nonce_state);
-                account.set_state(&nonce_versions).unwrap();
-            }
-            true
-        } else {
-            if execution_result.is_err() && is_fee_payer {
-                if let Some(fee_payer_account) = nonce.fee_payer_account() {
-                    // Instruction error and fee-payer for this nonce tx is not
-                    // the nonce account itself, rollback the fee payer to the
-                    // fee-paid original state.
-                    *account = fee_payer_account.clone();
-                }
-            }
-
-            false
+        // Advance the stored blockhash to prevent fee theft by someone
+        // replaying nonce transactions that have failed with an
+        // `InstructionError`.
+        //
+        // Since we know we are dealing with a valid nonce account,
+        // unwrap is safe here
+        let nonce_versions = StateMut::<NonceVersions>::state(nonce.account()).unwrap();
+        if let NonceState::Initialized(ref data) = nonce_versions.state() {
+            let nonce_state =
+                NonceState::new_initialized(&data.authority, durable_nonce, lamports_per_signature);
+            let nonce_versions = NonceVersions::new(nonce_state);
+            account.set_state(&nonce_versions).unwrap();
         }
+        true
     } else {
+        if is_fee_payer {
+            if let Some(fee_payer_account) = nonce.fee_payer_account() {
+                // Instruction error and fee-payer for this nonce tx is not
+                // the nonce account itself, rollback the fee payer to the
+                // fee-paid original state.
+                *account = fee_payer_account.clone();
+            }
+        }
+
         false
     }
 }

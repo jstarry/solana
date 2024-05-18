@@ -1684,29 +1684,26 @@ mod tests {
     fn run_prepare_if_nonce_account_test(
         account_address: &Pubkey,
         account: &mut AccountSharedData,
-        tx_result: &Result<()>,
         is_fee_payer: bool,
-        maybe_nonce: Option<(&NonceFull, bool)>,
+        nonce: &NonceFull,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
         expect_account: &AccountSharedData,
     ) -> bool {
         // Verify expect_account's relationship
         if !is_fee_payer {
-            match maybe_nonce {
-                Some((nonce, _)) if nonce.address() == account_address => {
-                    assert_ne!(expect_account, nonce.account())
-                }
-                _ => assert_eq!(expect_account, account),
+            if nonce.address() == account_address {
+                assert_ne!(expect_account, nonce.account());
+            } else {
+                assert_eq!(expect_account, account);
             }
         }
 
         prepare_if_nonce_account(
             account_address,
             account,
-            tx_result,
             is_fee_payer,
-            maybe_nonce,
+            nonce,
             durable_nonce,
             lamports_per_signature,
         );
@@ -1741,35 +1738,8 @@ mod tests {
         assert!(run_prepare_if_nonce_account_test(
             &post_account_address,
             &mut post_account,
-            &Ok(()),
             false,
-            Some((&nonce, true)),
-            &blockhash,
-            lamports_per_signature,
-            &expect_account,
-        ));
-    }
-
-    #[test]
-    fn test_prepare_if_nonce_account_not_nonce_tx() {
-        let (
-            pre_account_address,
-            _pre_account,
-            _post_account,
-            blockhash,
-            lamports_per_signature,
-            _maybe_fee_payer_account,
-        ) = create_accounts_prepare_if_nonce_account();
-        let post_account_address = pre_account_address;
-
-        let mut post_account = AccountSharedData::default();
-        let expect_account = post_account.clone();
-        assert!(run_prepare_if_nonce_account_test(
-            &post_account_address,
-            &mut post_account,
-            &Ok(()),
-            false,
-            None,
+            &nonce,
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -1794,45 +1764,8 @@ mod tests {
         assert!(run_prepare_if_nonce_account_test(
             &Pubkey::from([1u8; 32]),
             &mut post_account,
-            &Ok(()),
             false,
-            Some((&nonce, true)),
-            &blockhash,
-            lamports_per_signature,
-            &expect_account,
-        ));
-    }
-
-    #[test]
-    fn test_prepare_if_nonce_account_tx_error() {
-        let (
-            pre_account_address,
-            pre_account,
-            mut post_account,
-            blockhash,
-            lamports_per_signature,
-            maybe_fee_payer_account,
-        ) = create_accounts_prepare_if_nonce_account();
-        let post_account_address = pre_account_address;
-        let mut expect_account = pre_account.clone();
-
-        let nonce = NonceFull::new(pre_account_address, pre_account, maybe_fee_payer_account);
-
-        expect_account
-            .set_state(&NonceVersions::new(NonceState::Initialized(
-                nonce::state::Data::new(Pubkey::default(), blockhash, lamports_per_signature),
-            )))
-            .unwrap();
-
-        assert!(run_prepare_if_nonce_account_test(
-            &post_account_address,
-            &mut post_account,
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
-            false,
-            Some((&nonce, true)),
+            &nonce,
             &blockhash,
             lamports_per_signature,
             &expect_account,
@@ -1844,7 +1777,7 @@ mod tests {
         let nonce_account = AccountSharedData::new_data(1, &(), &system_program::id()).unwrap();
         let pre_fee_payer_account =
             AccountSharedData::new_data(42, &(), &system_program::id()).unwrap();
-        let mut post_fee_payer_account =
+        let post_fee_payer_account =
             AccountSharedData::new_data(84, &[1, 2, 3, 4], &system_program::id()).unwrap();
         let nonce = NonceFull::new(
             Pubkey::new_unique(),
@@ -1855,12 +1788,8 @@ mod tests {
         assert!(run_prepare_if_nonce_account_test(
             &Pubkey::new_unique(),
             &mut post_fee_payer_account.clone(),
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
             false,
-            Some((&nonce, true)),
+            &nonce,
             &DurableNonce::default(),
             1,
             &post_fee_payer_account,
@@ -1869,37 +1798,8 @@ mod tests {
         assert!(run_prepare_if_nonce_account_test(
             &Pubkey::new_unique(),
             &mut post_fee_payer_account.clone(),
-            &Ok(()),
             true,
-            Some((&nonce, true)),
-            &DurableNonce::default(),
-            1,
-            &post_fee_payer_account,
-        ));
-
-        assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::new_unique(),
-            &mut post_fee_payer_account.clone(),
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
-            true,
-            None,
-            &DurableNonce::default(),
-            1,
-            &post_fee_payer_account,
-        ));
-
-        assert!(run_prepare_if_nonce_account_test(
-            &Pubkey::new_unique(),
-            &mut post_fee_payer_account,
-            &Err(TransactionError::InstructionError(
-                0,
-                InstructionError::InvalidArgument,
-            )),
-            true,
-            Some((&nonce, true)),
+            &nonce,
             &DurableNonce::default(),
             1,
             &pre_fee_payer_account,

@@ -1,8 +1,9 @@
 use solana_sdk::{
-    account::{AccountSharedData, ReadableAccount, WritableAccount},
+    account::AccountSharedData,
+    account_utils::StateMut,
+    nonce::state::{DurableNonce, State, Versions},
     nonce_account,
     pubkey::Pubkey,
-    rent_debits::RentDebits,
 };
 
 pub trait NonceInfo {
@@ -23,6 +24,37 @@ impl NoncePartial {
     pub fn new(address: Pubkey, account: AccountSharedData) -> Self {
         Self { address, account }
     }
+
+    /// Advance the stored durable nonce for the captured nonce account
+    /// and update lamports per signature.
+    pub fn advance_nonce_account(
+        &self,
+        durable_nonce: DurableNonce,
+        lamports_per_signature: u64,
+    ) -> AccountSharedData {
+        // The transaction failed which would normally drop the account
+        // processing changes, since this account is now being included
+        // in the accounts written back to the db, roll it back to
+        // pre-processing state.
+        let mut account = self.account.clone();
+
+        // Advance the stored blockhash to prevent fee theft by someone
+        // replaying nonce transactions that have failed with an
+        // `InstructionError`.
+        //
+        // Since we know we are dealing with a valid nonce account,
+        // unwrap is safe here
+        let nonce_versions = StateMut::<Versions>::state(&account).unwrap();
+        if let State::Initialized(ref data) = nonce_versions.state() {
+            let nonce_state =
+                State::new_initialized(&data.authority, durable_nonce, lamports_per_signature);
+            let nonce_versions = Versions::new(nonce_state);
+            account.set_state(&nonce_versions).unwrap();
+        }
+
+        // Return nonce account with an advanced nonce blockhash
+        account
+    }
 }
 
 impl NonceInfo for NoncePartial {
@@ -40,88 +72,19 @@ impl NonceInfo for NoncePartial {
     }
 }
 
-/// Holds fee subtracted nonce info
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct NonceFull {
-    address: Pubkey,
-    account: AccountSharedData,
-    fee_payer_account: Option<AccountSharedData>,
-}
-
-impl NonceFull {
-    pub fn new(
-        address: Pubkey,
-        account: AccountSharedData,
-        fee_payer_account: Option<AccountSharedData>,
-    ) -> Self {
-        Self {
-            address,
-            account,
-            fee_payer_account,
-        }
-    }
-    pub fn from_partial(
-        partial: &NoncePartial,
-        fee_payer_address: &Pubkey,
-        mut fee_payer_account: AccountSharedData,
-        rent_debits: &RentDebits,
-    ) -> Self {
-        let rent_debit = rent_debits.get_account_rent_debit(fee_payer_address);
-        fee_payer_account.set_lamports(fee_payer_account.lamports().saturating_add(rent_debit));
-
-        let nonce_address = *partial.address();
-        if *fee_payer_address == nonce_address {
-            Self::new(nonce_address, fee_payer_account, None)
-        } else {
-            Self::new(
-                nonce_address,
-                partial.account().clone(),
-                Some(fee_payer_account),
-            )
-        }
-    }
-}
-
-impl NonceInfo for NonceFull {
-    fn address(&self) -> &Pubkey {
-        &self.address
-    }
-    fn account(&self) -> &AccountSharedData {
-        &self.account
-    }
-    fn lamports_per_signature(&self) -> Option<u64> {
-        nonce_account::lamports_per_signature_of(&self.account)
-    }
-    fn fee_payer_account(&self) -> Option<&AccountSharedData> {
-        self.fee_payer_account.as_ref()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use {
         super::*,
         solana_sdk::{
+            account::{ReadableAccount, WritableAccount},
             hash::Hash,
-            instruction::Instruction,
-            message::{Message, SanitizedMessage},
             nonce::{self, state::DurableNonce},
-            reserved_account_keys::ReservedAccountKeys,
+            rent_debits::RentDebits,
             signature::{keypair_from_seed, Signer},
-            system_instruction, system_program,
+            system_program,
         },
     };
-
-    fn new_sanitized_message(
-        instructions: &[Instruction],
-        payer: Option<&Pubkey>,
-    ) -> SanitizedMessage {
-        SanitizedMessage::try_from_legacy_message(
-            Message::new(instructions, payer),
-            &ReservedAccountKeys::empty_key_set(),
-        )
-        .unwrap()
-    }
 
     #[test]
     fn test_nonce_info() {
@@ -131,7 +94,6 @@ mod tests {
         let nonce_address = nonce_authority.pubkey();
         let from = keypair_from_seed(&[1; 32]).unwrap();
         let from_address = from.pubkey();
-        let to_address = Pubkey::new_unique();
 
         let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let nonce_account = AccountSharedData::new_data(
@@ -158,11 +120,6 @@ mod tests {
             account
         };
 
-        let instructions = vec![
-            system_instruction::advance_nonce_account(&nonce_address, &nonce_authority.pubkey()),
-            system_instruction::transfer(&from_address, &to_address, 42),
-        ];
-
         // NoncePartial create + NonceInfo impl
         let partial = NoncePartial::new(nonce_address, rent_collected_nonce_account.clone());
         assert_eq!(*partial.address(), nonce_address);
@@ -185,43 +142,5 @@ mod tests {
             TEST_RENT_DEBIT,
             rent_collected_nonce_account.lamports(),
         );
-
-        // NonceFull create + NonceInfo impl
-        {
-            let message = new_sanitized_message(&instructions, Some(&from_address));
-            let fee_payer_address = message.account_keys().get(0).unwrap();
-            let fee_payer_account = rent_collected_from_account.clone();
-            let full = NonceFull::from_partial(
-                &partial,
-                fee_payer_address,
-                fee_payer_account,
-                &rent_debits,
-            );
-            assert_eq!(*full.address(), nonce_address);
-            assert_eq!(*full.account(), rent_collected_nonce_account);
-            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
-            assert_eq!(
-                full.fee_payer_account(),
-                Some(&from_account),
-                "rent debit should be refunded in captured fee account"
-            );
-        }
-
-        // Nonce account is fee-payer
-        {
-            let message = new_sanitized_message(&instructions, Some(&nonce_address));
-            let fee_payer_address = message.account_keys().get(0).unwrap();
-            let fee_payer_account = rent_collected_nonce_account;
-            let full = NonceFull::from_partial(
-                &partial,
-                fee_payer_address,
-                fee_payer_account,
-                &rent_debits,
-            );
-            assert_eq!(*full.address(), nonce_address);
-            assert_eq!(*full.account(), nonce_account);
-            assert_eq!(full.lamports_per_signature(), Some(lamports_per_signature));
-            assert_eq!(full.fee_payer_account(), None);
-        }
     }
 }

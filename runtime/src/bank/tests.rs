@@ -101,7 +101,7 @@ use {
         transaction_context::TransactionAccount,
     },
     solana_stake_program::stake_state::{self, StakeStateV2},
-    solana_svm::{nonce_info::NonceFull, transaction_results::DurableNonceFee},
+    solana_svm::{nonce_info::NoncePartial, transaction_results::DurableNonceFee},
     solana_vote_program::{
         vote_instruction,
         vote_state::{
@@ -230,7 +230,7 @@ fn test_race_register_tick_freeze() {
 
 fn new_execution_result(
     status: Result<()>,
-    nonce: Option<&NonceFull>,
+    nonce: Option<&NoncePartial>,
 ) -> TransactionExecutionResult {
     TransactionExecutionResult::Executed {
         details: TransactionExecutionDetails {
@@ -12890,12 +12890,11 @@ fn test_filter_program_errors_and_collect_fee_details() {
     // tx1 | not executed                | n/a      | (0    , 0)         | 0                   | Original Err
     // tx2 | executed and no error       | n/a      | (5_000, 1_000)     | 0                   | Ok
     // tx3 | executed has error          | true     | (5_000, 1_000)     | 0                   | Ok
-    // tx4 | executed has error          | false    | (5_000, 1_000)     | 6_000               | Ok
-    // tx5 | executed error,
+    // tx4 | executed has error          | false    | (5_000, 1_000)     | 0                   | Ok
+    // tx5 | not executed,
     //         payer insufficient fund   | false    | (0    , 0)         | 0                   | InsufficientFundsForFee
     //
     let initial_payer_balance = 7_000;
-    let additional_payer_withdraw = 6_000;
     let expected_collected_fee_details = CollectorFeeDetails {
         transaction_fee: 15_000,
         priority_fee: 3_000,
@@ -12948,7 +12947,7 @@ fn test_filter_program_errors_and_collect_fee_details() {
                 1,
                 SystemError::ResultWithNegativeLamports.into(),
             )),
-            Some(&NonceFull::new(Pubkey::new_unique(), nonce_account, None)),
+            Some(&NoncePartial::new(Pubkey::new_unique(), nonce_account)),
         ),
         new_execution_result(
             Err(TransactionError::InstructionError(
@@ -12957,7 +12956,7 @@ fn test_filter_program_errors_and_collect_fee_details() {
             )),
             None,
         ),
-        new_execution_result(Err(TransactionError::AccountNotFound), None),
+        TransactionExecutionResult::NotExecuted(TransactionError::InsufficientFundsForFee),
     ];
 
     let results = bank.filter_program_errors_and_collect_fee_details(&txs, &results);
@@ -12967,61 +12966,12 @@ fn test_filter_program_errors_and_collect_fee_details() {
         *bank.collector_fee_details.read().unwrap()
     );
     assert_eq!(
-        initial_payer_balance - additional_payer_withdraw,
+        initial_payer_balance,
         bank.get_balance(&mint_keypair.pubkey())
     );
     assert_eq!(expected_collect_results, results);
 }
 
-#[test]
-fn test_check_execution_status_and_charge_fee() {
-    let fee = 5000;
-    let initial_balance = fee - 1000;
-    let tx_error =
-        TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature);
-    let GenesisConfigInfo {
-        mut genesis_config,
-        mint_keypair,
-        ..
-    } = create_genesis_config_with_leader(initial_balance, &Pubkey::new_unique(), 3);
-    genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
-    let bank = Bank::new_for_tests(&genesis_config);
-    let message = new_sanitized_message(Message::new(
-        &[system_instruction::transfer(
-            &mint_keypair.pubkey(),
-            &Pubkey::new_unique(),
-            1,
-        )],
-        Some(&mint_keypair.pubkey()),
-    ));
-
-    [Ok(()), Err(tx_error)]
-        .iter()
-        .flat_map(|result| [true, false].iter().map(move |is_nonce| (result, is_nonce)))
-        .for_each(|(result, is_nonce)| {
-            if result.is_err() && !is_nonce {
-                assert_eq!(
-                    Err(TransactionError::InsufficientFundsForFee),
-                    bank.check_execution_status_and_charge_fee(&message, result, *is_nonce, fee)
-                );
-                assert_eq!(initial_balance, bank.get_balance(&mint_keypair.pubkey()));
-
-                let small_fee = 1;
-                assert!(bank
-                    .check_execution_status_and_charge_fee(&message, result, *is_nonce, small_fee)
-                    .is_ok());
-                assert_eq!(
-                    initial_balance - small_fee,
-                    bank.get_balance(&mint_keypair.pubkey())
-                );
-            } else {
-                assert!(bank
-                    .check_execution_status_and_charge_fee(&message, result, *is_nonce, fee)
-                    .is_ok());
-                assert_eq!(initial_balance, bank.get_balance(&mint_keypair.pubkey()));
-            }
-        });
-}
 #[test]
 fn test_deploy_last_epoch_slot() {
     solana_logger::setup();

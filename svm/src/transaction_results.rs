@@ -5,7 +5,7 @@
 )]
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
-    crate::nonce_info::{NonceFull, NonceInfo},
+    crate::nonce_info::{NonceInfo, NoncePartial},
     solana_program_runtime::loaded_programs::ProgramCacheForTxBatch,
     solana_sdk::{
         rent_debits::RentDebits,
@@ -88,8 +88,8 @@ pub enum DurableNonceFee {
     Invalid,
 }
 
-impl From<&NonceFull> for DurableNonceFee {
-    fn from(nonce: &NonceFull) -> Self {
+impl From<&NoncePartial> for DurableNonceFee {
+    fn from(nonce: &NoncePartial) -> Self {
         match nonce.lamports_per_signature() {
             Some(lamports_per_signature) => Self::Valid(lamports_per_signature),
             None => Self::Invalid,

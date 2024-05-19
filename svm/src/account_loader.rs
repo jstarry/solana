@@ -1,8 +1,7 @@
 use {
     crate::{
-        account_overrides::AccountOverrides,
-        account_rent_state::RentState,
-        nonce_info::{NonceFull, NoncePartial},
+        account_overrides::AccountOverrides, account_rent_state::RentState,
+        nonce_info::NoncePartial, rollback_accounts::RollbackAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
     },
@@ -44,14 +43,14 @@ pub type TransactionLoadResult = Result<LoadedTransaction>;
 pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
     pub program_indices: TransactionProgramIndices,
-    pub nonce: Option<NonceFull>,
+    pub rollback_accounts: RollbackAccounts,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
 }
 
 impl LoadedTransaction {
-    pub fn fee_payer_account(&self) -> Option<&TransactionAccount> {
-        self.accounts.first()
+    pub fn nonce(&self) -> Option<&NoncePartial> {
+        self.rollback_accounts.nonce()
     }
 }
 
@@ -297,18 +296,14 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         return Err(TransactionError::AccountNotFound);
     }
 
-    // Update nonce with fee-subtracted accounts
-    let nonce = nonce.map(|nonce| {
+    // Capture fee-subtracted fee payer account and original nonce account state
+    // to rollback to if transaction execution fails.
+    let rollback_accounts = {
         // SAFETY: The first accounts entry must be a validated fee payer because
         // validated_fee_payer must be true at this point.
-        let (fee_payer_address, fee_payer_account) = accounts.first().unwrap();
-        NonceFull::from_partial(
-            nonce,
-            fee_payer_address,
-            fee_payer_account.clone(),
-            &rent_debits,
-        )
-    });
+        let (fee_payer_address, fee_payer_account) = accounts.first().cloned().unwrap();
+        RollbackAccounts::new(nonce, fee_payer_address, fee_payer_account, &rent_debits)
+    };
 
     let builtins_start_index = accounts.len();
     let program_indices = message
@@ -377,7 +372,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     Ok(LoadedTransaction {
         accounts,
         program_indices,
-        nonce,
+        rollback_accounts,
         rent: tx_rent,
         rent_debits,
     })
@@ -451,8 +446,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            nonce_info::{NonceFull, NoncePartial},
-            transaction_account_state_info::TransactionAccountStateInfo,
+            nonce_info::NoncePartial, transaction_account_state_info::TransactionAccountStateInfo,
             transaction_processing_callback::TransactionProcessingCallback,
         },
         nonce::state::Versions as NonceVersions,
@@ -1462,9 +1456,14 @@ mod tests {
         mock_bank
             .accounts_map
             .insert(native_loader::id(), AccountSharedData::default());
-        let mut account_data = AccountSharedData::default();
-        account_data.set_lamports(200);
-        mock_bank.accounts_map.insert(key1.pubkey(), account_data);
+        let mut fee_account_data = AccountSharedData::default();
+        fee_account_data.set_lamports(200);
+        mock_bank
+            .accounts_map
+            .insert(key1.pubkey(), fee_account_data.clone());
+
+        let fee = 32;
+        fee_account_data.checked_sub_lamports(32).unwrap();
 
         let mut error_counter = TransactionErrorMetrics::default();
         let loaded_programs = ProgramCacheForTxBatch::default();
@@ -1478,7 +1477,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1503,7 +1502,9 @@ mod tests {
                     )
                 ],
                 program_indices: vec![vec![]],
-                nonce: None,
+                rollback_accounts: RollbackAccounts::FeePayerOnly {
+                    fee_payer_account: fee_account_data,
+                },
                 rent: 0,
                 rent_debits: RentDebits::default()
             }
@@ -1666,9 +1667,15 @@ mod tests {
         account_data.set_executable(true);
         mock_bank.accounts_map.insert(key1.pubkey(), account_data);
 
-        let mut account_data = AccountSharedData::default();
-        account_data.set_lamports(200);
-        mock_bank.accounts_map.insert(key2.pubkey(), account_data);
+        let mut fee_account_data = AccountSharedData::default();
+        fee_account_data.set_lamports(200);
+        mock_bank
+            .accounts_map
+            .insert(key2.pubkey(), fee_account_data.clone());
+
+        let fee = 32;
+        fee_account_data.checked_sub_lamports(32).unwrap();
+
         let mut error_counter = TransactionErrorMetrics::default();
         let loaded_programs = ProgramCacheForTxBatch::default();
 
@@ -1681,7 +1688,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1705,7 +1712,9 @@ mod tests {
                         mock_bank.accounts_map[&key1.pubkey()].clone()
                     ),
                 ],
-                nonce: None,
+                rollback_accounts: RollbackAccounts::FeePayerOnly {
+                    fee_payer_account: fee_account_data,
+                },
                 program_indices: vec![vec![1]],
                 rent: 0,
                 rent_debits: RentDebits::default()
@@ -1848,9 +1857,14 @@ mod tests {
         account_data.set_owner(key3.pubkey());
         mock_bank.accounts_map.insert(key1.pubkey(), account_data);
 
-        let mut account_data = AccountSharedData::default();
-        account_data.set_lamports(200);
-        mock_bank.accounts_map.insert(key2.pubkey(), account_data);
+        let mut fee_account_data = AccountSharedData::default();
+        fee_account_data.set_lamports(200);
+        mock_bank
+            .accounts_map
+            .insert(key2.pubkey(), fee_account_data.clone());
+
+        let fee = 32;
+        fee_account_data.checked_sub_lamports(32).unwrap();
 
         let mut account_data = AccountSharedData::default();
         account_data.set_executable(true);
@@ -1869,7 +1883,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1898,7 +1912,9 @@ mod tests {
                     ),
                 ],
                 program_indices: vec![vec![2, 1]],
-                nonce: None,
+                rollback_accounts: RollbackAccounts::FeePayerOnly {
+                    fee_payer_account: fee_account_data,
+                },
                 rent: 0,
                 rent_debits: RentDebits::default()
             }
@@ -1937,9 +1953,14 @@ mod tests {
         account_data.set_owner(key3.pubkey());
         mock_bank.accounts_map.insert(key1.pubkey(), account_data);
 
-        let mut account_data = AccountSharedData::default();
-        account_data.set_lamports(200);
-        mock_bank.accounts_map.insert(key2.pubkey(), account_data);
+        let mut fee_account_data = AccountSharedData::default();
+        fee_account_data.set_lamports(200);
+        mock_bank
+            .accounts_map
+            .insert(key2.pubkey(), fee_account_data.clone());
+
+        let fee = 32;
+        fee_account_data.checked_sub_lamports(32).unwrap();
 
         let mut account_data = AccountSharedData::default();
         account_data.set_executable(true);
@@ -1958,7 +1979,7 @@ mod tests {
             &mock_bank,
             sanitized_transaction.message(),
             None,
-            32,
+            fee,
             &mut error_counter,
             None,
             &loaded_programs,
@@ -1990,7 +2011,9 @@ mod tests {
                     ),
                 ],
                 program_indices: vec![vec![3, 1], vec![3, 1]],
-                nonce: None,
+                rollback_accounts: RollbackAccounts::FeePayerOnly {
+                    fee_payer_account: fee_account_data,
+                },
                 rent: 0,
                 rent_debits: RentDebits::default()
             }
@@ -2143,11 +2166,10 @@ mod tests {
                     ),
                 ],
                 program_indices: vec![vec![3, 1], vec![3, 1]],
-                nonce: Some(NonceFull::new(
-                    Pubkey::from([0; 32]),
-                    AccountSharedData::default(),
-                    Some(mock_bank.accounts_map[&key2.pubkey()].clone())
-                )),
+                rollback_accounts: RollbackAccounts::SeparateNonceAndFeePayer {
+                    nonce: NoncePartial::new(Pubkey::from([0; 32]), AccountSharedData::default(),),
+                    fee_payer_account: mock_bank.accounts_map[&key2.pubkey()].clone(),
+                },
                 rent: 0,
                 rent_debits: RentDebits::default()
             }

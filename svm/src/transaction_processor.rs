@@ -725,7 +725,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                 status,
                 log_messages,
                 inner_instructions,
-                durable_nonce_fee: loaded_transaction.nonce.as_ref().map(DurableNonceFee::from),
+                durable_nonce_fee: loaded_transaction.nonce().map(DurableNonceFee::from),
                 return_data,
                 executed_units,
                 accounts_data_len_delta,
@@ -830,6 +830,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 mod tests {
     use {
         super::*,
+        crate::rollback_accounts::RollbackAccounts,
         solana_program_runtime::loaded_programs::{BlockRelation, ProgramCacheEntryType},
         solana_sdk::{
             account::{create_account_shared_data_for_test, WritableAccount},
@@ -986,7 +987,9 @@ mod tests {
         let mut loaded_transaction = LoadedTransaction {
             accounts: vec![(Pubkey::new_unique(), AccountSharedData::default())],
             program_indices: vec![vec![0]],
-            nonce: None,
+            rollback_accounts: RollbackAccounts::FeePayerOnly {
+                fee_payer_account: AccountSharedData::default(),
+            },
             rent: 0,
             rent_debits: RentDebits::default(),
         };
@@ -1113,7 +1116,9 @@ mod tests {
                 (key2, AccountSharedData::default()),
             ],
             program_indices: vec![vec![0]],
-            nonce: None,
+            rollback_accounts: RollbackAccounts::FeePayerOnly {
+                fee_payer_account: AccountSharedData::default(),
+            },
             rent: 0,
             rent_debits: RentDebits::default(),
         };

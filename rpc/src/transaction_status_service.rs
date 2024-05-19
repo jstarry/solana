@@ -230,7 +230,7 @@ pub(crate) mod tests {
                 VersionedTransaction,
             },
         },
-        solana_svm::nonce_info::{NonceFull, NoncePartial},
+        solana_svm::nonce_info::NoncePartial,
         solana_transaction_status::{
             token_balances::TransactionTokenBalancesSet, TransactionStatusMeta,
             TransactionTokenBalance,
@@ -338,18 +338,11 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
-        let fee_payer_address = &pubkey;
-        let fee_payer_account = nonce_account;
         let transaction_result = Some(TransactionExecutionDetails {
             status: Ok(()),
             log_messages: None,
             inner_instructions: None,
-            durable_nonce_fee: Some(DurableNonceFee::from(&NonceFull::from_partial(
-                &rollback_partial,
-                fee_payer_address,
-                fee_payer_account,
-                &rent_debits,
-            ))),
+            durable_nonce_fee: Some(DurableNonceFee::from(&rollback_partial)),
             return_data: None,
             executed_units: 0,
             accounts_data_len_delta: 0,

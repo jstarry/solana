@@ -135,7 +135,7 @@ use {
         message::{AccountKeys, SanitizedMessage},
         native_loader,
         native_token::LAMPORTS_PER_SOL,
-        nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
+        nonce::{state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
         packet::PACKET_DATA_SIZE,
         precompiles::get_precompiles,
@@ -177,7 +177,6 @@ use {
             TransactionExecutionDetails, TransactionExecutionResult, TransactionResults,
         },
     },
-    solana_system_program::{get_system_account_kind, SystemAccountKind},
     solana_vote::vote_account::{VoteAccount, VoteAccountsHashMap},
     solana_vote_program::vote_state::VoteState,
     std::{
@@ -205,6 +204,8 @@ use {
         ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
     },
     solana_program_runtime::{loaded_programs::ProgramCacheForTxBatch, sysvar_cache::SysvarCache},
+    solana_sdk::nonce,
+    solana_system_program::{get_system_account_kind, SystemAccountKind},
 };
 
 /// params to `verify_accounts_hash`
@@ -3889,23 +3890,15 @@ impl Bank {
             .zip(execution_results)
             .map(|(tx, execution_result)| {
                 let message = tx.message();
-                let (execution_status, is_nonce, lamports_per_signature) =
-                    Self::get_details_from_execution_result(
-                        &hash_queue,
-                        execution_result,
-                        message.recent_blockhash(),
-                    )?;
+                let lamports_per_signature = Self::get_details_from_execution_result(
+                    &hash_queue,
+                    execution_result,
+                    message.recent_blockhash(),
+                )?;
                 let fee = self.get_fee_for_message_with_lamports_per_signature(
                     message,
                     lamports_per_signature,
                 );
-
-                self.check_execution_status_and_charge_fee(
-                    message,
-                    execution_status,
-                    is_nonce,
-                    fee,
-                )?;
 
                 fees += fee;
                 Ok(())
@@ -3930,12 +3923,11 @@ impl Bank {
             .zip(execution_results)
             .map(|(tx, execution_result)| {
                 let message = tx.message();
-                let (execution_status, is_nonce, lamports_per_signature) =
-                    Self::get_details_from_execution_result(
-                        &hash_queue,
-                        execution_result,
-                        message.recent_blockhash(),
-                    )?;
+                let lamports_per_signature = Self::get_details_from_execution_result(
+                    &hash_queue,
+                    execution_result,
+                    message.recent_blockhash(),
+                )?;
 
                 if !FeeStructure::to_clear_transaction_fee(lamports_per_signature) {
                     let fee_details = self.fee_structure().calculate_fee_details(
@@ -3946,16 +3938,6 @@ impl Bank {
                         self.feature_set
                             .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
                     );
-
-                    self.check_execution_status_and_charge_fee(
-                        message,
-                        execution_status,
-                        is_nonce,
-                        fee_details.total_fee(
-                            self.feature_set
-                                .is_active(&remove_rounding_in_fee_calculation::id()),
-                        ),
-                    )?;
 
                     accumulated_fee_details.accumulate(&fee_details);
                 }
@@ -3974,48 +3956,23 @@ impl Bank {
         hash_queue_readonly: &RwLockReadGuard<'a, BlockhashQueue>,
         execution_result: &'a TransactionExecutionResult,
         transaction_blockhash: &Hash,
-    ) -> Result<(&'a transaction::Result<()>, bool, u64)> {
-        let (execution_status, durable_nonce_fee) = match &execution_result {
+    ) -> Result<u64> {
+        let durable_nonce_fee = match &execution_result {
             TransactionExecutionResult::Executed { details, .. } => {
-                Ok((&details.status, details.durable_nonce_fee.as_ref()))
+                Ok(details.durable_nonce_fee.as_ref())
             }
             TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
         }?;
 
-        let (lamports_per_signature, is_nonce) = durable_nonce_fee
+        let lamports_per_signature = durable_nonce_fee
             .map(|durable_nonce_fee| durable_nonce_fee.lamports_per_signature())
-            .map(|maybe_lamports_per_signature| (maybe_lamports_per_signature, true))
             .unwrap_or_else(|| {
-                (
-                    hash_queue_readonly.get_lamports_per_signature(transaction_blockhash),
-                    false,
-                )
+                hash_queue_readonly.get_lamports_per_signature(transaction_blockhash)
             });
 
         let lamports_per_signature =
             lamports_per_signature.ok_or(TransactionError::BlockhashNotFound)?;
-        Ok((execution_status, is_nonce, lamports_per_signature))
-    }
-
-    fn check_execution_status_and_charge_fee(
-        &self,
-        message: &SanitizedMessage,
-        execution_status: &transaction::Result<()>,
-        is_nonce: bool,
-        fee: u64,
-    ) -> Result<()> {
-        // In case of instruction error, even though no accounts
-        // were stored we still need to charge the payer the
-        // fee.
-        //
-        //...except nonce accounts, which already have their
-        // post-load, fee deducted, pre-execute account state
-        // stored
-        if execution_status.is_err() && !is_nonce {
-            self.withdraw(message.fee_payer(), fee)?;
-        }
-
-        Ok(())
+        Ok(lamports_per_signature)
     }
 
     /// `committed_transactions_count` is the number of transactions out of `sanitized_txs`
@@ -5066,32 +5023,6 @@ impl Bank {
             old_account_data_size,
             new_account.data().len(),
         );
-    }
-
-    fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
-        match self.get_account_with_fixed_root(pubkey) {
-            Some(mut account) => {
-                let min_balance = match get_system_account_kind(&account) {
-                    Some(SystemAccountKind::Nonce) => self
-                        .rent_collector
-                        .rent
-                        .minimum_balance(nonce::State::size()),
-                    _ => 0,
-                };
-
-                lamports
-                    .checked_add(min_balance)
-                    .filter(|required_balance| *required_balance <= account.lamports())
-                    .ok_or(TransactionError::InsufficientFundsForFee)?;
-                account
-                    .checked_sub_lamports(lamports)
-                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
-                self.store_account(pubkey, &account);
-
-                Ok(())
-            }
-            None => Err(TransactionError::AccountNotFound),
-        }
     }
 
     pub fn accounts(&self) -> Arc<Accounts> {
@@ -7088,6 +7019,32 @@ impl Bank {
 
     pub fn set_fee_structure(&mut self, fee_structure: &FeeStructure) {
         self.transaction_processor.fee_structure = fee_structure.clone();
+    }
+
+    pub fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
+        match self.get_account_with_fixed_root(pubkey) {
+            Some(mut account) => {
+                let min_balance = match get_system_account_kind(&account) {
+                    Some(SystemAccountKind::Nonce) => self
+                        .rent_collector
+                        .rent
+                        .minimum_balance(nonce::State::size()),
+                    _ => 0,
+                };
+
+                lamports
+                    .checked_add(min_balance)
+                    .filter(|required_balance| *required_balance <= account.lamports())
+                    .ok_or(TransactionError::InsufficientFundsForFee)?;
+                account
+                    .checked_sub_lamports(lamports)
+                    .map_err(|_| TransactionError::InsufficientFundsForFee)?;
+                self.store_account(pubkey, &account);
+
+                Ok(())
+            }
+            None => Err(TransactionError::AccountNotFound),
+        }
     }
 }
 

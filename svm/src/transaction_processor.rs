@@ -1244,21 +1244,16 @@ mod tests {
         let transactions = vec![
             sanitized_transaction_1.clone(),
             sanitized_transaction_2.clone(),
-            sanitized_transaction_2,
             sanitized_transaction_1,
         ];
         let mut lock_results = vec![
             Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(25),
+                lamports_per_signature: 25,
             }),
             Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(25),
-            }),
-            Ok(CheckedTransactionDetails {
-                nonce: None,
-                lamports_per_signature: None,
+                lamports_per_signature: 25,
             }),
             Err(TransactionError::ProgramAccountNotFound),
         ];
@@ -1271,7 +1266,6 @@ mod tests {
             &owners,
         );
 
-        assert_eq!(lock_results[2], Err(TransactionError::BlockhashNotFound));
         assert_eq!(result.len(), 2);
         assert_eq!(result[&key1], 2);
         assert_eq!(result[&key2], 1);
@@ -1353,11 +1347,11 @@ mod tests {
                 &mut [
                     Ok(CheckedTransactionDetails {
                         nonce: None,
-                        lamports_per_signature: Some(0),
+                        lamports_per_signature: 0,
                     }),
                     Ok(CheckedTransactionDetails {
                         nonce: None,
-                        lamports_per_signature: Some(0),
+                        lamports_per_signature: 0,
                     }),
                 ],
                 owners,
@@ -1452,12 +1446,9 @@ mod tests {
         let mut lock_results = vec![
             Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(0),
+                lamports_per_signature: 0,
             }),
-            Ok(CheckedTransactionDetails {
-                nonce: None,
-                lamports_per_signature: None,
-            }),
+            Err(TransactionError::BlockhashNotFound),
         ];
         let programs =
             TransactionBatchProcessor::<TestForkGraph>::filter_executable_program_accounts(
@@ -1475,7 +1466,6 @@ mod tests {
                 .expect("failed to find the program account"),
             &1
         );
-        assert_eq!(lock_results[1], Err(TransactionError::BlockhashNotFound));
     }
 
     #[test]

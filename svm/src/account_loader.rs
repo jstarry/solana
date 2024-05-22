@@ -1041,7 +1041,7 @@ mod tests {
             &[tx],
             &[Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(10),
+                lamports_per_signature: 10,
             })],
             &mut error_counters,
             &FeeStructure::default(),
@@ -2045,7 +2045,7 @@ mod tests {
             &[sanitized_tx.clone()],
             &[Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(0),
+                lamports_per_signature: 0,
             })],
             &mut error_counters,
             &FeeStructure::default(),
@@ -2125,7 +2125,7 @@ mod tests {
         );
         let check_result = Ok(CheckedTransactionDetails {
             nonce: Some(NoncePartial::default()),
-            lamports_per_signature: Some(20),
+            lamports_per_signature: 20,
         });
 
         let results = load_accounts(
@@ -2194,27 +2194,10 @@ mod tests {
             false,
         );
 
-        let check_result = Ok(CheckedTransactionDetails {
-            nonce: Some(NoncePartial::default()),
-            lamports_per_signature: None,
-        });
         let fee_structure = FeeStructure::default();
-
-        let result = load_accounts(
-            &mock_bank,
-            &[sanitized_transaction.clone()],
-            &[check_result],
-            &mut TransactionErrorMetrics::default(),
-            &fee_structure,
-            None,
-            &ProgramCacheForTxBatch::default(),
-        );
-
-        assert_eq!(result, vec![Err(TransactionError::BlockhashNotFound)]);
-
         let check_result = Ok(CheckedTransactionDetails {
             nonce: Some(NoncePartial::default()),
-            lamports_per_signature: Some(20),
+            lamports_per_signature: 20,
         });
 
         let result = load_accounts(

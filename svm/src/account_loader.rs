@@ -43,7 +43,7 @@ pub type TransactionLoadResult = Result<LoadedTransaction>;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CheckedTransactionDetails {
     pub nonce: Option<NoncePartial>,
-    pub lamports_per_signature: Option<u64>,
+    pub lamports_per_signature: u64,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -141,20 +141,16 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                 }),
             ) => {
                 let message = tx.message();
-                let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                    fee_structure.calculate_fee(
-                        message,
-                        *lamports_per_signature,
-                        &process_compute_budget_instructions(message.program_instructions_iter())
-                            .unwrap_or_default()
-                            .into(),
-                        feature_set
-                            .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
-                        feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
-                    )
-                } else {
-                    return Err(TransactionError::BlockhashNotFound);
-                };
+                let fee = fee_structure.calculate_fee(
+                    message,
+                    *lamports_per_signature,
+                    &process_compute_budget_instructions(message.program_instructions_iter())
+                        .unwrap_or_default()
+                        .into(),
+                    feature_set
+                        .is_active(&include_loaded_accounts_data_size_in_fee_calculation::id()),
+                    feature_set.is_active(&remove_rounding_in_fee_calculation::id()),
+                );
 
                 // load transactions
                 load_transaction_accounts(
@@ -557,7 +553,7 @@ mod tests {
             &[sanitized_tx],
             &[Ok(CheckedTransactionDetails {
                 nonce: None,
-                lamports_per_signature: Some(lamports_per_signature),
+                lamports_per_signature,
             })],
             error_counters,
             fee_structure,

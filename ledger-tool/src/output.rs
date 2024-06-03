@@ -722,23 +722,25 @@ pub fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
-        match account_data {
-            UiAccountData::Binary(data, data_encoding) => {
-                println!("  data: '{data}'");
-                println!(
-                    "  encoding: {}",
-                    serde_json::to_string(&data_encoding).unwrap()
-                );
-            }
-            UiAccountData::Json(account_data) => {
-                println!(
-                    "  data: '{}'",
-                    serde_json::to_string(&account_data).unwrap()
-                );
-                println!("  encoding: \"jsonParsed\"");
-            }
-            UiAccountData::LegacyBinary(_) => {}
-        };
+        use pretty_hex::*;
+        println!("{:?}", account.data().hex_dump());
+        // let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+        // match account_data {
+        //     UiAccountData::Binary(data, data_encoding) => {
+        //         println!("  data: '{data}'");
+        //         println!(
+        //             "  encoding: {}",
+        //             serde_json::to_string(&data_encoding).unwrap()
+        //         );
+        //     }
+        //     UiAccountData::Json(account_data) => {
+        //         println!(
+        //             "  data: '{}'",
+        //             serde_json::to_string(&account_data).unwrap()
+        //         );
+        //         println!("  encoding: \"jsonParsed\"");
+        //     }
+        //     UiAccountData::LegacyBinary(_) => {}
+        // };
     }
 }

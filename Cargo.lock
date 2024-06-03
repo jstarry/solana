@@ -156,6 +156,7 @@ dependencies = [
  "itertools",
  "log",
  "num_cpus",
+ "pretty-hex",
  "rayon",
  "regex",
  "serde",

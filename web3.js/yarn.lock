@@ -6104,8 +6104,8 @@ mocha@^10.0.0:
     yargs-unparser "2.0.0"
 
 mockttp@^3.0.0:
-  version "3.11.0"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.11.0.tgz#599e0e6d28d289a0eb28d73b9ad4ea5927571c3b"
+  version "3.12.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.12.0.tgz#cbe2ae86195ae6de9cd7e7c8aa22c9c4750541af"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
@@ -6145,6 +6145,7 @@ mockttp@^3.0.0:
     semver "^7.5.3"
     socks-proxy-agent "^7.0.0"
     typed-error "^3.0.2"
+    urlpattern-polyfill "^8.0.0"
     uuid "^8.3.2"
     ws "^8.8.0"
 
@@ -8705,6 +8706,10 @@ urlgrey@1.0.0:
 urlpattern-polyfill@10.0.0:
   version "10.0.0"
   resolved "https://registry.yarnpkg.com/urlpattern-polyfill/-/urlpattern-polyfill-10.0.0.tgz#f0a03a97bfb03cdf33553e5e79a2aadd22cac8ec"
+
+urlpattern-polyfill@^8.0.0:
+  version "8.0.2"
+  resolved "https://registry.yarnpkg.com/urlpattern-polyfill/-/urlpattern-polyfill-8.0.2.tgz#99f096e35eff8bf4b5a2aa7d58a1523d6ebc7ce5"
 
 utf-8-validate@^5.0.2:
   version "5.0.9"

@@ -370,7 +370,7 @@ impl Banks for BanksServer {
         let bank = self.bank_forks.read().unwrap().working_bank();
         match bank.process_transaction_with_metadata(transaction) {
             TransactionExecutionResult::NotExecuted(error) => BanksTransactionResultWithMetadata {
-                result: Err(error),
+                result: Err(error.into_err()),
                 metadata: None,
             },
             TransactionExecutionResult::Executed { details, .. } => {

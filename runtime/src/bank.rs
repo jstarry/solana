@@ -165,7 +165,7 @@ use {
     solana_svm::{
         account_loader::{
             collect_rent_from_account, CheckedTransactionDetails, TransactionCheckResult,
-            TransactionLoadResult,
+            TransactionFailure, TransactionLoadResult,
         },
         account_overrides::AccountOverrides,
         nonce_info::NoncePartial,
@@ -3426,7 +3426,9 @@ impl Bank {
             execution_results
                 .pop()
                 .unwrap_or(TransactionExecutionResult::NotExecuted(
-                    TransactionError::InvalidProgramForExecution,
+                    TransactionFailure::FailedAccountLoading(
+                        TransactionError::InvalidProgramForExecution,
+                    ),
                 ));
         let flattened_result = execution_result.flattened_result();
         let (logs, return_data, inner_instructions) = match execution_result {
@@ -3917,7 +3919,9 @@ impl Bank {
                 let message = tx.message();
                 let details = match &execution_result {
                     TransactionExecutionResult::Executed { details, .. } => details,
-                    TransactionExecutionResult::NotExecuted(err) => return Err(err.clone()),
+                    TransactionExecutionResult::NotExecuted(failure) => {
+                        return Err(failure.clone().into_err())
+                    }
                 };
 
                 let fee = details.fee_details.total_fee();
@@ -3952,7 +3956,9 @@ impl Bank {
                 let message = tx.message();
                 let details = match &execution_result {
                     TransactionExecutionResult::Executed { details, .. } => details,
-                    TransactionExecutionResult::NotExecuted(err) => return Err(err.clone()),
+                    TransactionExecutionResult::NotExecuted(err) => {
+                        return Err(err.clone().into_err())
+                    }
                 };
 
                 self.check_execution_status_and_charge_fee(
@@ -4149,7 +4155,7 @@ impl Bank {
                     loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
                     loaded_accounts_count: loaded_tx.accounts.len(),
                 }),
-                Err(err) => Err(err.clone()),
+                Err(err) => Err(err.clone().into_err()),
             })
             .collect()
     }
@@ -4911,7 +4917,11 @@ impl Bank {
         let txs = vec![tx.into()];
         let batch = match self.prepare_entry_batch(txs) {
             Ok(batch) => batch,
-            Err(err) => return TransactionExecutionResult::NotExecuted(err),
+            Err(err) => {
+                return TransactionExecutionResult::NotExecuted(
+                    TransactionFailure::FailedSanitization(err),
+                )
+            }
         };
 
         let (

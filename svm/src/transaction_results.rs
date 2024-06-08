@@ -5,11 +5,10 @@
 )]
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
+    crate::account_loader::TransactionFailure,
     solana_program_runtime::loaded_programs::ProgramCacheForTxBatch,
     solana_sdk::{
-        fee::FeeDetails,
-        rent_debits::RentDebits,
-        transaction::{self, TransactionError},
+        fee::FeeDetails, rent_debits::RentDebits, transaction,
         transaction_context::TransactionReturnData,
     },
 };
@@ -43,7 +42,7 @@ pub enum TransactionExecutionResult {
         details: TransactionExecutionDetails,
         programs_modified_by_tx: Box<ProgramCacheForTxBatch>,
     },
-    NotExecuted(TransactionError),
+    NotExecuted(TransactionFailure),
 }
 
 impl TransactionExecutionResult {
@@ -71,7 +70,7 @@ impl TransactionExecutionResult {
     pub fn flattened_result(&self) -> transaction::Result<()> {
         match self {
             Self::Executed { details, .. } => details.status.clone(),
-            Self::NotExecuted(err) => Err(err.clone()),
+            Self::NotExecuted(failure) => Err(failure.clone().into_err()),
         }
     }
 }

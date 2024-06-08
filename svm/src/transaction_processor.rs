@@ -5,7 +5,8 @@ use {
         account_loader::{
             collect_rent_from_account, load_accounts, validate_fee_payer,
             CheckedTransactionDetails, LoadedTransaction, TransactionCheckResult,
-            TransactionLoadResult, TransactionValidationResult, ValidatedTransactionDetails,
+            TransactionFailure, TransactionLoadResult, TransactionValidationResult,
+            ValidatedTransactionDetails,
         },
         account_overrides::AccountOverrides,
         message_processor::MessageProcessor,
@@ -256,7 +257,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         )));
 
         if program_cache_for_tx_batch.borrow().hit_max_limit {
-            const ERROR: TransactionError = TransactionError::ProgramCacheHitMaxLimit;
+            const ERROR: TransactionFailure =
+                TransactionFailure::Retryable(TransactionError::ProgramCacheHitMaxLimit);
             let loaded_transactions = vec![Err(ERROR); sanitized_txs.len()];
             let execution_results =
                 vec![TransactionExecutionResult::NotExecuted(ERROR); sanitized_txs.len()];
@@ -305,7 +307,9 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                                 compute_budget_process_transaction_time.as_us()
                             );
                             if let Err(err) = maybe_compute_budget {
-                                return TransactionExecutionResult::NotExecuted(err);
+                                return TransactionExecutionResult::NotExecuted(
+                                    TransactionFailure::FailedComputeBudget(err),
+                                );
                             }
                             maybe_compute_budget.unwrap()
                         };

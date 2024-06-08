@@ -34,7 +34,28 @@ pub(crate) type TransactionRent = u64;
 pub(crate) type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
 pub type TransactionCheckResult = Result<CheckedTransactionDetails>;
 pub type TransactionValidationResult = Result<ValidatedTransactionDetails>;
-pub type TransactionLoadResult = Result<LoadedTransaction>;
+pub type TransactionLoadResult = std::result::Result<LoadedTransaction, TransactionFailure>;
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum TransactionFailure {
+    Retryable(TransactionError),
+    FailedSanitization(TransactionError),
+    FailedValidation(TransactionError),
+    FailedAccountLoading(TransactionError),
+    FailedComputeBudget(TransactionError),
+}
+
+impl TransactionFailure {
+    pub fn into_err(self) -> TransactionError {
+        match self {
+            Self::Retryable(err)
+            | Self::FailedSanitization(err)
+            | Self::FailedValidation(err)
+            | Self::FailedAccountLoading(err)
+            | Self::FailedComputeBudget(err) => err,
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CheckedTransactionDetails {
@@ -180,8 +201,9 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                     account_overrides,
                     loaded_programs,
                 )
+                .map_err(TransactionFailure::FailedAccountLoading)
             }
-            (_, Err(e)) => Err(e),
+            (_, Err(e)) => Err(TransactionFailure::FailedValidation(e)),
         })
         .collect()
 }

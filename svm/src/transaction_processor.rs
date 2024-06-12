@@ -308,7 +308,10 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                             );
                             if let Err(err) = maybe_compute_budget {
                                 return TransactionExecutionResult::NotExecuted(
-                                    TransactionFailure::FailedComputeBudget(err),
+                                    TransactionFailure::CollectFees(
+                                        err,
+                                        loaded_transaction.fee_details,
+                                    ),
                                 );
                             }
                             maybe_compute_budget.unwrap()

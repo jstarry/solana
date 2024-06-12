@@ -633,6 +633,7 @@ impl Consumer {
                 .iter()
                 .zip(batch.sanitized_transactions())
                 .filter_map(|(execution_result, tx)| {
+                    // todo
                     if execution_result.was_executed() {
                         Some(tx.to_versioned_transaction())
                     } else {
@@ -671,6 +672,7 @@ impl Consumer {
         };
 
         if let Err(recorder_err) = record_transactions_result {
+            // todo
             retryable_transaction_indexes.extend(execution_results.iter().enumerate().filter_map(
                 |(index, execution_result)| execution_result.was_executed().then_some(index),
             ));

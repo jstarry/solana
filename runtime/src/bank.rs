@@ -3164,6 +3164,7 @@ impl Bank {
         let mut status_cache = self.status_cache.write().unwrap();
         assert_eq!(sanitized_txs.len(), execution_results.len());
         for (tx, execution_result) in sanitized_txs.iter().zip(execution_results) {
+            // todo
             if let Some(details) = execution_result.details() {
                 // Add the message hash to the status cache to ensure that this message
                 // won't be processed again with a different signature.
@@ -3426,9 +3427,7 @@ impl Bank {
             execution_results
                 .pop()
                 .unwrap_or(TransactionExecutionResult::NotExecuted(
-                    TransactionFailure::FailedAccountLoading(
-                        TransactionError::InvalidProgramForExecution,
-                    ),
+                    TransactionFailure::Discard(TransactionError::InvalidProgramForExecution),
                 ));
         let flattened_result = execution_result.flattened_result();
         let (logs, return_data, inner_instructions) = match execution_result {
@@ -3792,6 +3791,7 @@ impl Bank {
                 }
             }
 
+            // todo
             if execution_result.was_executed() {
                 // Signature count must be accumulated only if the transaction
                 // is executed, otherwise a mismatched count between banking and
@@ -3920,7 +3920,11 @@ impl Bank {
                 let details = match &execution_result {
                     TransactionExecutionResult::Executed { details, .. } => details,
                     TransactionExecutionResult::NotExecuted(failure) => {
-                        return Err(failure.clone().into_err())
+                        if let TransactionFailure::CollectFees(_, fee_details) = failure {
+                            let fee = fee_details.total_fee();
+                            fees += fee;
+                        }
+                        return Err(failure.clone().into_err());
                     }
                 };
 
@@ -3956,8 +3960,11 @@ impl Bank {
                 let message = tx.message();
                 let details = match &execution_result {
                     TransactionExecutionResult::Executed { details, .. } => details,
-                    TransactionExecutionResult::NotExecuted(err) => {
-                        return Err(err.clone().into_err())
+                    TransactionExecutionResult::NotExecuted(failure) => {
+                        if let TransactionFailure::CollectFees(_, fee_details) = failure {
+                            accumulated_fee_details.accumulate(fee_details);
+                        }
+                        return Err(failure.clone().into_err());
                     }
                 };
 
@@ -4918,9 +4925,7 @@ impl Bank {
         let batch = match self.prepare_entry_batch(txs) {
             Ok(batch) => batch,
             Err(err) => {
-                return TransactionExecutionResult::NotExecuted(
-                    TransactionFailure::FailedSanitization(err),
-                )
+                return TransactionExecutionResult::NotExecuted(TransactionFailure::Discard(err))
             }
         };
 

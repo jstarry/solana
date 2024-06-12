@@ -39,20 +39,14 @@ pub type TransactionLoadResult = std::result::Result<LoadedTransaction, Transact
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum TransactionFailure {
     Retryable(TransactionError),
-    FailedSanitization(TransactionError),
-    FailedValidation(TransactionError),
-    FailedAccountLoading(TransactionError),
-    FailedComputeBudget(TransactionError),
+    Discard(TransactionError),
+    CollectFees(TransactionError, FeeDetails),
 }
 
 impl TransactionFailure {
     pub fn into_err(self) -> TransactionError {
         match self {
-            Self::Retryable(err)
-            | Self::FailedSanitization(err)
-            | Self::FailedValidation(err)
-            | Self::FailedAccountLoading(err)
-            | Self::FailedComputeBudget(err) => err,
+            Self::Retryable(err) | Self::Discard(err) | Self::CollectFees(err, ..) => err,
         }
     }
 }
@@ -191,6 +185,7 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
         .map(|etx| match etx {
             (tx, Ok(tx_details)) => {
                 let message = tx.message();
+                let fee_details = tx_details.fee_details;
 
                 // load transactions
                 load_transaction_accounts(
@@ -201,9 +196,9 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
                     account_overrides,
                     loaded_programs,
                 )
-                .map_err(TransactionFailure::FailedAccountLoading)
+                .map_err(|err| TransactionFailure::CollectFees(err, fee_details))
             }
-            (_, Err(e)) => Err(TransactionFailure::FailedValidation(e)),
+            (_, Err(e)) => Err(TransactionFailure::Discard(e)),
         })
         .collect()
 }

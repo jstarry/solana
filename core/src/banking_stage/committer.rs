@@ -80,6 +80,7 @@ impl Committer {
         executed_non_vote_transactions_count: usize,
         executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
+        // todo
         let executed_transactions = execution_results
             .iter()
             .zip(batch.sanitized_transactions())
@@ -113,6 +114,8 @@ impl Committer {
                     // reports actual execution CUs, and actual loaded accounts size for
                     // transaction committed to block. qos_service uses these information to adjust
                     // reserved block space.
+
+                    // todo
                     Some(details) => CommitTransactionDetails::Committed {
                         compute_units: details.executed_units,
                         loaded_accounts_data_size: loaded_accounts_stats

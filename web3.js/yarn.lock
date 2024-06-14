@@ -3948,6 +3948,10 @@ eventemitter3@^4.0.0, eventemitter3@^4.0.7:
   version "4.0.7"
   resolved "https://registry.npmjs.org/eventemitter3/-/eventemitter3-4.0.7.tgz"
 
+eventemitter3@^5.0.1:
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/eventemitter3/-/eventemitter3-5.0.1.tgz#53f5ffd0a492ac800721bb42c66b841de96423c4"
+
 events@^3.3.0:
   version "3.3.0"
   resolved "https://registry.yarnpkg.com/events/-/events-3.3.0.tgz#31a95ad0a924e2d2c419a813aeb2c4e878ea7400"
@@ -7602,14 +7606,14 @@ rpc-websockets@^7.5.0:
     utf-8-validate "^5.0.2"
 
 rpc-websockets@^9.0.0:
-  version "9.0.0"
-  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-9.0.0.tgz#e31fc38c2b1fdcf65132d90201bacf288b9c0748"
+  version "9.0.1"
+  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-9.0.1.tgz#a69c83ffd5e26bdd6117f5b434ae68133c4805b6"
   dependencies:
     "@swc/helpers" "^0.5.11"
     "@types/uuid" "^8.3.4"
     "@types/ws" "^8.2.2"
     buffer "^6.0.3"
-    eventemitter3 "^4.0.7"
+    eventemitter3 "^5.0.1"
     uuid "^8.3.2"
     ws "^8.5.0"
   optionalDependencies:

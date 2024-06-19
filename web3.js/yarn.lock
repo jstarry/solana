@@ -7216,24 +7216,24 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@22.11.1:
-  version "22.11.1"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-22.11.1.tgz#623f12a751455f4d2bdde2acaea131012c7fe3ac"
+puppeteer-core@22.11.2:
+  version "22.11.2"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-22.11.2.tgz#6c2eb1b17be075e2f6e8cf82061d67af6267ecf8"
   dependencies:
     "@puppeteer/browsers" "2.2.3"
     chromium-bidi "0.5.23"
     debug "4.3.5"
     devtools-protocol "0.0.1299070"
-    ws "8.17.0"
+    ws "8.17.1"
 
 puppeteer@^22.0.0:
-  version "22.11.1"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-22.11.1.tgz#06acc384350382143046eb6feea208c8bc4ec41b"
+  version "22.11.2"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-22.11.2.tgz#39cbcdbf1ae0505f60a49d697d8b23e1b0f371b1"
   dependencies:
     "@puppeteer/browsers" "2.2.3"
     cosmiconfig "9.0.0"
     devtools-protocol "0.0.1299070"
-    puppeteer-core "22.11.1"
+    puppeteer-core "22.11.2"
 
 qrcode-terminal@^0.12.0:
   version "0.12.0"
@@ -8996,9 +8996,13 @@ write-file-atomic@^5.0.1:
     imurmurhash "^0.1.4"
     signal-exit "^4.0.1"
 
-ws@*, ws@8.17.0, ws@^8.5.0, ws@^8.8.0:
+ws@*, ws@^8.5.0, ws@^8.8.0:
   version "8.17.0"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.17.0.tgz#d145d18eca2ed25aaf791a183903f7be5e295fea"
+
+ws@8.17.1:
+  version "8.17.1"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.17.1.tgz#9293da530bb548febc95371d90f9c878727d919b"
 
 ws@^7.4.5:
   version "7.5.7"

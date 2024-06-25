@@ -61,7 +61,7 @@
     "@solana/buffer-layout": "^4.0.0",
     "bn.js": "^5.0.0",
     "borsh": "^2.0.0",
-    "bs58": "^5.0.0",
+    "bs58": "^6.0.0",
     "buffer": "6.0.1",
     "cross-fetch": "^4.0.0",
     "jayson": "^4.0.0",

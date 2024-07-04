@@ -8258,9 +8258,9 @@ superstruct@^0.14.2:
   version "0.14.2"
   resolved "https://registry.npmjs.org/superstruct/-/superstruct-0.14.2.tgz"
 
-superstruct@^1.0.3:
-  version "1.0.4"
-  resolved "https://registry.yarnpkg.com/superstruct/-/superstruct-1.0.4.tgz#0adb99a7578bd2f1c526220da6571b2d485d91ca"
+superstruct@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/superstruct/-/superstruct-2.0.0.tgz#eddb22ea6ef9ca4671c7384070c0a4038b73f27e"
 
 supports-color@^5.3.0:
   version "5.5.0"

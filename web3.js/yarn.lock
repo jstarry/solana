@@ -6181,8 +6181,8 @@ mocha@^10.0.0:
     yargs-unparser "^2.0.0"
 
 mockttp@^3.0.0:
-  version "3.14.0"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.14.0.tgz#c1b0c3d80775edbbbfabb104a74c2df516f953da"
+  version "3.15.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.15.0.tgz#839eeeeca19ddd63290cf1ecb1e7ee31dd620a23"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
@@ -9052,17 +9052,13 @@ write-file-atomic@^5.0.1:
     imurmurhash "^0.1.4"
     signal-exit "^4.0.1"
 
-ws@*, ws@^8.5.0, ws@^8.8.0:
-  version "8.17.1"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.17.1.tgz#9293da530bb548febc95371d90f9c878727d919b"
+ws@*, ws@^8.18.0, ws@^8.5.0, ws@^8.8.0:
+  version "8.18.0"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.0.tgz#0d7505a6eafe2b0e712d232b42279f53bc289bbc"
 
 ws@^7.4.5, ws@^7.5.10:
   version "7.5.10"
   resolved "https://registry.yarnpkg.com/ws/-/ws-7.5.10.tgz#58b5c20dc281633f6c19113f39b349bd8bd558d9"
-
-ws@^8.18.0:
-  version "8.18.0"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.0.tgz#0d7505a6eafe2b0e712d232b42279f53bc289bbc"
 
 xtend@^4.0.0, xtend@~4.0.1:
   version "4.0.2"

@@ -117,7 +117,7 @@ fn process_transaction_and_record_inner(
     let execution_details = results
         .execution_results
         .swap_remove(0)
-        .details()
+        .execution_details()
         .expect("tx should be executed")
         .clone();
     let inner_instructions = execution_details
@@ -175,16 +175,16 @@ fn execute_transactions(
             post_token_balances,
         )| {
             match execution_result {
-                TransactionExecutionResult::Executed { details, .. } => {
+                TransactionExecutionResult::Executed(executed_tx) => {
+                    let fee_details = executed_tx.loaded_transaction.fee_details;
                     let TransactionExecutionDetails {
                         status,
                         log_messages,
                         inner_instructions,
-                        fee_details,
                         return_data,
                         executed_units,
                         ..
-                    } = details;
+                    } = executed_tx.execution_details;
 
                     let inner_instructions = inner_instructions.map(|inner_instructions| {
                         map_inner_instructions(inner_instructions).collect()

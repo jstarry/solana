@@ -13,10 +13,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{hash::Hash, pubkey::Pubkey, saturating_add_assign},
-    solana_svm::{
-        account_loader::TransactionLoadResult,
-        transaction_results::{TransactionExecutionResult, TransactionResults},
-    },
+    solana_svm::transaction_results::{TransactionExecutionResult, TransactionResults},
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
     },
@@ -67,7 +64,6 @@ impl Committer {
     pub(super) fn commit_transactions(
         &self,
         batch: &TransactionBatch,
-        loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
@@ -88,7 +84,6 @@ impl Committer {
 
         let (tx_results, commit_time_us) = measure_us!(bank.commit_transactions(
             batch.sanitized_transactions(),
-            loaded_transactions,
             execution_results,
             last_blockhash,
             lamports_per_signature,
@@ -108,8 +103,8 @@ impl Committer {
             .execution_results
             .iter()
             .zip(tx_results.loaded_accounts_stats.iter())
-            .map(
-                |(execution_result, loaded_accounts_stats)| match execution_result.details() {
+            .map(|(execution_result, loaded_accounts_stats)| {
+                match execution_result.execution_details() {
                     // reports actual execution CUs, and actual loaded accounts size for
                     // transaction committed to block. qos_service uses these information to adjust
                     // reserved block space.
@@ -120,8 +115,8 @@ impl Committer {
                             .map_or(0, |stats| stats.loaded_accounts_data_size),
                     },
                     None => CommitTransactionDetails::NotCommitted,
-                },
-            )
+                }
+            })
             .collect();
 
         let ((), find_and_send_votes_us) = measure_us!({
@@ -183,7 +178,6 @@ impl Committer {
                     std::mem::take(&mut pre_balance_info.token),
                     post_token_balances,
                 ),
-                tx_results.rent_debits,
                 batch_transaction_indexes,
             );
         }

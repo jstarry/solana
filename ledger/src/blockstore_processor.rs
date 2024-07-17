@@ -45,6 +45,7 @@ use {
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
         feature_set,
+        fee::FeeDetails,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
@@ -183,7 +184,6 @@ pub fn execute_batch(
         fee_collection_results,
         loaded_accounts_stats,
         execution_results,
-        rent_debits,
         ..
     } = tx_results;
 
@@ -231,7 +231,6 @@ pub fn execute_batch(
             execution_results,
             balances,
             token_balances,
-            rent_debits,
             transaction_indexes.to_vec(),
         );
     }
@@ -258,7 +257,7 @@ fn check_block_cost_limits(
         .zip(loaded_accounts_stats)
         .zip(sanitized_transactions)
         .filter_map(|((execution_result, loaded_accounts_stats), tx)| {
-            if let Some(details) = execution_result.details() {
+            if let Some(details) = execution_result.execution_details() {
                 let tx_cost = CostModel::calculate_cost_for_executed_transaction(
                     tx,
                     details.executed_units,
@@ -2135,11 +2134,16 @@ pub enum TransactionStatusMessage {
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<SanitizedTransaction>,
-    pub execution_results: Vec<Option<TransactionExecutionDetails>>,
+    pub commit_results: Vec<Result<CommittedTransaction>>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
-    pub rent_debits: Vec<RentDebits>,
     pub transaction_indexes: Vec<usize>,
+}
+
+pub struct CommittedTransaction {
+    pub execution_details: TransactionExecutionDetails,
+    pub fee_details: FeeDetails,
+    pub rent_debits: RentDebits,
 }
 
 #[derive(Clone, Debug)]
@@ -2155,7 +2159,6 @@ impl TransactionStatusSender {
         execution_results: Vec<TransactionExecutionResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
-        rent_debits: Vec<RentDebits>,
         transaction_indexes: Vec<usize>,
     ) {
         let slot = bank.slot();
@@ -2165,16 +2168,21 @@ impl TransactionStatusSender {
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions,
-                execution_results: execution_results
+                commit_results: execution_results
                     .into_iter()
                     .map(|result| match result {
-                        TransactionExecutionResult::Executed { details, .. } => Some(details),
-                        TransactionExecutionResult::NotExecuted(_) => None,
+                        TransactionExecutionResult::Executed(executed_tx) => {
+                            Ok(CommittedTransaction {
+                                execution_details: executed_tx.execution_details,
+                                fee_details: executed_tx.loaded_transaction.fee_details,
+                                rent_debits: executed_tx.loaded_transaction.rent_debits,
+                            })
+                        }
+                        TransactionExecutionResult::NotExecuted(err) => Err(err),
                     })
                     .collect(),
                 balances,
                 token_balances,
-                rent_debits,
                 transaction_indexes,
             }))
         {
@@ -2275,7 +2283,10 @@ pub mod tests {
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
-        solana_svm::transaction_processor::ExecutionRecordingConfig,
+        solana_svm::{
+            account_loader::LoadedTransaction, transaction_processor::ExecutionRecordingConfig,
+            transaction_results::ExecutedTransaction,
+        },
         solana_vote::vote_account::VoteAccount,
         solana_vote_program::{
             self,
@@ -5110,18 +5121,18 @@ pub mod tests {
             .set_limits(u64::MAX, block_limit, u64::MAX);
         let txs = vec![tx.clone(), tx];
         let results = vec![
-            TransactionExecutionResult::Executed {
-                details: TransactionExecutionDetails {
+            TransactionExecutionResult::Executed(Box::new(ExecutedTransaction {
+                loaded_transaction: LoadedTransaction::default(),
+                execution_details: TransactionExecutionDetails {
                     status: Ok(()),
                     log_messages: None,
                     inner_instructions: None,
-                    fee_details: solana_sdk::fee::FeeDetails::default(),
                     return_data: None,
                     executed_units: actual_execution_cu,
                     accounts_data_len_delta: 0,
                 },
                 programs_modified_by_tx: HashMap::new(),
-            },
+            })),
             TransactionExecutionResult::NotExecuted(TransactionError::AccountNotFound),
         ];
         let loaded_accounts_stats = vec![

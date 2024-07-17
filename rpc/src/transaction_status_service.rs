@@ -4,7 +4,9 @@ use {
     itertools::izip,
     solana_ledger::{
         blockstore::Blockstore,
-        blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
+        blockstore_processor::{
+            CommittedTransaction, TransactionStatusBatch, TransactionStatusMessage,
+        },
     },
     solana_svm::transaction_results::TransactionExecutionDetails,
     solana_transaction_status::{
@@ -68,42 +70,43 @@ impl TransactionStatusService {
             TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions,
-                execution_results,
+                commit_results,
                 balances,
                 token_balances,
-                rent_debits,
                 transaction_indexes,
             }) => {
                 let slot = bank.slot();
                 for (
                     transaction,
-                    execution_result,
+                    commit_result,
                     pre_balances,
                     post_balances,
                     pre_token_balances,
                     post_token_balances,
-                    rent_debits,
                     transaction_index,
                 ) in izip!(
                     transactions,
-                    execution_results,
+                    commit_results,
                     balances.pre_balances,
                     balances.post_balances,
                     token_balances.pre_token_balances,
                     token_balances.post_token_balances,
-                    rent_debits,
                     transaction_indexes,
                 ) {
-                    if let Some(details) = execution_result {
-                        let TransactionExecutionDetails {
-                            status,
-                            log_messages,
-                            inner_instructions,
-                            return_data,
-                            executed_units,
+                    if let Ok(committed_tx) = commit_result {
+                        let CommittedTransaction {
+                            execution_details:
+                                TransactionExecutionDetails {
+                                    status,
+                                    log_messages,
+                                    inner_instructions,
+                                    return_data,
+                                    executed_units,
+                                    ..
+                                },
                             fee_details,
-                            ..
-                        } = details;
+                            rent_debits,
+                        } = committed_tx;
                         let tx_account_locks = transaction.get_account_locks_unchecked();
 
                         let fee = fee_details.total_fee();
@@ -325,14 +328,17 @@ pub(crate) mod tests {
         let mut rent_debits = RentDebits::default();
         rent_debits.insert(&pubkey, 123, 456);
 
-        let transaction_result = Some(TransactionExecutionDetails {
-            status: Ok(()),
-            log_messages: None,
-            inner_instructions: None,
+        let commit_result = Ok(CommittedTransaction {
+            execution_details: TransactionExecutionDetails {
+                status: Ok(()),
+                log_messages: None,
+                inner_instructions: None,
+                return_data: None,
+                executed_units: 0,
+                accounts_data_len_delta: 0,
+            },
             fee_details: FeeDetails::default(),
-            return_data: None,
-            executed_units: 0,
-            accounts_data_len_delta: 0,
+            rent_debits,
         });
 
         let balances = TransactionBalancesSet {
@@ -375,10 +381,9 @@ pub(crate) mod tests {
         let transaction_status_batch = TransactionStatusBatch {
             bank,
             transactions: vec![transaction],
-            execution_results: vec![transaction_result],
+            commit_results: vec![commit_result],
             balances,
             token_balances,
-            rent_debits: vec![rent_debits],
             transaction_indexes: vec![transaction_index],
         };
 

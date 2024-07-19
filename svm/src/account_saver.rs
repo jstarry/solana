@@ -1,40 +1,54 @@
 use {
     crate::{
-        nonce_info::NonceInfo, rollback_accounts::RollbackAccounts,
-        transaction_results::TransactionExecutionResult,
+        nonce_info::NonceInfo,
+        rollback_accounts::RollbackAccounts,
+        transaction_processing_result::{
+            TransactionProcessingOutcome, TransactionProcessingResult,
+        },
     },
     solana_sdk::{
-        account::AccountSharedData,
-        account_utils::StateMut,
-        message::SanitizedMessage,
-        nonce::{
-            state::{DurableNonce, Versions as NonceVersions},
-            State as NonceState,
-        },
-        pubkey::Pubkey,
-        transaction::SanitizedTransaction,
+        account::AccountSharedData, message::SanitizedMessage, nonce::state::DurableNonce,
+        pubkey::Pubkey, transaction::SanitizedTransaction,
     },
 };
 
+pub fn collect_rents(processing_results: &[TransactionProcessingResult]) -> u64 {
+    let mut batch_collected_rent: u64 = 0;
+    for processed_tx in processing_results.iter().flatten() {
+        if let TransactionProcessingOutcome::Executed(context) = &processed_tx.outcome {
+            let details = &context.execution_details;
+            let collected_rent = context.collected_rent;
+            if details.status.is_ok() {
+                batch_collected_rent += collected_rent;
+            }
+        }
+    }
+    batch_collected_rent
+}
+
 pub fn collect_accounts_to_store<'a>(
     txs: &'a [SanitizedTransaction],
-    execution_results: &'a mut [TransactionExecutionResult],
+    processing_results: &'a mut [TransactionProcessingResult],
     durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) -> (
     Vec<(&'a Pubkey, &'a AccountSharedData)>,
     Vec<Option<&'a SanitizedTransaction>>,
 ) {
-    // TODO: calculate a better initial capacity for these vectors. The current
-    // usage of the length of execution results is far from accurate.
-    let mut accounts = Vec::with_capacity(execution_results.len());
-    let mut transactions = Vec::with_capacity(execution_results.len());
-    for (execution_result, tx) in execution_results.iter_mut().zip(txs) {
-        let Some(executed_tx) = execution_result.executed_transaction_mut() else {
-            // Don't store any accounts if tx wasn't executed
-            continue;
-        };
+    let num_approx_writable_accounts = processing_results
+        .iter()
+        .zip(txs)
+        .filter(|(res, _)| res.is_ok())
+        .map(|(_, tx)| tx.message().num_write_locks() as usize)
+        .sum();
 
+    let mut collected_accounts = Vec::with_capacity(num_approx_writable_accounts);
+    let mut transactions = Vec::with_capacity(num_approx_writable_accounts);
+    for (processed_tx, transaction) in processing_results
+        .iter_mut()
+        .zip(txs)
+        .filter_map(|(res, tx)| res.as_mut().ok().map(|processed_tx| (processed_tx, tx)))
+    {
         // Accounts that are invoked and also not passed as an instruction
         // account to a program don't need to be stored because it's assumed
         // to be impossible for a committable transaction to modify an
@@ -51,80 +65,98 @@ pub fn collect_accounts_to_store<'a>(
             !message.is_invoked(key_index) || message.is_instruction_account(key_index)
         };
 
-        let loaded_transaction = &mut executed_tx.loaded_transaction;
-        let execution_status = &executed_tx.execution_details.status;
-        let message = tx.message();
-        let rollback_accounts = &loaded_transaction.rollback_accounts;
-        let maybe_nonce_address = rollback_accounts.nonce().map(|account| account.address());
-
-        for (i, (address, account)) in (0..message.account_keys().len())
-            .zip(loaded_transaction.accounts.iter_mut())
-            .filter(|(i, _)| is_storable_account(message, *i))
-        {
-            if message.is_writable(i) {
-                let should_collect_account = match execution_status {
-                    Ok(()) => true,
-                    Err(_) => {
-                        let is_fee_payer = i == 0;
-                        let is_nonce_account = Some(&*address) == maybe_nonce_address;
-                        post_process_failed_tx(
-                            account,
-                            is_fee_payer,
-                            is_nonce_account,
-                            rollback_accounts,
-                            durable_nonce,
-                            lamports_per_signature,
-                        );
-
-                        is_fee_payer || is_nonce_account
+        let message = transaction.message();
+        let rollback_accounts = &mut processed_tx.rollback_accounts;
+        match &mut processed_tx.outcome {
+            TransactionProcessingOutcome::FeesOnly { .. } => {
+                let fee_payer_address = message.fee_payer();
+                match rollback_accounts {
+                    RollbackAccounts::FeePayerOnly { fee_payer_account } => {
+                        collected_accounts.push((fee_payer_address, &*fee_payer_account));
+                        transactions.push(Some(transaction));
                     }
-                };
+                    RollbackAccounts::SameNonceAndFeePayer { nonce } => {
+                        collected_accounts.push(
+                            nonce.get_advanced_account(*durable_nonce, lamports_per_signature),
+                        );
+                        transactions.push(Some(transaction));
+                    }
+                    RollbackAccounts::SeparateNonceAndFeePayer {
+                        nonce,
+                        fee_payer_account,
+                    } => {
+                        collected_accounts.push((fee_payer_address, &*fee_payer_account));
+                        transactions.push(Some(transaction));
 
-                if should_collect_account {
-                    // Add to the accounts to store
-                    accounts.push((&*address, &*account));
-                    transactions.push(Some(tx));
+                        collected_accounts.push(
+                            nonce.get_advanced_account(*durable_nonce, lamports_per_signature),
+                        );
+                        transactions.push(Some(transaction));
+                    }
+                }
+            }
+            TransactionProcessingOutcome::Executed(executed_tx) => {
+                let details = &executed_tx.execution_details;
+                let accounts = &mut executed_tx.accounts;
+                let maybe_nonce_address = rollback_accounts
+                    .nonce()
+                    .map(|account| account.address())
+                    .cloned();
+                for (i, (address, account)) in (0..message.account_keys().len())
+                    .zip(accounts.iter_mut())
+                    .filter(|(i, _)| is_storable_account(message, *i))
+                {
+                    if message.is_writable(i) {
+                        let should_collect_account = details.status.is_ok() || {
+                            let is_fee_payer = i == 0;
+                            let is_nonce_account = Some(*address) == maybe_nonce_address;
+                            post_process_failed_tx(
+                                account,
+                                is_fee_payer,
+                                is_nonce_account,
+                                rollback_accounts,
+                                durable_nonce,
+                                lamports_per_signature,
+                            );
+
+                            is_fee_payer || is_nonce_account
+                        };
+
+                        if should_collect_account {
+                            // Add to the accounts to store
+                            collected_accounts.push((&*address, &*account));
+                            transactions.push(Some(transaction));
+                        }
+                    }
                 }
             }
         }
     }
-    (accounts, transactions)
+    (collected_accounts, transactions)
 }
 
 fn post_process_failed_tx(
     account: &mut AccountSharedData,
     is_fee_payer: bool,
     is_nonce_account: bool,
-    rollback_accounts: &RollbackAccounts,
+    rollback_accounts: &mut RollbackAccounts,
     &durable_nonce: &DurableNonce,
     lamports_per_signature: u64,
 ) {
     // For the case of RollbackAccounts::SameNonceAndFeePayer, it's crucial
     // for `is_nonce_account` to be checked earlier than `is_fee_payer`.
     if is_nonce_account {
-        if let Some(nonce) = rollback_accounts.nonce() {
+        if let Some(nonce) = rollback_accounts.nonce_mut() {
             // The transaction failed which would normally drop the account
             // processing changes, since this account is now being included
             // in the accounts written back to the db, roll it back to
-            // pre-processing state.
-            *account = nonce.account().clone();
+            // pre-processing state and then advance the stored blockhash to
+            // prevent fee theft by someone replaying nonce transactions that
+            // have failed with an `InstructionError`.
+            let (_, advanced_account) =
+                nonce.get_advanced_account(durable_nonce, lamports_per_signature);
 
-            // Advance the stored blockhash to prevent fee theft by someone
-            // replaying nonce transactions that have failed with an
-            // `InstructionError`.
-            //
-            // Since we know we are dealing with a valid nonce account,
-            // unwrap is safe here
-            let nonce_versions = StateMut::<NonceVersions>::state(account).unwrap();
-            if let NonceState::Initialized(ref data) = nonce_versions.state() {
-                let nonce_state = NonceState::new_initialized(
-                    &data.authority,
-                    durable_nonce,
-                    lamports_per_signature,
-                );
-                let nonce_versions = NonceVersions::new(nonce_state);
-                account.set_state(&nonce_versions).unwrap();
-            }
+            *account = advanced_account.clone();
         }
     } else if is_fee_payer {
         *account = rollback_accounts.fee_payer_account().clone();

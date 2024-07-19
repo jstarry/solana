@@ -6,7 +6,7 @@ use {
     },
     solana_measure::measure_us,
     solana_runtime::{
-        bank::{Bank, ExecutedTransactionCounts, TransactionBalancesSet},
+        bank::{Bank, TransactionBalancesSet},
         bank_utils,
         prioritization_fee_cache::PrioritizationFeeCache,
         transaction_batch::TransactionBatch,
@@ -14,8 +14,8 @@ use {
     },
     solana_sdk::{hash::Hash, pubkey::Pubkey, saturating_add_assign},
     solana_svm::{
-        transaction_commit_result::{TransactionCommitResultExtensions, TransactionCommitResult},
-        transaction_results::TransactionExecutionResult,
+        transaction_commit_result::TransactionCommitResult,
+        transaction_processing_result::TransactionProcessingResult,
     },
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,
@@ -67,37 +67,25 @@ impl Committer {
     pub(super) fn commit_transactions(
         &self,
         batch: &TransactionBatch,
-        execution_results: Vec<TransactionExecutionResult>,
+        processing_results: Vec<TransactionProcessingResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
         starting_transaction_index: Option<usize>,
         bank: &Arc<Bank>,
         pre_balance_info: &mut PreBalanceInfo,
         execute_and_commit_timings: &mut LeaderExecuteAndCommitTimings,
-        signature_count: u64,
-        executed_transactions_count: usize,
-        executed_non_vote_transactions_count: usize,
-        executed_with_successful_result_count: usize,
     ) -> (u64, Vec<CommitTransactionDetails>) {
-        let executed_transactions = execution_results
+        let processed_transactions = processing_results
             .iter()
             .zip(batch.sanitized_transactions())
-            .filter_map(|(execution_result, tx)| execution_result.was_executed().then_some(tx))
+            .filter_map(|(res, tx)| res.is_ok().then_some(tx))
             .collect_vec();
 
         let (commit_results, commit_time_us) = measure_us!(bank.commit_transactions(
             batch.sanitized_transactions(),
-            execution_results,
+            processing_results,
             last_blockhash,
             lamports_per_signature,
-            ExecutedTransactionCounts {
-                executed_transactions_count: executed_transactions_count as u64,
-                executed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
-                executed_with_failure_result_count: executed_transactions_count
-                    .saturating_sub(executed_with_successful_result_count)
-                    as u64,
-                signature_count,
-            },
             &mut execute_and_commit_timings.execute_timings,
         ));
         execute_and_commit_timings.commit_us = commit_time_us;
@@ -109,7 +97,7 @@ impl Committer {
                 // transaction committed to block. qos_service uses these information to adjust
                 // reserved block space.
                 Ok(committed_tx) => CommitTransactionDetails::Committed {
-                    compute_units: committed_tx.execution_details.executed_units,
+                    compute_units: committed_tx.execution_outcome.executed_units(),
                     loaded_accounts_data_size: committed_tx
                         .loaded_account_stats
                         .loaded_accounts_data_size,
@@ -132,7 +120,7 @@ impl Committer {
                 starting_transaction_index,
             );
             self.prioritization_fee_cache
-                .update(bank, executed_transactions.into_iter());
+                .update(bank, processed_transactions.into_iter());
         });
         execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_us;
         (commit_time_us, commit_transaction_statuses)
@@ -155,7 +143,7 @@ impl Committer {
             let batch_transaction_indexes: Vec<_> = commit_results
                 .iter()
                 .map(|commit_result| {
-                    if commit_result.was_executed() {
+                    if commit_result.is_ok() {
                         let this_transaction_index = transaction_index;
                         saturating_add_assign!(transaction_index, 1);
                         this_transaction_index

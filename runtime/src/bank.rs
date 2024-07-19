@@ -58,6 +58,7 @@ use {
     },
     byteorder::{ByteOrder, LittleEndian},
     dashmap::{DashMap, DashSet},
+    itertools::Itertools,
     log::*,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
@@ -159,20 +160,21 @@ use {
             collect_rent_from_account, CheckedTransactionDetails, TransactionCheckResult,
         },
         account_overrides::AccountOverrides,
-        account_saver::collect_accounts_to_store,
+        account_saver::{collect_accounts_to_store, collect_rents},
         nonce_info::NoncePartial,
         transaction_commit_result::{
-            CommittedTransaction, TransactionCommitResult, TransactionCommitResultExtensions,
+            CommittedExecutionOutcome, TransactionCommitResult, TransactionCommitResultExtensions,
         },
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processing_result::{
+            TransactionProcessingOutcome, TransactionProcessingResult,
+        },
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionLogMessages,
             TransactionProcessingConfig, TransactionProcessingEnvironment,
         },
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionLoadedAccountsStats,
-        },
+        transaction_results::TransactionExecutionDetails,
     },
     solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_vote::vote_account::{VoteAccount, VoteAccountsHashMap},
@@ -324,9 +326,7 @@ impl BankRc {
 }
 
 pub struct LoadAndExecuteTransactionsOutput {
-    // Vector of results indicating whether a transaction was executed or could not
-    // be executed. Note executed transactions can still have failed!
-    pub execution_results: Vec<TransactionExecutionResult>,
+    pub processing_results: Vec<TransactionProcessingResult>,
     pub retryable_transaction_indexes: Vec<usize>,
     // Total number of transactions that were executed
     pub executed_transactions_count: usize,
@@ -335,7 +335,6 @@ pub struct LoadAndExecuteTransactionsOutput {
     // Total number of the executed transactions that returned success/not
     // an error.
     pub executed_with_successful_result_count: usize,
-    pub signature_count: u64,
     pub error_counters: TransactionErrorMetrics,
 }
 
@@ -903,7 +902,6 @@ pub struct ExecutedTransactionCounts {
     pub executed_transactions_count: u64,
     pub executed_non_vote_transactions_count: u64,
     pub executed_with_failure_result_count: u64,
-    pub signature_count: u64,
 }
 
 impl Bank {
@@ -3113,30 +3111,35 @@ impl Bank {
     fn update_transaction_statuses(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        execution_results: &[TransactionExecutionResult],
+        processing_results: &[TransactionProcessingResult],
     ) {
         let mut status_cache = self.status_cache.write().unwrap();
-        assert_eq!(sanitized_txs.len(), execution_results.len());
-        for (tx, execution_result) in sanitized_txs.iter().zip(execution_results) {
-            if let Some(details) = execution_result.execution_details() {
-                // Add the message hash to the status cache to ensure that this message
-                // won't be processed again with a different signature.
-                status_cache.insert(
-                    tx.message().recent_blockhash(),
-                    tx.message_hash(),
-                    self.slot(),
-                    details.status.clone(),
-                );
-                // Add the transaction signature to the status cache so that transaction status
-                // can be queried by transaction signature over RPC. In the future, this should
-                // only be added for API nodes because voting validators don't need to do this.
-                status_cache.insert(
-                    tx.message().recent_blockhash(),
-                    tx.signature(),
-                    self.slot(),
-                    details.status.clone(),
-                );
-            }
+        assert_eq!(sanitized_txs.len(), processing_results.len());
+        for (tx, processed_tx) in sanitized_txs
+            .iter()
+            .zip(processing_results)
+            .filter_map(|(tx, res)| res.as_ref().ok().map(|processed_tx| (tx, processed_tx)))
+        {
+            let status = processed_tx.status();
+
+            // Add the message hash to the status cache to ensure that this message
+            // won't be processed again with a different signature.
+            status_cache.insert(
+                tx.message().recent_blockhash(),
+                tx.message_hash(),
+                self.slot(),
+                status.clone(),
+            );
+
+            // Add the transaction signature to the status cache so that transaction status
+            // can be queried by transaction signature over RPC. In the future, this should
+            // only be added for API nodes because voting validators don't need to do this.
+            status_cache.insert(
+                tx.message().recent_blockhash(),
+                tx.signature(),
+                self.slot(),
+                status,
+            );
         }
     }
 
@@ -3332,7 +3335,7 @@ impl Bank {
         let mut timings = ExecuteTimings::default();
 
         let LoadAndExecuteTransactionsOutput {
-            mut execution_results,
+            mut processing_results,
             ..
         } = self.load_and_execute_transactions(
             &batch,
@@ -3368,35 +3371,34 @@ impl Bank {
 
         debug!("simulate_transaction: {:?}", timings);
 
-        let execution_result =
-            execution_results
-                .pop()
-                .unwrap_or(TransactionExecutionResult::NotExecuted(
-                    TransactionError::InvalidProgramForExecution,
-                ));
-        let flattened_result = execution_result.flattened_result();
-        let (post_simulation_accounts, logs, return_data, inner_instructions) =
-            match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    let post_simulation_accounts = executed_tx
-                        .loaded_transaction
-                        .accounts
-                        .into_iter()
-                        .take(number_of_accounts)
-                        .collect::<Vec<_>>();
-                    (
-                        post_simulation_accounts,
-                        executed_tx.execution_details.log_messages,
-                        executed_tx.execution_details.return_data,
-                        executed_tx.execution_details.inner_instructions,
-                    )
-                }
-                TransactionExecutionResult::NotExecuted(_) => (vec![], None, None, None),
+        let processing_result = processing_results.pop().unwrap();
+        let (post_simulation_accounts, result, logs, return_data, inner_instructions) =
+            match processing_result {
+                Ok(processed_tx) => match processed_tx.outcome {
+                    TransactionProcessingOutcome::FeesOnly { err } => {
+                        (vec![], Err(err), None, None, None)
+                    }
+                    TransactionProcessingOutcome::Executed(context) => {
+                        let post_simulation_accounts = context
+                            .accounts
+                            .into_iter()
+                            .take(number_of_accounts)
+                            .collect::<Vec<_>>();
+                        (
+                            post_simulation_accounts,
+                            context.execution_details.status,
+                            context.execution_details.log_messages,
+                            context.execution_details.return_data,
+                            context.execution_details.inner_instructions,
+                        )
+                    }
+                },
+                Err(error) => (vec![], Err(error), None, None, None),
             };
         let logs = logs.unwrap_or_default();
 
         TransactionSimulationResult {
-            result: flattened_result,
+            result,
             logs,
             post_simulation_accounts,
             units_consumed,
@@ -3678,8 +3680,6 @@ impl Bank {
         // Accumulate the transaction batch execution timings.
         timings.accumulate(&sanitized_output.execute_timings);
 
-        let mut signature_count = 0;
-
         let mut executed_transactions_count: usize = 0;
         let mut executed_non_vote_transactions_count: usize = 0;
         let mut executed_with_successful_result_count: usize = 0;
@@ -3688,11 +3688,18 @@ impl Bank {
             self.transaction_log_collector_config.read().unwrap();
 
         let mut collect_logs_time = Measure::start("collect_logs_time");
-        for (execution_result, tx) in sanitized_output.execution_results.iter().zip(sanitized_txs) {
+        for (processing_result, tx) in sanitized_output
+            .processing_results
+            .iter()
+            .zip(sanitized_txs)
+        {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys().iter() {
                     if debug_keys.contains(key) {
-                        let result = execution_result.flattened_result();
+                        let result = processing_result
+                            .as_ref()
+                            .map_err(|err| err.clone())
+                            .and_then(|processed_tx| processed_tx.status());
                         info!("slot: {} result: {:?} tx: {:?}", self.slot, result, tx);
                         break;
                     }
@@ -3701,79 +3708,81 @@ impl Bank {
 
             let is_vote = tx.is_simple_vote_transaction();
 
-            if execution_result.was_executed() // Skip log collection for unprocessed transactions
-                && transaction_log_collector_config.filter != TransactionLogCollectorFilter::None
-            {
-                let mut filtered_mentioned_addresses = Vec::new();
-                if !transaction_log_collector_config
-                    .mentioned_addresses
-                    .is_empty()
-                {
-                    for key in tx.message().account_keys().iter() {
-                        if transaction_log_collector_config
-                            .mentioned_addresses
-                            .contains(key)
-                        {
-                            filtered_mentioned_addresses.push(*key);
-                        }
-                    }
-                }
-
-                let store = match transaction_log_collector_config.filter {
-                    TransactionLogCollectorFilter::All => {
-                        !is_vote || !filtered_mentioned_addresses.is_empty()
-                    }
-                    TransactionLogCollectorFilter::AllWithVotes => true,
-                    TransactionLogCollectorFilter::None => false,
-                    TransactionLogCollectorFilter::OnlyMentionedAddresses => {
-                        !filtered_mentioned_addresses.is_empty()
-                    }
-                };
-
-                if store {
-                    if let Some(TransactionExecutionDetails {
-                        status,
-                        log_messages: Some(log_messages),
-                        ..
-                    }) = execution_result.execution_details()
+            if let Ok(processed_tx) = processing_result {
+                // Skip log collection for unprocessed transactions
+                if transaction_log_collector_config.filter != TransactionLogCollectorFilter::None {
+                    let mut filtered_mentioned_addresses = Vec::new();
+                    if !transaction_log_collector_config
+                        .mentioned_addresses
+                        .is_empty()
                     {
-                        let mut transaction_log_collector =
-                            self.transaction_log_collector.write().unwrap();
-                        let transaction_log_index = transaction_log_collector.logs.len();
-
-                        transaction_log_collector.logs.push(TransactionLogInfo {
-                            signature: *tx.signature(),
-                            result: status.clone(),
-                            is_vote,
-                            log_messages: log_messages.clone(),
-                        });
-                        for key in filtered_mentioned_addresses.into_iter() {
-                            transaction_log_collector
-                                .mentioned_address_map
-                                .entry(key)
-                                .or_default()
-                                .push(transaction_log_index);
+                        for key in tx.message().account_keys().iter() {
+                            if transaction_log_collector_config
+                                .mentioned_addresses
+                                .contains(key)
+                            {
+                                filtered_mentioned_addresses.push(*key);
+                            }
                         }
+                    }
+
+                    let store = match transaction_log_collector_config.filter {
+                        TransactionLogCollectorFilter::All => {
+                            !is_vote || !filtered_mentioned_addresses.is_empty()
+                        }
+                        TransactionLogCollectorFilter::AllWithVotes => true,
+                        TransactionLogCollectorFilter::None => false,
+                        TransactionLogCollectorFilter::OnlyMentionedAddresses => {
+                            !filtered_mentioned_addresses.is_empty()
+                        }
+                    };
+
+                    if store {
+                        if let Some(TransactionExecutionDetails {
+                            status,
+                            log_messages: Some(log_messages),
+                            ..
+                        }) = processed_tx.outcome.execution_details()
+                        {
+                            let mut transaction_log_collector =
+                                self.transaction_log_collector.write().unwrap();
+                            let transaction_log_index = transaction_log_collector.logs.len();
+
+                            transaction_log_collector.logs.push(TransactionLogInfo {
+                                signature: *tx.signature(),
+                                result: status.clone(),
+                                is_vote,
+                                log_messages: log_messages.clone(),
+                            });
+                            for key in filtered_mentioned_addresses.into_iter() {
+                                transaction_log_collector
+                                    .mentioned_address_map
+                                    .entry(key)
+                                    .or_default()
+                                    .push(transaction_log_index);
+                            }
+                        }
+                    }
+                }
+
+                if processed_tx.outcome.was_executed() {
+                    executed_transactions_count += 1;
+
+                    if processed_tx.outcome.was_executed_successfully() {
+                        executed_with_successful_result_count += 1;
+                    }
+                    if !is_vote {
+                        executed_non_vote_transactions_count += 1;
                     }
                 }
             }
 
-            if execution_result.was_executed() {
-                // Signature count must be accumulated only if the transaction
-                // is executed, otherwise a mismatched count between banking and
-                // replay could occur
-                signature_count += u64::from(tx.message().header().num_required_signatures);
-                executed_transactions_count += 1;
-
-                if !is_vote {
-                    executed_non_vote_transactions_count += 1;
-                }
-            }
-
-            match execution_result.flattened_result() {
-                Ok(()) => {
-                    executed_with_successful_result_count += 1;
-                }
+            match processing_result
+                .as_ref()
+                .map_err(|err| err.clone())
+                .and_then(|processed_tx| processed_tx.status())
+            {
+                Ok(()) => {}
                 Err(err) => {
                     if *err_count == 0 {
                         debug!("tx error: {:?} {:?}", err, tx);
@@ -3787,20 +3796,15 @@ impl Bank {
             .saturating_add_in_place(ExecuteTimingType::CollectLogsUs, collect_logs_time.as_us());
 
         if *err_count > 0 {
-            debug!(
-                "{} errors of {} txs",
-                *err_count,
-                *err_count + executed_with_successful_result_count
-            );
+            debug!("{} errors of {} txs", *err_count, sanitized_txs.len());
         }
 
         LoadAndExecuteTransactionsOutput {
-            execution_results: sanitized_output.execution_results,
+            processing_results: sanitized_output.processing_results,
             retryable_transaction_indexes,
             executed_transactions_count,
             executed_non_vote_transactions_count,
             executed_with_successful_result_count,
-            signature_count,
             error_counters,
         }
     }
@@ -3870,53 +3874,21 @@ impl Bank {
         self.update_accounts_data_size_delta_off_chain(data_size_delta);
     }
 
-    fn filter_program_errors_and_collect_fee(
-        &self,
-        execution_results: &[TransactionExecutionResult],
-    ) {
-        let mut fees = 0;
-
-        execution_results
-            .iter()
-            .for_each(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    fees += executed_tx.loaded_transaction.fee_details.total_fee();
-                }
-                TransactionExecutionResult::NotExecuted(_) => {}
-            });
-
-        self.collector_fees.fetch_add(fees, Relaxed);
-    }
-
-    // Note: this function is not yet used; next PR will call it behind a feature gate
-    fn filter_program_errors_and_collect_fee_details(
-        &self,
-        execution_results: &[TransactionExecutionResult],
-    ) {
-        let mut accumulated_fee_details = FeeDetails::default();
-
-        execution_results
-            .iter()
-            .for_each(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    accumulated_fee_details.accumulate(&executed_tx.loaded_transaction.fee_details);
-                }
-                TransactionExecutionResult::NotExecuted(_) => {}
-            });
-
-        self.collector_fee_details
-            .write()
-            .unwrap()
-            .accumulate(&accumulated_fee_details);
-    }
-
+    /// Committing transactions involves:
+    /// 1) Recording transaction stats on the bank
+    /// 2) Storing account state updates
+    /// 3) Accumulate collected rent
+    /// 4) Updating stakes cache state
+    /// 5) Modifying program cache
+    /// 6) Track accounts data size delta
+    /// 7) Update status cache
+    /// 8) Accumulate collected fees
     pub fn commit_transactions(
         &self,
         sanitized_txs: &[SanitizedTransaction],
-        mut execution_results: Vec<TransactionExecutionResult>,
+        mut processing_results: Vec<TransactionProcessingResult>,
         last_blockhash: Hash,
         lamports_per_signature: u64,
-        counts: ExecutedTransactionCounts,
         timings: &mut ExecuteTimings,
     ) -> Vec<TransactionCommitResult> {
         assert!(
@@ -3924,30 +3896,40 @@ impl Bank {
             "commit_transactions() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        let ExecutedTransactionCounts {
-            executed_transactions_count,
-            executed_non_vote_transactions_count,
-            executed_with_failure_result_count,
-            signature_count,
-        } = counts;
-
-        self.increment_transaction_count(executed_transactions_count);
-        self.increment_non_vote_transaction_count_since_restart(
-            executed_non_vote_transactions_count,
-        );
-        self.increment_signature_count(signature_count);
-
-        if executed_with_failure_result_count > 0 {
-            self.transaction_error_count
-                .fetch_add(executed_with_failure_result_count, Relaxed);
-        }
-
-        // Should be equivalent to checking `executed_transactions_count > 0`
-        if execution_results.iter().any(|result| result.was_executed()) {
+        // Record stats
+        {
             self.is_delta.store(true, Relaxed);
             self.transaction_entries_count.fetch_add(1, Relaxed);
+
+            let processed_txs: Vec<_> = processing_results
+                .iter()
+                .zip(sanitized_txs)
+                .filter_map(|(res, tx)| res.as_ref().ok().map(|processed_tx| (processed_tx, tx)))
+                .collect();
+
+            let record_count = processed_txs.len();
             self.transactions_per_entry_max
-                .fetch_max(executed_transactions_count, Relaxed);
+                .fetch_max(record_count as u64, Relaxed);
+            self.increment_transaction_count(record_count as u64);
+
+            let batch_non_vote_count = processed_txs
+                .iter()
+                .filter(|(_, tx)| tx.is_simple_vote_transaction())
+                .count();
+            self.increment_non_vote_transaction_count_since_restart(batch_non_vote_count as u64);
+
+            let batch_signature_count = processed_txs
+                .iter()
+                .map(|(_, tx)| u64::from(tx.message().header().num_required_signatures))
+                .sum();
+            self.increment_signature_count(batch_signature_count);
+
+            let batch_failure_count = processed_txs
+                .iter()
+                .filter(|(processed_tx, _)| processed_tx.is_failure())
+                .count();
+            self.transaction_error_count
+                .fetch_add(batch_failure_count as u64, Relaxed);
         }
 
         let mut write_time = Measure::start("write_time");
@@ -3955,7 +3937,7 @@ impl Bank {
             let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
             let (accounts_to_store, transactions) = collect_accounts_to_store(
                 sanitized_txs,
-                &mut execution_results,
+                &mut processing_results,
                 &durable_nonce,
                 lamports_per_signature,
             );
@@ -3963,111 +3945,80 @@ impl Bank {
                 .accounts
                 .store_cached((self.slot(), accounts_to_store.as_slice()), &transactions);
         }
-        self.collect_rent(&execution_results);
+        write_time.stop();
+
+        let collected_rent = collect_rents(&processing_results);
+        self.collected_rent.fetch_add(collected_rent, Relaxed);
 
         // Cached vote and stake accounts are synchronized with accounts-db
         // after each transaction.
         let mut update_stakes_cache_time = Measure::start("update_stakes_cache_time");
-        self.update_stakes_cache(sanitized_txs, &execution_results);
+        self.update_stakes_cache(sanitized_txs, &processing_results);
         update_stakes_cache_time.stop();
-
-        // once committed there is no way to unroll
-        write_time.stop();
-        debug!(
-            "store: {}us txs_len={}",
-            write_time.as_us(),
-            sanitized_txs.len()
-        );
 
         let mut store_executors_which_were_deployed_time =
             Measure::start("store_executors_which_were_deployed_time");
-        let mut cache = None;
-        for execution_result in &execution_results {
-            if let TransactionExecutionResult::Executed(executed_tx) = execution_result {
-                let programs_modified_by_tx = &executed_tx.programs_modified_by_tx;
-                if executed_tx.was_successful() && !programs_modified_by_tx.is_empty() {
-                    cache
-                        .get_or_insert_with(|| {
-                            self.transaction_processor.program_cache.write().unwrap()
-                        })
-                        .merge(programs_modified_by_tx);
-                }
-            }
+
+        let mut program_cache_write_guard = None;
+        for programs_modified_by_tx in processing_results
+            .iter()
+            .filter_map(|res| res.as_ref().ok())
+            .filter_map(|tx| tx.program_modifications())
+        {
+            program_cache_write_guard
+                .get_or_insert_with(|| self.transaction_processor.program_cache.write().unwrap())
+                .merge(programs_modified_by_tx);
         }
-        drop(cache);
+        drop(program_cache_write_guard);
         store_executors_which_were_deployed_time.stop();
+
+        let accounts_data_len_delta = processing_results
+            .iter()
+            .filter_map(|res| res.as_ref().ok())
+            .map(|processed_tx| processed_tx.accounts_data_len_delta())
+            .sum();
+        self.update_accounts_data_size_delta_on_chain(accounts_data_len_delta);
+
+        let mut update_transaction_statuses_time = Measure::start("update_transaction_statuses");
+        self.update_transaction_statuses(sanitized_txs, &processing_results);
+        update_transaction_statuses_time.stop();
+
+        let mut accumulated_fee_details = FeeDetails::default();
+        for fee_details in processing_results
+            .iter()
+            .filter_map(|res| res.as_ref().ok())
+            .map(|tx| &tx.fee_details)
+        {
+            accumulated_fee_details.accumulate(fee_details);
+        }
+        if self.feature_set.is_active(&reward_full_priority_fee::id()) {
+            self.collector_fee_details
+                .write()
+                .unwrap()
+                .accumulate(&accumulated_fee_details);
+        } else {
+            let fees = accumulated_fee_details.total_fee();
+            self.collector_fees.fetch_add(fees, Relaxed);
+        }
+
         saturating_add_assign!(
             timings.execute_accessories.update_executors_us,
             store_executors_which_were_deployed_time.as_us()
         );
-
-        let accounts_data_len_delta = execution_results
-            .iter()
-            .filter_map(TransactionExecutionResult::execution_details)
-            .filter_map(|details| {
-                details
-                    .status
-                    .is_ok()
-                    .then_some(details.accounts_data_len_delta)
-            })
-            .sum();
-        self.update_accounts_data_size_delta_on_chain(accounts_data_len_delta);
-
         timings.saturating_add_in_place(ExecuteTimingType::StoreUs, write_time.as_us());
         timings.saturating_add_in_place(
             ExecuteTimingType::UpdateStakesCacheUs,
             update_stakes_cache_time.as_us(),
         );
-
-        let mut update_transaction_statuses_time = Measure::start("update_transaction_statuses");
-        self.update_transaction_statuses(sanitized_txs, &execution_results);
-        if self.feature_set.is_active(&reward_full_priority_fee::id()) {
-            self.filter_program_errors_and_collect_fee_details(&execution_results)
-        } else {
-            self.filter_program_errors_and_collect_fee(&execution_results)
-        };
-        update_transaction_statuses_time.stop();
         timings.saturating_add_in_place(
             ExecuteTimingType::UpdateTransactionStatuses,
             update_transaction_statuses_time.as_us(),
         );
 
-        Self::create_commit_results(execution_results)
-    }
-
-    fn create_commit_results(
-        execution_results: Vec<TransactionExecutionResult>,
-    ) -> Vec<TransactionCommitResult> {
-        execution_results
+        processing_results
             .into_iter()
-            .map(|execution_result| match execution_result {
-                TransactionExecutionResult::Executed(executed_tx) => {
-                    let loaded_tx = &executed_tx.loaded_transaction;
-                    let loaded_account_stats = TransactionLoadedAccountsStats {
-                        loaded_accounts_data_size: loaded_tx.loaded_accounts_data_size,
-                        loaded_accounts_count: loaded_tx.accounts.len(),
-                    };
-
-                    Ok(CommittedTransaction {
-                        loaded_account_stats,
-                        execution_details: executed_tx.execution_details,
-                        fee_details: executed_tx.loaded_transaction.fee_details,
-                        rent_debits: executed_tx.loaded_transaction.rent_debits,
-                    })
-                }
-                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
-            })
-            .collect()
-    }
-
-    fn collect_rent(&self, execution_results: &[TransactionExecutionResult]) {
-        let collected_rent = execution_results
-            .iter()
-            .filter_map(|executed_result| executed_result.executed_transaction())
-            .filter(|executed_tx| executed_tx.was_successful())
-            .map(|executed_tx| executed_tx.loaded_transaction.rent)
-            .sum();
-        self.collected_rent.fetch_add(collected_rent, Relaxed);
+            .map(|res| res.map(|processed_tx| processed_tx.into()))
+            .collect_vec()
     }
 
     fn run_incinerator(&self) {
@@ -4736,12 +4687,7 @@ impl Bank {
         };
 
         let LoadAndExecuteTransactionsOutput {
-            execution_results,
-            executed_transactions_count,
-            executed_non_vote_transactions_count,
-            executed_with_successful_result_count,
-            signature_count,
-            ..
+            processing_results, ..
         } = self.load_and_execute_transactions(
             batch,
             max_age,
@@ -4761,17 +4707,9 @@ impl Bank {
             self.last_blockhash_and_lamports_per_signature();
         let commit_results = self.commit_transactions(
             batch.sanitized_transactions(),
-            execution_results,
+            processing_results,
             last_blockhash,
             lamports_per_signature,
-            ExecutedTransactionCounts {
-                executed_transactions_count: executed_transactions_count as u64,
-                executed_non_vote_transactions_count: executed_non_vote_transactions_count as u64,
-                executed_with_failure_result_count: executed_transactions_count
-                    .saturating_sub(executed_with_successful_result_count)
-                    as u64,
-                signature_count,
-            },
             timings,
         );
         let post_balances = if collect_balances {
@@ -4817,7 +4755,10 @@ impl Bank {
         );
 
         let committed_tx = commit_results.remove(0)?;
-        Ok(committed_tx.execution_details)
+        match committed_tx.execution_outcome {
+            CommittedExecutionOutcome::Executed { details, .. } => Ok(*details),
+            CommittedExecutionOutcome::FeesOnly { err } => Err(err),
+        }
     }
 
     /// Process multiple transaction in a single batch. This is used for benches and unit tests.
@@ -6011,22 +5952,23 @@ impl Bank {
     fn update_stakes_cache(
         &self,
         txs: &[SanitizedTransaction],
-        execution_results: &[TransactionExecutionResult],
+        processing_results: &[TransactionProcessingResult],
     ) {
-        debug_assert_eq!(txs.len(), execution_results.len());
+        debug_assert_eq!(txs.len(), processing_results.len());
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
         txs.iter()
-            .zip(execution_results)
-            .filter_map(|(tx, execution_result)| {
-                execution_result
-                    .executed_transaction()
+            .zip(processing_results)
+            .filter_map(|(tx, res)| res.as_ref().ok().map(|processed_tx| (tx, processed_tx)))
+            .filter_map(|(tx, processed_tx)| {
+                processed_tx
+                    .outcome
+                    .execution_context()
                     .map(|executed_tx| (tx, executed_tx))
             })
-            .filter(|(_, executed_tx)| executed_tx.was_successful())
-            .flat_map(|(tx, executed_tx)| {
+            .filter(|(_, context)| context.execution_details.status.is_ok())
+            .flat_map(|(tx, context)| {
                 let num_account_keys = tx.message().account_keys().len();
-                let loaded_tx = &executed_tx.loaded_transaction;
-                loaded_tx.accounts.iter().take(num_account_keys)
+                context.accounts.iter().take(num_account_keys)
             })
             .for_each(|(pubkey, account)| {
                 // note that this could get timed to: self.rc.accounts.accounts_db.stats.stakes_cache_check_and_store_us,

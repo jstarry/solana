@@ -216,7 +216,7 @@ fn execute_transactions(
                         block_time: None,
                     })
                 }
-                TransactionExecutionResult::NotExecuted(err) => Err(err.clone()),
+                TransactionExecutionResult::NotExecuted(failure) => Err(failure.clone().into_err()),
             }
         },
     )

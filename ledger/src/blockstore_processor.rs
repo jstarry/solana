@@ -239,7 +239,7 @@ fn check_block_cost_limits(
             if let Ok(committed_tx) = commit_result {
                 Some(CostModel::calculate_cost_for_executed_transaction(
                     tx,
-                    committed_tx.execution_details.executed_units,
+                    committed_tx.execution_outcome.executed_units(),
                     committed_tx.loaded_account_stats.loaded_accounts_data_size,
                     &bank.feature_set,
                 ))

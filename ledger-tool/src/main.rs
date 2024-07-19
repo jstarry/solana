@@ -2871,15 +2871,15 @@ fn record_transactions(
                         .collect();
 
                     let is_simple_vote_tx = tx.is_simple_vote_transaction();
-                    let execution_results = commit_result
-                        .ok()
-                        .map(|committed_tx| committed_tx.execution_details);
+                    let execution_details = commit_result.ok().and_then(|committed_tx| {
+                        committed_tx.execution_outcome.into_execution_details()
+                    });
 
                     TransactionDetails {
                         accounts,
                         instructions,
                         is_simple_vote_tx,
-                        execution_results,
+                        execution_details,
                         index,
                     }
                 })

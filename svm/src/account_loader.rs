@@ -1,9 +1,12 @@
 use {
     crate::{
-        account_overrides::AccountOverrides, account_rent_state::RentState,
-        nonce_info::NoncePartial, rollback_accounts::RollbackAccounts,
+        account_overrides::AccountOverrides,
+        account_rent_state::RentState,
+        nonce_info::NoncePartial,
+        rollback_accounts::RollbackAccounts,
         transaction_error_metrics::TransactionErrorMetrics,
         transaction_processing_callback::TransactionProcessingCallback,
+        transaction_results::{CollectFeesDetails, TransactionLoadFailure},
     },
     itertools::Itertools,
     solana_compute_budget::compute_budget_processor::{
@@ -35,7 +38,7 @@ pub(crate) type TransactionRent = u64;
 pub(crate) type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
 pub type TransactionCheckResult = Result<CheckedTransactionDetails>;
 pub type TransactionValidationResult = Result<ValidatedTransactionDetails>;
-pub type TransactionLoadResult = Result<LoadedTransaction>;
+pub type TransactionLoadResult = std::result::Result<LoadedTransaction, TransactionLoadFailure>;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct CheckedTransactionDetails {
@@ -168,22 +171,17 @@ pub(crate) fn load_accounts<CB: TransactionProcessingCallback>(
     txs.iter()
         .zip(validation_results)
         .map(|etx| match etx {
-            (tx, Ok(tx_details)) => {
-                let message = tx.message();
-
-                // load transactions
-                load_transaction_accounts(
-                    callbacks,
-                    message,
-                    tx_details,
-                    error_metrics,
-                    account_overrides,
-                    feature_set,
-                    rent_collector,
-                    loaded_programs,
-                )
-            }
-            (_, Err(e)) => Err(e),
+            (tx, Ok(tx_details)) => load_transaction_accounts(
+                callbacks,
+                tx.message(),
+                tx_details,
+                error_metrics,
+                account_overrides,
+                feature_set,
+                rent_collector,
+                loaded_programs,
+            ),
+            (_, Err(e)) => Err(TransactionLoadFailure::Discard(e)),
         })
         .collect()
 }
@@ -197,14 +195,25 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     feature_set: &FeatureSet,
     rent_collector: &RentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
-) -> Result<LoadedTransaction> {
+) -> TransactionLoadResult {
     let mut tx_rent: TransactionRent = 0;
     let account_keys = message.account_keys();
     let mut accounts_found = Vec::with_capacity(account_keys.len());
     let mut rent_debits = RentDebits::default();
 
     let requested_loaded_accounts_data_size_limit =
-        get_requested_loaded_accounts_data_size_limit(message)?;
+        match get_requested_loaded_accounts_data_size_limit(message) {
+            Ok(limit) => limit,
+            Err(err) => {
+                return Err(TransactionLoadFailure::CollectFees {
+                    err,
+                    details: Box::new(CollectFeesDetails {
+                        fee_details: tx_details.fee_details,
+                        rollback_accounts: tx_details.rollback_accounts,
+                    }),
+                });
+            }
+        };
     let mut accumulated_accounts_data_size: usize = 0;
 
     let instruction_accounts = message
@@ -214,7 +223,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         .unique()
         .collect::<Vec<&u8>>();
 
-    let mut accounts = account_keys
+    let accounts_result = account_keys
         .iter()
         .enumerate()
         .map(|(i, key)| {
@@ -292,10 +301,23 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
             accounts_found.push(account_found);
             Ok((*key, account))
         })
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Result<Vec<_>>>();
+
+    let mut accounts = match accounts_result {
+        Ok(accounts) => accounts,
+        Err(err) => {
+            return Err(TransactionLoadFailure::CollectFees {
+                err,
+                details: Box::new(CollectFeesDetails {
+                    fee_details: tx_details.fee_details,
+                    rollback_accounts: tx_details.rollback_accounts,
+                }),
+            });
+        }
+    };
 
     let builtins_start_index = accounts.len();
-    let program_indices = message
+    let program_indices_result = message
         .instructions()
         .iter()
         .map(|instruction| {
@@ -356,7 +378,20 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
             account_indices.insert(0, program_index as IndexOfAccount);
             Ok(account_indices)
         })
-        .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+        .collect::<Result<Vec<Vec<IndexOfAccount>>>>();
+
+    let program_indices = match program_indices_result {
+        Ok(program_indices) => program_indices,
+        Err(err) => {
+            return Err(TransactionLoadFailure::CollectFees {
+                err,
+                details: Box::new(CollectFeesDetails {
+                    fee_details: tx_details.fee_details,
+                    rollback_accounts: tx_details.rollback_accounts,
+                }),
+            });
+        }
+    };
 
     Ok(LoadedTransaction {
         accounts,

@@ -73,7 +73,7 @@ pub struct TransactionDetails {
     pub accounts: Vec<String>,
     pub instructions: Vec<UiInstruction>,
     pub is_simple_vote_tx: bool,
-    pub execution_results: Option<TransactionExecutionDetails>,
+    pub execution_details: Option<TransactionExecutionDetails>,
 }
 
 /// The components that go into a bank hash calculation for a single bank/slot.

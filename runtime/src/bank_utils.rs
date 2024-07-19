@@ -1,7 +1,9 @@
 use {
     crate::vote_sender_types::ReplayVoteSender,
     solana_sdk::transaction::SanitizedTransaction,
-    solana_svm::transaction_commit_result::{TransactionCommitResultExtensions, TransactionCommitResult},
+    solana_svm::transaction_commit_result::{
+        TransactionCommitResult, TransactionCommitResultExtensions,
+    },
     solana_vote::vote_parser,
 };
 #[cfg(feature = "dev-context-only-utils")]

@@ -81,6 +81,15 @@ impl RollbackAccounts {
         }
     }
 
+    pub fn nonce_mut(&mut self) -> Option<&mut NoncePartial> {
+        match self {
+            Self::FeePayerOnly { .. } => None,
+            Self::SameNonceAndFeePayer { nonce } | Self::SeparateNonceAndFeePayer { nonce, .. } => {
+                Some(nonce)
+            }
+        }
+    }
+
     pub fn fee_payer_account(&self) -> &AccountSharedData {
         match self {
             Self::FeePayerOnly { fee_payer_account }

@@ -136,6 +136,8 @@ pub struct RecordTransactionsSummary {
     pub result: Result<()>,
     // Index in the slot of the first transaction recorded
     pub starting_transaction_index: Option<usize>,
+    // Number of transactions recorded
+    pub recorded_transactions_count: usize,
 }
 
 #[derive(Clone)]
@@ -163,6 +165,7 @@ impl TransactionRecorder {
         let mut record_transactions_timings = RecordTransactionsTimings::default();
         let mut starting_transaction_index = None;
 
+        let transactions_len = transactions.len();
         if !transactions.is_empty() {
             let (hash, hash_us) = measure_us!(hash_transactions(&transactions));
             record_transactions_timings.hash_us = hash_us;
@@ -179,6 +182,7 @@ impl TransactionRecorder {
                         record_transactions_timings,
                         result: Err(PohRecorderError::MaxHeightReached),
                         starting_transaction_index: None,
+                        recorded_transactions_count: 0,
                     };
                 }
                 Err(PohRecorderError::SendError(e)) => {
@@ -186,6 +190,7 @@ impl TransactionRecorder {
                         record_transactions_timings,
                         result: Err(PohRecorderError::SendError(e)),
                         starting_transaction_index: None,
+                        recorded_transactions_count: 0,
                     };
                 }
                 Err(e) => panic!("Poh recorder returned unexpected error: {e:?}"),
@@ -196,6 +201,7 @@ impl TransactionRecorder {
             record_transactions_timings,
             result: Ok(()),
             starting_transaction_index,
+            recorded_transactions_count: transactions_len,
         }
     }
 

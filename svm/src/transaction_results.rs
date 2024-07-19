@@ -5,10 +5,15 @@
 )]
 pub use solana_sdk::inner_instruction::{InnerInstruction, InnerInstructionsList};
 use {
-    crate::account_loader::LoadedTransaction,
+    crate::{
+        account_loader::LoadedTransaction, nonce_info::NonceInfo,
+        rollback_accounts::RollbackAccounts,
+    },
     serde::{Deserialize, Serialize},
     solana_program_runtime::loaded_programs::ProgramCacheEntry,
     solana_sdk::{
+        account::ReadableAccount,
+        fee::FeeDetails,
         pubkey::Pubkey,
         transaction::{self, TransactionError},
         transaction_context::TransactionReturnData,
@@ -35,20 +40,7 @@ pub struct TransactionLoadedAccountsStats {
 #[derive(Debug, Clone)]
 pub enum TransactionExecutionResult {
     Executed(Box<ExecutedTransaction>),
-    NotExecuted(TransactionError),
-}
-
-#[derive(Debug, Clone)]
-pub struct ExecutedTransaction {
-    pub loaded_transaction: LoadedTransaction,
-    pub execution_details: TransactionExecutionDetails,
-    pub programs_modified_by_tx: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
-}
-
-impl ExecutedTransaction {
-    pub fn was_successful(&self) -> bool {
-        self.execution_details.status.is_ok()
-    }
+    NotExecuted(TransactionLoadFailure),
 }
 
 impl TransactionExecutionResult {
@@ -84,8 +76,69 @@ impl TransactionExecutionResult {
     pub fn flattened_result(&self) -> transaction::Result<()> {
         match self {
             Self::Executed(executed_tx) => executed_tx.execution_details.status.clone(),
-            Self::NotExecuted(err) => Err(err.clone()),
+            Self::NotExecuted(failure) => Err(failure.clone().into_err()),
         }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum TransactionLoadFailure {
+    Discard(TransactionError),
+    CollectFees {
+        err: TransactionError,
+        details: Box<CollectFeesDetails>,
+    },
+}
+
+impl TransactionLoadFailure {
+    pub fn into_err(self) -> TransactionError {
+        match self {
+            Self::Discard(err) | Self::CollectFees { err, .. } => err,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct CollectFeesDetails {
+    pub rollback_accounts: RollbackAccounts,
+    pub fee_details: FeeDetails,
+}
+
+impl CollectFeesDetails {
+    pub fn loaded_account_stats(&self) -> TransactionLoadedAccountsStats {
+        match &self.rollback_accounts {
+            RollbackAccounts::FeePayerOnly { fee_payer_account } => {
+                TransactionLoadedAccountsStats {
+                    loaded_accounts_count: 1,
+                    loaded_accounts_data_size: fee_payer_account.data().len(),
+                }
+            }
+            RollbackAccounts::SameNonceAndFeePayer { nonce } => TransactionLoadedAccountsStats {
+                loaded_accounts_count: 1,
+                loaded_accounts_data_size: nonce.account().data().len(),
+            },
+            RollbackAccounts::SeparateNonceAndFeePayer {
+                nonce,
+                fee_payer_account,
+            } => TransactionLoadedAccountsStats {
+                loaded_accounts_count: 2,
+                loaded_accounts_data_size: fee_payer_account.data().len()
+                    + nonce.account().data().len(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecutedTransaction {
+    pub loaded_transaction: LoadedTransaction,
+    pub execution_details: TransactionExecutionDetails,
+    pub programs_modified_by_tx: HashMap<Pubkey, Arc<ProgramCacheEntry>>,
+}
+
+impl ExecutedTransaction {
+    pub fn was_successful(&self) -> bool {
+        self.execution_details.status.is_ok()
     }
 }
 

@@ -606,28 +606,21 @@ impl Consumer {
         execute_and_commit_timings.load_execute_us = load_execute_us;
 
         let LoadAndExecuteTransactionsOutput {
-            execution_results,
+            processing_results,
             mut retryable_transaction_indexes,
             executed_transactions_count,
-            executed_non_vote_transactions_count,
             executed_with_successful_result_count,
-            signature_count,
             error_counters,
             ..
         } = load_and_execute_transactions_output;
 
-        let transactions_attempted_execution_count = execution_results.len();
-        let (executed_transactions, execution_results_to_transactions_us) =
-            measure_us!(execution_results
+        let transactions_attempted_execution_count = processing_results.len();
+        let (processed_transactions, execution_results_to_transactions_us) =
+            measure_us!(processing_results
                 .iter()
                 .zip(batch.sanitized_transactions())
-                .filter_map(|(execution_result, tx)| {
-                    if execution_result.was_executed() {
-                        Some(tx.to_versioned_transaction())
-                    } else {
-                        None
-                    }
-                })
+                .filter(|(res, _)| res.is_ok())
+                .map(|(_, tx)| tx.to_versioned_transaction())
                 .collect_vec());
 
         let (freeze_lock, freeze_lock_us) = measure_us!(bank.freeze_lock());
@@ -646,13 +639,14 @@ impl Consumer {
 
         let (record_transactions_summary, record_us) = measure_us!(self
             .transaction_recorder
-            .record_transactions(bank.slot(), executed_transactions));
+            .record_transactions(bank.slot(), processed_transactions));
         execute_and_commit_timings.record_us = record_us;
 
         let RecordTransactionsSummary {
             result: record_transactions_result,
             record_transactions_timings,
             starting_transaction_index,
+            recorded_transactions_count,
         } = record_transactions_summary;
         execute_and_commit_timings.record_transactions_timings = RecordTransactionsTimings {
             execution_results_to_transactions_us,
@@ -660,9 +654,12 @@ impl Consumer {
         };
 
         if let Err(recorder_err) = record_transactions_result {
-            retryable_transaction_indexes.extend(execution_results.iter().enumerate().filter_map(
-                |(index, execution_result)| execution_result.was_executed().then_some(index),
-            ));
+            retryable_transaction_indexes.extend(
+                processing_results
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, res)| res.is_ok().then_some(index)),
+            );
 
             return ExecuteAndCommitTransactionsOutput {
                 transactions_attempted_execution_count,
@@ -677,25 +674,21 @@ impl Consumer {
             };
         }
 
-        let (commit_time_us, commit_transaction_statuses) = if executed_transactions_count != 0 {
+        let (commit_time_us, commit_transaction_statuses) = if recorded_transactions_count != 0 {
             self.committer.commit_transactions(
                 batch,
-                execution_results,
+                processing_results,
                 last_blockhash,
                 lamports_per_signature,
                 starting_transaction_index,
                 bank,
                 &mut pre_balance_info,
                 &mut execute_and_commit_timings,
-                signature_count,
-                executed_transactions_count,
-                executed_non_vote_transactions_count,
-                executed_with_successful_result_count,
             )
         } else {
             (
                 0,
-                vec![CommitTransactionDetails::NotCommitted; execution_results.len()],
+                vec![CommitTransactionDetails::NotCommitted; processing_results.len()],
             )
         };
 

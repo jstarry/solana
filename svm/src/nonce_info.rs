@@ -1,4 +1,10 @@
-use solana_sdk::{account::AccountSharedData, nonce_account, pubkey::Pubkey};
+use solana_sdk::{
+    account::AccountSharedData,
+    account_utils::StateMut,
+    nonce::state::{DurableNonce, State as NonceState, Versions as NonceVersions},
+    nonce_account,
+    pubkey::Pubkey,
+};
 
 pub trait NonceInfo {
     fn address(&self) -> &Pubkey;
@@ -17,6 +23,28 @@ pub struct NoncePartial {
 impl NoncePartial {
     pub fn new(address: Pubkey, account: AccountSharedData) -> Self {
         Self { address, account }
+    }
+
+    pub fn get_advanced_account(
+        &mut self,
+        durable_nonce: DurableNonce,
+        lamports_per_signature: u64,
+    ) -> (&Pubkey, &AccountSharedData) {
+        // Advance the stored blockhash to prevent fee theft by someone
+        // replaying nonce transactions that have failed with an
+        // `InstructionError`.
+        //
+        // Since we know we are dealing with a valid nonce account,
+        // unwrap is safe here
+        let nonce_versions = StateMut::<NonceVersions>::state(&self.account).unwrap();
+        if let NonceState::Initialized(ref data) = nonce_versions.state() {
+            let nonce_state =
+                NonceState::new_initialized(&data.authority, durable_nonce, lamports_per_signature);
+            let nonce_versions = NonceVersions::new(nonce_state);
+            self.account.set_state(&nonce_versions).unwrap();
+        }
+
+        (&self.address, &self.account)
     }
 }
 

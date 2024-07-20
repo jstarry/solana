@@ -45,11 +45,9 @@ use {
     solana_sdk::{
         clock::{Slot, MAX_PROCESSING_AGE},
         feature_set,
-        fee::FeeDetails,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
-        rent_debits::RentDebits,
         saturating_add_assign,
         signature::{Keypair, Signature},
         timing,
@@ -59,11 +57,8 @@ use {
         },
     },
     solana_svm::{
+        transaction_commit_result::TransactionCommitResult,
         transaction_processor::ExecutionRecordingConfig,
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult,
-            TransactionLoadedAccountsStats, TransactionResults,
-        },
     },
     solana_timings::{report_execute_timings, ExecuteTimingType, ExecuteTimings},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
@@ -106,16 +101,13 @@ fn first_err(results: &[Result<()>]) -> Result<()> {
 // Includes transaction signature for unit-testing
 fn get_first_error(
     batch: &TransactionBatch,
-    fee_collection_results: Vec<Result<()>>,
+    commit_results: &[TransactionCommitResult],
 ) -> Option<(Result<()>, Signature)> {
     let mut first_err = None;
-    for (result, transaction) in fee_collection_results
-        .iter()
-        .zip(batch.sanitized_transactions())
-    {
-        if let Err(ref err) = result {
+    for (commit_result, transaction) in commit_results.iter().zip(batch.sanitized_transactions()) {
+        if let Err(err) = commit_result {
             if first_err.is_none() {
-                first_err = Some((result.clone(), *transaction.signature()));
+                first_err = Some((Err(err.clone()), *transaction.signature()));
             }
             warn!(
                 "Unexpected validator error: {:?}, transaction: {:?}",
@@ -165,7 +157,7 @@ pub fn execute_batch(
         vec![]
     };
 
-    let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
+    let (commit_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
         transaction_status_sender.is_some(),
@@ -176,28 +168,16 @@ pub fn execute_batch(
 
     bank_utils::find_and_send_votes(
         batch.sanitized_transactions(),
-        &tx_results,
+        &commit_results,
         replay_vote_sender,
     );
-
-    let TransactionResults {
-        fee_collection_results,
-        loaded_accounts_stats,
-        execution_results,
-        ..
-    } = tx_results;
 
     let (check_block_cost_limits_result, check_block_cost_limits_time): (Result<()>, Measure) =
         measure!(if bank
             .feature_set
             .is_active(&feature_set::apply_cost_tracker_during_replay::id())
         {
-            check_block_cost_limits(
-                bank,
-                &loaded_accounts_stats,
-                &execution_results,
-                batch.sanitized_transactions(),
-            )
+            check_block_cost_limits(bank, &commit_results, batch.sanitized_transactions())
         } else {
             Ok(())
         });
@@ -208,11 +188,13 @@ pub fn execute_batch(
     );
     check_block_cost_limits_result?;
 
-    let executed_transactions = execution_results
+    let committed_transactions = commit_results
         .iter()
         .zip(batch.sanitized_transactions())
-        .filter_map(|(execution_result, tx)| execution_result.was_executed().then_some(tx))
+        .filter_map(|(commit_result, tx)| commit_result.is_ok().then_some(tx))
         .collect_vec();
+
+    let first_err = get_first_error(batch, &commit_results);
 
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
@@ -228,16 +210,15 @@ pub fn execute_batch(
         transaction_status_sender.send_transaction_status_batch(
             bank.clone(),
             transactions,
-            execution_results,
+            commit_results,
             balances,
             token_balances,
             transaction_indexes.to_vec(),
         );
     }
 
-    prioritization_fee_cache.update(bank, executed_transactions.into_iter());
+    prioritization_fee_cache.update(bank, committed_transactions.into_iter());
 
-    let first_err = get_first_error(batch, fee_collection_results);
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }
 
@@ -246,27 +227,22 @@ pub fn execute_batch(
 // reported to metric `replay-stage-mark_dead_slot`
 fn check_block_cost_limits(
     bank: &Bank,
-    loaded_accounts_stats: &[Result<TransactionLoadedAccountsStats>],
-    execution_results: &[TransactionExecutionResult],
+    commit_results: &[TransactionCommitResult],
     sanitized_transactions: &[SanitizedTransaction],
 ) -> Result<()> {
-    assert_eq!(loaded_accounts_stats.len(), execution_results.len());
+    assert_eq!(sanitized_transactions.len(), commit_results.len());
 
-    let tx_costs_with_actual_execution_units: Vec<_> = execution_results
+    let tx_costs_with_actual_execution_units: Vec<_> = commit_results
         .iter()
-        .zip(loaded_accounts_stats)
         .zip(sanitized_transactions)
-        .filter_map(|((execution_result, loaded_accounts_stats), tx)| {
-            if let Some(details) = execution_result.execution_details() {
-                let tx_cost = CostModel::calculate_cost_for_executed_transaction(
+        .filter_map(|(commit_result, tx)| {
+            if let Ok(committed_tx) = commit_result {
+                Some(CostModel::calculate_cost_for_executed_transaction(
                     tx,
-                    details.executed_units,
-                    loaded_accounts_stats
-                        .as_ref()
-                        .map_or(0, |stats| stats.loaded_accounts_data_size),
+                    committed_tx.execution_details.executed_units,
+                    committed_tx.loaded_account_stats.loaded_accounts_data_size,
                     &bank.feature_set,
-                );
-                Some(tx_cost)
+                ))
             } else {
                 None
             }
@@ -2134,16 +2110,10 @@ pub enum TransactionStatusMessage {
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<SanitizedTransaction>,
-    pub commit_results: Vec<Result<CommittedTransaction>>,
+    pub commit_results: Vec<TransactionCommitResult>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
     pub transaction_indexes: Vec<usize>,
-}
-
-pub struct CommittedTransaction {
-    pub execution_details: TransactionExecutionDetails,
-    pub fee_details: FeeDetails,
-    pub rent_debits: RentDebits,
 }
 
 #[derive(Clone, Debug)]
@@ -2156,7 +2126,7 @@ impl TransactionStatusSender {
         &self,
         bank: Arc<Bank>,
         transactions: Vec<SanitizedTransaction>,
-        execution_results: Vec<TransactionExecutionResult>,
+        commit_results: Vec<TransactionCommitResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         transaction_indexes: Vec<usize>,
@@ -2168,19 +2138,7 @@ impl TransactionStatusSender {
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions,
-                commit_results: execution_results
-                    .into_iter()
-                    .map(|result| match result {
-                        TransactionExecutionResult::Executed(executed_tx) => {
-                            Ok(CommittedTransaction {
-                                execution_details: executed_tx.execution_details,
-                                fee_details: executed_tx.loaded_transaction.fee_details,
-                                rent_debits: executed_tx.loaded_transaction.rent_debits,
-                            })
-                        }
-                        TransactionExecutionResult::NotExecuted(err) => Err(err),
-                    })
-                    .collect(),
+                commit_results,
                 balances,
                 token_balances,
                 transaction_indexes,

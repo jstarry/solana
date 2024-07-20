@@ -4,11 +4,12 @@ use {
     itertools::izip,
     solana_ledger::{
         blockstore::Blockstore,
-        blockstore_processor::{
-            CommittedTransaction, TransactionStatusBatch, TransactionStatusMessage,
-        },
+        blockstore_processor::{TransactionStatusBatch, TransactionStatusMessage},
     },
-    solana_svm::transaction_results::TransactionExecutionDetails,
+    solana_svm::{
+        transaction_commit_result::CommittedTransaction,
+        transaction_results::TransactionExecutionDetails,
+    },
     solana_transaction_status::{
         extract_and_fmt_memos, map_inner_instructions, Reward, TransactionStatusMeta,
     },
@@ -106,6 +107,7 @@ impl TransactionStatusService {
                                 },
                             fee_details,
                             rent_debits,
+                            ..
                         } = committed_tx;
                         let tx_account_locks = transaction.get_account_locks_unchecked();
 

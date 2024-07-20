@@ -16,12 +16,6 @@ use {
     std::{collections::HashMap, sync::Arc},
 };
 
-pub struct TransactionResults {
-    pub fee_collection_results: Vec<transaction::Result<()>>,
-    pub loaded_accounts_stats: Vec<transaction::Result<TransactionLoadedAccountsStats>>,
-    pub execution_results: Vec<TransactionExecutionResult>,
-}
-
 #[derive(Debug, Default, Clone)]
 pub struct TransactionLoadedAccountsStats {
     pub loaded_accounts_data_size: usize,

@@ -13,9 +13,9 @@ pub mod runtime_config;
 pub mod transaction_account_state_info;
 pub mod transaction_commit_result;
 pub mod transaction_error_metrics;
+pub mod transaction_execution_result;
 pub mod transaction_processing_callback;
 pub mod transaction_processor;
-pub mod transaction_results;
 
 #[macro_use]
 extern crate solana_metrics;

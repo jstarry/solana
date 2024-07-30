@@ -2242,8 +2242,10 @@ pub mod tests {
         },
         solana_svm::{
             transaction_commit_result::CommittedTransaction,
+            transaction_execution_result::{
+                TransactionExecutionDetails, TransactionLoadedAccountsStats,
+            },
             transaction_processor::ExecutionRecordingConfig,
-            transaction_results::{TransactionExecutionDetails, TransactionLoadedAccountsStats},
         },
         solana_vote::vote_account::VoteAccount,
         solana_vote_program::{

@@ -161,13 +161,13 @@ use {
         nonce_info::NoncePartial,
         transaction_commit_result::{CommittedTransaction, TransactionCommitResult},
         transaction_error_metrics::TransactionErrorMetrics,
+        transaction_execution_result::{
+            TransactionExecutionDetails, TransactionExecutionResult, TransactionLoadedAccountsStats,
+        },
         transaction_processing_callback::TransactionProcessingCallback,
         transaction_processor::{
             ExecutionRecordingConfig, TransactionBatchProcessor, TransactionLogMessages,
             TransactionProcessingConfig, TransactionProcessingEnvironment,
-        },
-        transaction_results::{
-            TransactionExecutionDetails, TransactionExecutionResult, TransactionLoadedAccountsStats,
         },
     },
     solana_timings::{ExecuteTimingType, ExecuteTimings},

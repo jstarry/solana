@@ -1,5 +1,7 @@
 use {
-    crate::transaction_results::{TransactionExecutionDetails, TransactionLoadedAccountsStats},
+    crate::transaction_execution_result::{
+        TransactionExecutionDetails, TransactionLoadedAccountsStats,
+    },
     solana_sdk::{
         fee::FeeDetails, rent_debits::RentDebits, transaction::Result as TransactionResult,
     },

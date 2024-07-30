@@ -103,7 +103,7 @@ use {
     solana_svm::{
         account_loader::LoadedTransaction, nonce_info::NoncePartial,
         transaction_commit_result::TransactionCommitResultExtensions,
-        transaction_results::ExecutedTransaction,
+        transaction_execution_result::ExecutedTransaction,
     },
     solana_timings::ExecuteTimings,
     solana_vote_program::{

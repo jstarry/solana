@@ -8,7 +8,7 @@ use {
     },
     solana_svm::{
         transaction_commit_result::CommittedTransaction,
-        transaction_results::TransactionExecutionDetails,
+        transaction_execution_result::TransactionExecutionDetails,
     },
     solana_transaction_status::{
         extract_and_fmt_memos, map_inner_instructions, Reward, TransactionStatusMeta,
@@ -225,7 +225,7 @@ pub(crate) mod tests {
                 VersionedTransaction,
             },
         },
-        solana_svm::transaction_results::TransactionLoadedAccountsStats,
+        solana_svm::transaction_execution_result::TransactionLoadedAccountsStats,
         solana_transaction_status::{
             token_balances::TransactionTokenBalancesSet, TransactionStatusMeta,
             TransactionTokenBalance,

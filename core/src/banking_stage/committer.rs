@@ -15,7 +15,7 @@ use {
     solana_sdk::{hash::Hash, pubkey::Pubkey, saturating_add_assign},
     solana_svm::{
         transaction_commit_result::{TransactionCommitResult, TransactionCommitResultExtensions},
-        transaction_results::TransactionExecutionResult,
+        transaction_execution_result::TransactionExecutionResult,
     },
     solana_transaction_status::{
         token_balances::TransactionTokenBalancesSet, TransactionTokenBalance,

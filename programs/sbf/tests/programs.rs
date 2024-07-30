@@ -64,8 +64,8 @@ use {
     },
     solana_svm::{
         transaction_commit_result::CommittedTransaction,
+        transaction_execution_result::{InnerInstruction, TransactionExecutionDetails},
         transaction_processor::ExecutionRecordingConfig,
-        transaction_results::{InnerInstruction, TransactionExecutionDetails},
     },
     solana_timings::ExecuteTimings,
     solana_transaction_status::{

@@ -4017,11 +4017,18 @@ impl Bank {
                         loaded_accounts_count: loaded_tx.accounts.len(),
                     };
 
+                    // Rent is only collected for successfully executed transactions
+                    let rent_debits = if executed_tx.was_successful() {
+                        executed_tx.loaded_transaction.rent_debits
+                    } else {
+                        RentDebits::default()
+                    };
+
                     Ok(CommittedTransaction {
                         loaded_account_stats,
                         execution_details: executed_tx.execution_details,
                         fee_details: executed_tx.loaded_transaction.fee_details,
-                        rent_debits: executed_tx.loaded_transaction.rent_debits,
+                        rent_debits,
                     })
                 }
                 TransactionExecutionResult::NotExecuted(err) => Err(err),

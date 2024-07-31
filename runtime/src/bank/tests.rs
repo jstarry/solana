@@ -9356,6 +9356,71 @@ fn test_tx_return_data() {
 }
 
 #[test]
+fn test_load_and_execute_commit_transactions_rent_debits() {
+    let (mut genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
+    genesis_config.rent = Rent::default();
+    let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+    let bank = Bank::new_from_parent(
+        bank,
+        &Pubkey::new_unique(),
+        genesis_config.epoch_schedule.get_first_slot_in_epoch(1),
+    );
+    let amount = genesis_config.rent.minimum_balance(0);
+
+    // Make sure that rent debits are tracked for successful transactions
+    {
+        let alice = Keypair::new();
+        test_utils::deposit(&bank, &alice.pubkey(), amount - 1).unwrap();
+        let tx = system_transaction::transfer(
+            &mint_keypair,
+            &alice.pubkey(),
+            amount,
+            genesis_config.hash(),
+        );
+
+        let batch = bank.prepare_batch_for_tests(vec![tx]);
+        let commit_result = bank
+            .load_execute_and_commit_transactions(
+                &batch,
+                MAX_PROCESSING_AGE,
+                false,
+                ExecutionRecordingConfig::new_single_setting(false),
+                &mut ExecuteTimings::default(),
+                None,
+            )
+            .0
+            .remove(0);
+        assert!(commit_result.is_ok());
+        assert!(commit_result.was_executed_successfully());
+        assert!(!commit_result.ok().unwrap().rent_debits.is_empty());
+    }
+
+    // Make sure that rent debits are ignored for failed transactions
+    {
+        let bob = Keypair::new();
+        test_utils::deposit(&bank, &bob.pubkey(), amount - 1).unwrap();
+        let tx =
+            system_transaction::transfer(&mint_keypair, &bob.pubkey(), 1, genesis_config.hash());
+
+        let batch = bank.prepare_batch_for_tests(vec![tx]);
+        let commit_result = bank
+            .load_execute_and_commit_transactions(
+                &batch,
+                MAX_PROCESSING_AGE,
+                false,
+                ExecutionRecordingConfig::new_single_setting(false),
+                &mut ExecuteTimings::default(),
+                None,
+            )
+            .0
+            .remove(0);
+        assert!(commit_result.is_ok());
+        assert!(!commit_result.was_executed_successfully());
+        assert!(commit_result.ok().unwrap().rent_debits.is_empty());
+    }
+}
+
+#[test]
 fn test_get_largest_accounts() {
     let GenesisConfigInfo { genesis_config, .. } =
         create_genesis_config_with_leader(42, &solana_sdk::pubkey::new_rand(), 42);

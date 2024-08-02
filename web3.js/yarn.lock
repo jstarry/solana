@@ -2143,8 +2143,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@^22.0.0":
-  version "22.0.2"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.0.2.tgz#9fb1a2b31970871e8bf696f0e8a40d2e6d2bd04e"
+  version "22.0.3"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.0.3.tgz#955d2eede5b83afdf3400a9769154cbd49e478f7"
   dependencies:
     undici-types "~6.11.1"
 

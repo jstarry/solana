@@ -236,21 +236,23 @@ fn new_processing_result(
     status: Result<()>,
     fee_details: FeeDetails,
 ) -> TransactionProcessingResult {
-    Ok(ExecutedTransaction {
-        loaded_transaction: LoadedTransaction {
-            fee_details,
-            ..LoadedTransaction::default()
+    Ok(ProcessedTransaction::Executed(Box::new(
+        ExecutedTransaction {
+            loaded_transaction: LoadedTransaction {
+                fee_details,
+                ..LoadedTransaction::default()
+            },
+            execution_details: TransactionExecutionDetails {
+                status,
+                log_messages: None,
+                inner_instructions: None,
+                return_data: None,
+                executed_units: 0,
+                accounts_data_len_delta: 0,
+            },
+            programs_modified_by_tx: HashMap::new(),
         },
-        execution_details: TransactionExecutionDetails {
-            status,
-            log_messages: None,
-            inner_instructions: None,
-            return_data: None,
-            executed_units: 0,
-            accounts_data_len_delta: 0,
-        },
-        programs_modified_by_tx: HashMap::new(),
-    })
+    )))
 }
 
 impl Bank {
@@ -6924,11 +6926,17 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         Err(TransactionError::ProgramAccountNotFound),
     );
     {
-        // Make sure it is not in the cache because the account owner is not a loader
+        // Make sure it is not in the program cache because the account owner is not a loader
         let program_cache = bank.transaction_processor.program_cache.read().unwrap();
         let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
         assert!(slot_versions.is_empty());
     }
+
+    // Advance bank to get a new last blockhash for duplicate transaction below
+    goto_end_of_slot(bank.clone());
+    let bank = bank_client
+        .advance_slot(1, bank_forks.as_ref(), &mint_keypair.pubkey())
+        .unwrap();
 
     // Load program file
     let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so")
@@ -6995,8 +7003,8 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         let program_cache = bank.transaction_processor.program_cache.read().unwrap();
         let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
         assert_eq!(slot_versions.len(), 1);
-        assert_eq!(slot_versions[0].deployment_slot, 0);
-        assert_eq!(slot_versions[0].effective_slot, 0);
+        assert_eq!(slot_versions[0].deployment_slot, bank.slot());
+        assert_eq!(slot_versions[0].effective_slot, bank.slot());
         assert!(matches!(
             slot_versions[0].program,
             ProgramCacheEntryType::Closed,
@@ -7019,8 +7027,8 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         let program_cache = bank.transaction_processor.program_cache.read().unwrap();
         let slot_versions = program_cache.get_slot_versions_for_tests(&buffer_address);
         assert_eq!(slot_versions.len(), 1);
-        assert_eq!(slot_versions[0].deployment_slot, 0);
-        assert_eq!(slot_versions[0].effective_slot, 0);
+        assert_eq!(slot_versions[0].deployment_slot, bank.slot());
+        assert_eq!(slot_versions[0].effective_slot, bank.slot());
         assert!(matches!(
             slot_versions[0].program,
             ProgramCacheEntryType::Closed,
@@ -7121,14 +7129,14 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
         let program_cache = bank.transaction_processor.program_cache.read().unwrap();
         let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
         assert_eq!(slot_versions.len(), 2);
-        assert_eq!(slot_versions[0].deployment_slot, 0);
-        assert_eq!(slot_versions[0].effective_slot, 0);
+        assert_eq!(slot_versions[0].deployment_slot, bank.slot() - 1);
+        assert_eq!(slot_versions[0].effective_slot, bank.slot() - 1);
         assert!(matches!(
             slot_versions[0].program,
             ProgramCacheEntryType::Closed,
         ));
-        assert_eq!(slot_versions[1].deployment_slot, 0);
-        assert_eq!(slot_versions[1].effective_slot, 1);
+        assert_eq!(slot_versions[1].deployment_slot, bank.slot() - 1);
+        assert_eq!(slot_versions[1].effective_slot, bank.slot());
         assert!(matches!(
             slot_versions[1].program,
             ProgramCacheEntryType::Loaded(_),

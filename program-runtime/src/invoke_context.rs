@@ -470,18 +470,14 @@ impl<'a> InvokeContext<'a> {
     pub fn process_precompile<'ix_data>(
         &mut self,
         precompile: &Precompile,
-        precompile_instruction_data: &[u8],
-        message_instruction_datas_iter: impl Iterator<Item = &'ix_data [u8]>,
+        instruction_data: &[u8],
         instruction_accounts: &[InstructionAccount],
         program_indices: &[IndexOfAccount],
+        message_instruction_datas_iter: impl Iterator<Item = &'ix_data [u8]>,
     ) -> Result<(), InstructionError> {
         self.transaction_context
             .get_next_instruction_context()?
-            .configure(
-                program_indices,
-                instruction_accounts,
-                precompile_instruction_data,
-            );
+            .configure(program_indices, instruction_accounts, instruction_data);
         self.push()?;
 
         let feature_set = self.get_feature_set();
@@ -490,7 +486,7 @@ impl<'a> InvokeContext<'a> {
         if move_precompile_verification_to_svm {
             let instruction_datas: Vec<_> = message_instruction_datas_iter.collect();
             precompile
-                .verify(precompile_instruction_data, &instruction_datas, feature_set)
+                .verify(instruction_data, &instruction_datas, feature_set)
                 .map_err(InstructionError::from)
                 .and(self.pop())
         } else {

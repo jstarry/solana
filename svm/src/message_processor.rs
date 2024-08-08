@@ -91,9 +91,9 @@ impl MessageProcessor {
                     invoke_context.process_precompile(
                         precompile,
                         instruction.data,
-                        message.instructions_iter().map(|ix| ix.data),
                         &instruction_accounts,
                         program_indices,
+                        message.instructions_iter().map(|ix| ix.data),
                     )
                 } else {
                     invoke_context.process_instruction(

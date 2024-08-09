@@ -62,3 +62,9 @@ pub struct TransactionExecutionDetails {
     /// NOTE: This value is valid IFF `status` is `Ok`.
     pub accounts_data_len_delta: i64,
 }
+
+impl TransactionExecutionDetails {
+    pub fn was_successful(&self) -> bool {
+        self.status.is_ok()
+    }
+}

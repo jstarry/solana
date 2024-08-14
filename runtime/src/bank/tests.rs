@@ -6921,7 +6921,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len() {
     );
     assert_eq!(
         bank.process_transaction(&transaction),
-        Err(TransactionError::ProgramAccountNotFound),
+        Err(TransactionError::InvalidProgramForExecution),
     );
     {
         // Make sure it is not in the cache because the account owner is not a loader

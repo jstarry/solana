@@ -1383,7 +1383,7 @@ mod tests {
         let validation_results = vec![
             Ok(ValidatedTransactionDetails::default()),
             Ok(ValidatedTransactionDetails::default()),
-            Err(TransactionError::ProgramAccountNotFound),
+            Err(TransactionError::InvalidProgramForExecution),
         ];
         let owners = vec![owner1, owner2];
 

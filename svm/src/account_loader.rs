@@ -277,7 +277,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     let mut tx_rent: TransactionRent = 0;
     let account_keys = message.account_keys();
     let mut accounts = Vec::with_capacity(account_keys.len());
-    let mut accounts_found = Vec::with_capacity(account_keys.len());
     let mut rent_debits = RentDebits::default();
     let mut accumulated_accounts_data_size: u32 = 0;
 
@@ -287,7 +286,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         .unique()
         .collect::<Vec<&u8>>();
 
-    let mut collect_loaded_account = |key, (loaded_account, found)| -> Result<()> {
+    let mut collect_loaded_account = |key, loaded_account| -> Result<()> {
         let LoadedTransactionAccount {
             account,
             loaded_size,
@@ -305,7 +304,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
         rent_debits.insert(key, rent_collected, account.lamports());
 
         accounts.push((*key, account));
-        accounts_found.push(found);
         Ok(())
     };
 
@@ -313,11 +311,11 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     // that account overrides are already applied during fee payer validation so
     // it's fine to use the fee payer directly here rather than checking account
     // overrides again.
-    collect_loaded_account(message.fee_payer(), (loaded_fee_payer_account, true))?;
+    collect_loaded_account(message.fee_payer(), loaded_fee_payer_account)?;
 
     // Attempt to load and collect remaining non-fee payer accounts
     for (account_index, account_key) in account_keys.iter().enumerate().skip(1) {
-        let (loaded_account, account_found) = load_transaction_account(
+        let loaded_account = load_transaction_account(
             callbacks,
             message,
             account_key,
@@ -328,7 +326,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
             rent_collector,
             loaded_programs,
         )?;
-        collect_loaded_account(account_key, (loaded_account, account_found))?;
+        collect_loaded_account(account_key, loaded_account)?;
     }
 
     let builtins_start_index = accounts.len();
@@ -343,12 +341,6 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
                 .ok_or(TransactionError::ProgramAccountNotFound)?;
             if native_loader::check_id(program_id) {
                 return Ok(account_indices);
-            }
-
-            let account_found = accounts_found.get(program_index).unwrap_or(&true);
-            if !account_found {
-                error_metrics.account_not_found += 1;
-                return Err(TransactionError::ProgramAccountNotFound);
             }
 
             if !program_account.executable() {
@@ -408,8 +400,7 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
     feature_set: &FeatureSet,
     rent_collector: &RentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
-) -> Result<(LoadedTransactionAccount, bool)> {
-    let mut account_found = true;
+) -> Result<LoadedTransactionAccount> {
     let is_instruction_account = u8::try_from(account_index)
         .map(|i| instruction_accounts.contains(&&i))
         .unwrap_or(false);
@@ -466,7 +457,6 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
                 }
             })
             .unwrap_or_else(|| {
-                account_found = false;
                 let mut default_account = AccountSharedData::default();
                 // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
                 // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
@@ -480,7 +470,7 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
             })
     };
 
-    Ok((loaded_account, account_found))
+    Ok(loaded_account)
 }
 
 fn account_shared_data_from_program(loaded_program: &ProgramCacheEntry) -> AccountSharedData {
@@ -705,12 +695,12 @@ mod tests {
 
         let load_results = load_accounts_aux_test(tx, &accounts, &mut error_metrics);
 
-        assert_eq!(error_metrics.account_not_found, 1);
+        assert_eq!(error_metrics.invalid_program_for_execution, 1);
         assert_eq!(load_results.len(), 1);
         assert!(matches!(
             load_results[0],
             TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
-                load_error: TransactionError::ProgramAccountNotFound,
+                load_error: TransactionError::InvalidProgramForExecution,
                 ..
             }),
         ));
@@ -935,7 +925,7 @@ mod tests {
         assert!(matches!(
             load_results[0],
             TransactionLoadResult::FeesOnly(FeesOnlyTransaction {
-                load_error: TransactionError::ProgramAccountNotFound,
+                load_error: TransactionError::InvalidProgramForExecution,
                 ..
             }),
         ));
@@ -1381,7 +1371,10 @@ mod tests {
             &loaded_programs,
         );
 
-        assert_eq!(result.err(), Some(TransactionError::ProgramAccountNotFound));
+        assert_eq!(
+            result.err(),
+            Some(TransactionError::InvalidProgramForExecution)
+        );
     }
 
     #[test]

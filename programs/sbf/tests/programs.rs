@@ -1656,7 +1656,7 @@ fn test_program_sbf_invoke_stable_genesis_and_bank() {
     let result = bank_client.send_and_confirm_instruction(&mint_keypair, instruction.clone());
     assert_eq!(
         result.unwrap_err().unwrap(),
-        TransactionError::ProgramAccountNotFound
+        TransactionError::InvalidProgramForExecution
     );
 
     load_upgradeable_program(
@@ -1882,7 +1882,7 @@ fn test_program_sbf_invoke_in_same_tx_as_deployment() {
             let results = execute_transactions(&bank, vec![tx]);
             assert_eq!(
                 results[0].as_ref().unwrap_err(),
-                &TransactionError::ProgramAccountNotFound,
+                &TransactionError::InvalidProgramForExecution,
             );
         } else {
             let (result, _, _) = process_transaction_and_record_inner(&bank, tx);

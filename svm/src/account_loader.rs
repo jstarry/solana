@@ -317,13 +317,11 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
 
     // Attempt to load and collect remaining non-fee payer accounts
     for (account_index, account_key) in account_keys.iter().enumerate().skip(1) {
-        let mut account_found = true;
-        let loaded_account = load_transaction_account(
+        let (loaded_account, account_found) = load_transaction_account(
             callbacks,
             message,
             account_key,
             account_index,
-            &mut account_found,
             &instruction_accounts[..],
             account_overrides,
             feature_set,
@@ -400,19 +398,18 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn load_transaction_account<CB: TransactionProcessingCallback>(
     callbacks: &CB,
     message: &impl SVMMessage,
     account_key: &Pubkey,
     account_index: usize,
-    account_found: &mut bool,
     instruction_accounts: &[&u8],
     account_overrides: Option<&AccountOverrides>,
     feature_set: &FeatureSet,
     rent_collector: &RentCollector,
     loaded_programs: &ProgramCacheForTxBatch,
-) -> Result<LoadedTransactionAccount> {
+) -> Result<(LoadedTransactionAccount, bool)> {
+    let mut account_found = true;
     let is_instruction_account = u8::try_from(account_index)
         .map(|i| instruction_accounts.contains(&&i))
         .unwrap_or(false);
@@ -469,7 +466,7 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
                 }
             })
             .unwrap_or_else(|| {
-                *account_found = false;
+                account_found = false;
                 let mut default_account = AccountSharedData::default();
                 // All new accounts must be rent-exempt (enforced in Bank::execute_loaded_transaction).
                 // Currently, rent collection sets rent_epoch to u64::MAX, but initializing the account
@@ -483,7 +480,7 @@ fn load_transaction_account<CB: TransactionProcessingCallback>(
             })
     };
 
-    Ok(loaded_account)
+    Ok((loaded_account, account_found))
 }
 
 fn account_shared_data_from_program(loaded_program: &ProgramCacheEntry) -> AccountSharedData {

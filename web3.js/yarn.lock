@@ -7772,8 +7772,8 @@ secure-compare@3.0.1:
   resolved "https://registry.npmjs.org/secure-compare/-/secure-compare-3.0.1.tgz"
 
 semantic-release@^24.0.0:
-  version "24.0.0"
-  resolved "https://registry.yarnpkg.com/semantic-release/-/semantic-release-24.0.0.tgz#779493f1426469ce0ef60cf74e50aba6e7a0af16"
+  version "24.1.0"
+  resolved "https://registry.yarnpkg.com/semantic-release/-/semantic-release-24.1.0.tgz#da799e6def44a0c3708fa1cfc2685d20e29b0f83"
   dependencies:
     "@semantic-release/commit-analyzer" "^13.0.0-beta.1"
     "@semantic-release/error" "^4.0.0"

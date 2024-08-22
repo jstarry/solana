@@ -5429,8 +5429,8 @@ jayson@^3.4.4:
     ws "^7.4.5"
 
 jayson@^4.0.0:
-  version "4.1.1"
-  resolved "https://registry.yarnpkg.com/jayson/-/jayson-4.1.1.tgz#282ff13d3cea09776db684b7eeca98c47b2fa99a"
+  version "4.1.2"
+  resolved "https://registry.yarnpkg.com/jayson/-/jayson-4.1.2.tgz#443c26a8658703e0b2e881117b09395d88b6982e"
   dependencies:
     "@types/connect" "^3.4.33"
     "@types/node" "^12.12.54"

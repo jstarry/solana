@@ -206,7 +206,6 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
 
     // Search all forks and collect the last vote made by each validator
     let mut last_votes = HashMap::new();
-    let default_vote_state = VoteState::default();
     for fork_slot in &fork_slots {
         let bank = &bank_forks[*fork_slot];
 
@@ -217,7 +216,6 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
             .sum();
         for (stake, vote_account) in bank.vote_accounts().values() {
             let vote_state = vote_account.vote_state();
-            let vote_state = vote_state.unwrap_or(&default_vote_state);
             if let Some(last_vote) = vote_state.votes.iter().last() {
                 let entry = last_votes.entry(vote_state.node_pubkey).or_insert((
                     last_vote.slot(),
@@ -258,7 +256,6 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
         loop {
             for (_, vote_account) in bank.vote_accounts().values() {
                 let vote_state = vote_account.vote_state();
-                let vote_state = vote_state.unwrap_or(&default_vote_state);
                 if let Some(last_vote) = vote_state.votes.iter().last() {
                     let validator_votes = all_votes.entry(vote_state.node_pubkey).or_default();
                     validator_votes
@@ -571,13 +568,13 @@ fn setup_slot_recording(
                 exit(1);
             });
 
-            let mut include_bank = false;
+            let mut include_bank_hash_components = false;
             let mut include_tx = false;
             if let Some(args) = arg_matches.values_of("record_slots_config") {
                 for arg in args {
                     match arg {
                         "tx" => include_tx = true,
-                        "accounts" => include_bank = true,
+                        "accounts" => include_bank_hash_components = true,
                         _ => unreachable!(),
                     }
                 }
@@ -603,16 +600,11 @@ fn setup_slot_recording(
             let slot_callback = Arc::new({
                 let slots = Arc::clone(&slot_details);
                 move |bank: &Bank| {
-                    let mut details = if include_bank {
-                        bank_hash_details::SlotDetails::try_from(bank).unwrap()
-                    } else {
-                        bank_hash_details::SlotDetails {
-                            slot: bank.slot(),
-                            bank_hash: bank.hash().to_string(),
-                            ..Default::default()
-                        }
-                    };
-
+                    let mut details = bank_hash_details::SlotDetails::new_from_bank(
+                        bank,
+                        include_bank_hash_components,
+                    )
+                    .unwrap();
                     let mut slots = slots.lock().unwrap();
 
                     if let Some(recorded_slot) = slots.iter_mut().find(|f| f.slot == details.slot) {
@@ -683,8 +675,6 @@ fn record_transactions(
 ) {
     for tsm in recv {
         if let TransactionStatusMessage::Batch(batch) = tsm {
-            let slot = batch.bank.slot();
-
             assert_eq!(batch.transactions.len(), batch.commit_results.len());
 
             let transactions: Vec<_> = batch
@@ -708,16 +698,14 @@ fn record_transactions(
                         .collect();
 
                     let is_simple_vote_tx = tx.is_simple_vote_transaction();
-                    let execution_results = commit_result
-                        .ok()
-                        .map(|committed_tx| committed_tx.execution_details);
+                    let commit_details = commit_result.ok().map(|committed_tx| committed_tx.into());
 
                     TransactionDetails {
                         signature: tx.signature().to_string(),
                         accounts,
                         instructions,
                         is_simple_vote_tx,
-                        execution_results,
+                        commit_details,
                         index,
                     }
                 })
@@ -725,11 +713,11 @@ fn record_transactions(
 
             let mut slots = slots.lock().unwrap();
 
-            if let Some(recorded_slot) = slots.iter_mut().find(|f| f.slot == slot) {
+            if let Some(recorded_slot) = slots.iter_mut().find(|f| f.slot == batch.slot) {
                 recorded_slot.transactions.extend(transactions);
             } else {
                 slots.push(SlotDetails {
-                    slot,
+                    slot: batch.slot,
                     transactions,
                     ..Default::default()
                 });

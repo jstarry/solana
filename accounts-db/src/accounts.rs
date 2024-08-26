@@ -1,6 +1,6 @@
 use {
     crate::{
-        account_locks::AccountLocks,
+        account_locks::{validate_account_locks, AccountLocks},
         accounts_db::{
             AccountStorageEntry, AccountsAddRootTiming, AccountsDb, LoadHint, LoadedAccount,
             ScanAccountStorageData, ScanStorageResult, VerifyAccountsHashAndLamportsConfig,
@@ -15,13 +15,15 @@ use {
         account::{AccountSharedData, ReadableAccount},
         address_lookup_table::{self, error::AddressLookupError, state::AddressLookupTable},
         clock::{BankId, Slot},
-        message::v0::{LoadedAddresses, MessageAddressTableLookup},
+        message::v0::LoadedAddresses,
         pubkey::Pubkey,
         slot_hashes::SlotHashes,
         transaction::{Result, SanitizedTransaction},
         transaction_context::TransactionAccount,
     },
-    solana_svm_transaction::svm_message::SVMMessage,
+    solana_svm_transaction::{
+        message_address_table_lookup::SVMMessageAddressTableLookup, svm_message::SVMMessage,
+    },
     std::{
         cmp::Reverse,
         collections::{BinaryHeap, HashSet},
@@ -82,12 +84,12 @@ impl Accounts {
     pub fn load_lookup_table_addresses(
         &self,
         ancestors: &Ancestors,
-        address_table_lookup: &MessageAddressTableLookup,
+        address_table_lookup: SVMMessageAddressTableLookup,
         slot_hashes: &SlotHashes,
     ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
         let table_account = self
             .accounts_db
-            .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
+            .load_with_fixed_root(ancestors, address_table_lookup.account_key)
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
@@ -99,12 +101,12 @@ impl Accounts {
             Ok(LoadedAddresses {
                 writable: lookup_table.lookup(
                     current_slot,
-                    &address_table_lookup.writable_indexes,
+                    address_table_lookup.writable_indexes,
                     slot_hashes,
                 )?,
                 readonly: lookup_table.lookup(
                     current_slot,
-                    &address_table_lookup.readonly_indexes,
+                    address_table_lookup.readonly_indexes,
                     slot_hashes,
                 )?,
             })
@@ -520,7 +522,7 @@ impl Accounts {
         // Validate the account locks, then get iterator if successful validation.
         let tx_account_locks_results: Vec<Result<_>> = txs
             .map(|tx| {
-                SanitizedTransaction::validate_account_locks(tx.message(), tx_account_lock_limit)
+                validate_account_locks(tx.account_keys(), tx_account_lock_limit)
                     .map(|_| TransactionAccountLocksIterator::new(tx))
             })
             .collect();
@@ -530,7 +532,7 @@ impl Accounts {
     #[must_use]
     pub fn lock_accounts_with_results<'a>(
         &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        txs: impl Iterator<Item = &'a (impl SVMMessage + 'a)>,
         results: impl Iterator<Item = Result<()>>,
         tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
@@ -538,11 +540,8 @@ impl Accounts {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
-                Ok(()) => SanitizedTransaction::validate_account_locks(
-                    tx.message(),
-                    tx_account_lock_limit,
-                )
-                .map(|_| TransactionAccountLocksIterator::new(tx)),
+                Ok(()) => validate_account_locks(tx.account_keys(), tx_account_lock_limit)
+                    .map(|_| TransactionAccountLocksIterator::new(tx)),
                 Err(err) => Err(err),
             })
             .collect();
@@ -614,7 +613,7 @@ mod tests {
             address_lookup_table::state::LookupTableMeta,
             hash::Hash,
             instruction::CompiledInstruction,
-            message::{Message, MessageHeader},
+            message::{v0::MessageAddressTableLookup, Message, MessageHeader},
             native_loader,
             signature::{signers::Signers, Keypair, Signer},
             transaction::{Transaction, TransactionError, MAX_TX_ACCOUNT_LOCKS},
@@ -711,7 +710,7 @@ mod tests {
         assert_eq!(
             accounts.load_lookup_table_addresses(
                 &ancestors,
-                &address_table_lookup,
+                SVMMessageAddressTableLookup::from(&address_table_lookup),
                 &SlotHashes::default(),
             ),
             Err(AddressLookupError::LookupTableAccountNotFound),
@@ -738,7 +737,7 @@ mod tests {
         assert_eq!(
             accounts.load_lookup_table_addresses(
                 &ancestors,
-                &address_table_lookup,
+                SVMMessageAddressTableLookup::from(&address_table_lookup),
                 &SlotHashes::default(),
             ),
             Err(AddressLookupError::InvalidAccountOwner),
@@ -765,7 +764,7 @@ mod tests {
         assert_eq!(
             accounts.load_lookup_table_addresses(
                 &ancestors,
-                &address_table_lookup,
+                SVMMessageAddressTableLookup::from(&address_table_lookup),
                 &SlotHashes::default(),
             ),
             Err(AddressLookupError::InvalidAccountData),
@@ -804,7 +803,7 @@ mod tests {
         assert_eq!(
             accounts.load_lookup_table_addresses(
                 &ancestors,
-                &address_table_lookup,
+                SVMMessageAddressTableLookup::from(&address_table_lookup),
                 &SlotHashes::default(),
             ),
             Ok(LoadedAddresses {

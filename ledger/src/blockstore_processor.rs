@@ -50,14 +50,13 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         signature::{Keypair, Signature},
-        timing,
         transaction::{
             Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
             VersionedTransaction,
         },
     },
     solana_svm::{
-        transaction_commit_result::TransactionCommitResult,
+        transaction_commit_result::{TransactionCommitResult, TransactionCommitResultExtensions},
         transaction_processor::ExecutionRecordingConfig,
     },
     solana_timings::{report_execute_timings, ExecuteTimingType, ExecuteTimings},
@@ -190,7 +189,7 @@ pub fn execute_batch(
     let committed_transactions = commit_results
         .iter()
         .zip(batch.sanitized_transactions())
-        .filter_map(|(commit_result, tx)| commit_result.is_ok().then_some(tx))
+        .filter_map(|(commit_result, tx)| commit_result.was_committed().then_some(tx))
         .collect_vec();
 
     let first_err = get_first_error(batch, &commit_results);
@@ -207,7 +206,7 @@ pub fn execute_batch(
             TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances);
 
         transaction_status_sender.send_transaction_status_batch(
-            bank.clone(),
+            bank.slot(),
             transactions,
             commit_results,
             balances,
@@ -238,7 +237,7 @@ fn check_block_cost_limits(
             if let Ok(committed_tx) = commit_result {
                 Some(CostModel::calculate_cost_for_executed_transaction(
                     tx,
-                    committed_tx.execution_details.executed_units,
+                    committed_tx.executed_units,
                     committed_tx.loaded_account_stats.loaded_accounts_data_size,
                     &bank.feature_set,
                 ))
@@ -1572,8 +1571,7 @@ fn confirm_slot_entries(
         recyclers.clone(),
         Arc::new(verify_transaction),
     );
-    let transaction_cpu_duration_us =
-        timing::duration_as_us(&transaction_verification_start.elapsed());
+    let transaction_cpu_duration_us = transaction_verification_start.elapsed().as_micros() as u64;
 
     let mut transaction_verification_result = match transaction_verification_result {
         Ok(transaction_verification_result) => transaction_verification_result,
@@ -1872,7 +1870,6 @@ fn load_frozen_forks(
             let new_root_bank = {
                 if bank_forks.read().unwrap().root() >= max_root {
                     supermajority_root_from_vote_accounts(
-                        bank.slot(),
                         bank.total_epoch_stake(),
                         &bank.vote_accounts(),
                     ).and_then(|supermajority_root| {
@@ -2007,27 +2004,17 @@ fn supermajority_root(roots: &[(Slot, u64)], total_epoch_stake: u64) -> Option<S
 }
 
 fn supermajority_root_from_vote_accounts(
-    bank_slot: Slot,
     total_epoch_stake: u64,
     vote_accounts: &VoteAccountsHashMap,
 ) -> Option<Slot> {
     let mut roots_stakes: Vec<(Slot, u64)> = vote_accounts
-        .iter()
-        .filter_map(|(key, (stake, account))| {
+        .values()
+        .filter_map(|(stake, account)| {
             if *stake == 0 {
                 return None;
             }
 
-            match account.vote_state().as_ref() {
-                Err(_) => {
-                    warn!(
-                        "Unable to get vote_state from account {} in bank: {}",
-                        key, bank_slot
-                    );
-                    None
-                }
-                Ok(vote_state) => Some((vote_state.root_slot?, *stake)),
-            }
+            Some((account.vote_state().root_slot?, *stake))
         })
         .collect();
 
@@ -2108,7 +2095,7 @@ pub enum TransactionStatusMessage {
 }
 
 pub struct TransactionStatusBatch {
-    pub bank: Arc<Bank>,
+    pub slot: Slot,
     pub transactions: Vec<SanitizedTransaction>,
     pub commit_results: Vec<TransactionCommitResult>,
     pub balances: TransactionBalancesSet,
@@ -2124,19 +2111,17 @@ pub struct TransactionStatusSender {
 impl TransactionStatusSender {
     pub fn send_transaction_status_batch(
         &self,
-        bank: Arc<Bank>,
+        slot: Slot,
         transactions: Vec<SanitizedTransaction>,
         commit_results: Vec<TransactionCommitResult>,
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         transaction_indexes: Vec<usize>,
     ) {
-        let slot = bank.slot();
-
         if let Err(e) = self
             .sender
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
-                bank,
+                slot,
                 transactions,
                 commit_results,
                 balances,
@@ -2245,15 +2230,13 @@ pub mod tests {
         },
         solana_svm::{
             transaction_commit_result::CommittedTransaction,
-            transaction_execution_result::{
-                TransactionExecutionDetails, TransactionLoadedAccountsStats,
-            },
+            transaction_execution_result::TransactionLoadedAccountsStats,
             transaction_processor::ExecutionRecordingConfig,
         },
         solana_vote::vote_account::VoteAccount,
         solana_vote_program::{
             self,
-            vote_state::{VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+            vote_state::{TowerSync, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
             vote_transaction,
         },
         std::{collections::BTreeSet, sync::RwLock},
@@ -3807,13 +3790,14 @@ pub mod tests {
 
     #[test]
     fn test_update_transaction_statuses() {
-        // Make sure instruction errors still update the signature cache
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config(11_000);
         let (bank, _bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
+
+        // Make sure instruction errors still update the signature cache
         let pubkey = solana_sdk::pubkey::new_rand();
         bank.transfer(1_000, &mint_keypair, &pubkey).unwrap();
         assert_eq!(bank.transaction_count(), 1);
@@ -3827,6 +3811,29 @@ pub mod tests {
         );
         assert_eq!(
             bank.transfer(10_001, &mint_keypair, &pubkey),
+            Err(TransactionError::AlreadyProcessed)
+        );
+
+        // Make sure fees-only transactions still update the signature cache
+        let missing_program_id = Pubkey::new_unique();
+        let tx = Transaction::new_signed_with_payer(
+            &[Instruction::new_with_bincode(
+                missing_program_id,
+                &10,
+                Vec::new(),
+            )],
+            Some(&mint_keypair.pubkey()),
+            &[&mint_keypair],
+            bank.last_blockhash(),
+        );
+        // First process attempt will fail but still update status cache
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(TransactionError::ProgramAccountNotFound)
+        );
+        // Second attempt will be rejected since tx was already in status cache
+        assert_eq!(
+            bank.process_transaction(&tx),
             Err(TransactionError::AlreadyProcessed)
         );
 
@@ -4292,13 +4299,13 @@ pub mod tests {
             .iter()
             .enumerate()
             .map(|(i, validator_keypairs)| {
+                let tower_sync = TowerSync::new_from_slots(vec![0], bank0.hash(), None);
                 if i % 3 == 0 {
                     // These votes are correct
                     expected_successful_voter_pubkeys
                         .insert(validator_keypairs.vote_keypair.pubkey());
-                    vote_transaction::new_vote_transaction(
-                        vec![0],
-                        bank0.hash(),
+                    vote_transaction::new_tower_sync_transaction(
+                        tower_sync,
                         bank_1_blockhash,
                         &validator_keypairs.node_keypair,
                         &validator_keypairs.vote_keypair,
@@ -4307,9 +4314,8 @@ pub mod tests {
                     )
                 } else if i % 3 == 1 {
                     // These have the wrong authorized voter
-                    vote_transaction::new_vote_transaction(
-                        vec![0],
-                        bank0.hash(),
+                    vote_transaction::new_tower_sync_transaction(
+                        tower_sync,
                         bank_1_blockhash,
                         &validator_keypairs.node_keypair,
                         &validator_keypairs.vote_keypair,
@@ -4318,9 +4324,8 @@ pub mod tests {
                     )
                 } else {
                     // These have an invalid vote for non-existent bank 2
-                    vote_transaction::new_vote_transaction(
-                        vec![bank1.slot() + 1],
-                        bank0.hash(),
+                    vote_transaction::new_tower_sync_transaction(
+                        TowerSync::from(vec![(bank1.slot() + 1, 1)]),
                         bank_1_blockhash,
                         &validator_keypairs.node_keypair,
                         &validator_keypairs.vote_keypair,
@@ -4458,10 +4463,9 @@ pub mod tests {
             .get(last_main_fork_slot - 1)
             .unwrap()
             .last_blockhash();
-        let slots: Vec<_> = (expected_root_slot..last_main_fork_slot).collect();
-        let vote_tx = vote_transaction::new_vote_transaction(
-            slots,
-            last_vote_bank_hash,
+        let tower_sync = TowerSync::new_from_slot(last_main_fork_slot - 1, last_vote_bank_hash);
+        let vote_tx = vote_transaction::new_tower_sync_transaction(
+            tower_sync,
             last_vote_blockhash,
             &validator_keypairs.node_keypair,
             &validator_keypairs.vote_keypair,
@@ -4519,10 +4523,9 @@ pub mod tests {
             .get(last_main_fork_slot)
             .unwrap()
             .last_blockhash();
-        let slots: Vec<_> = vec![last_main_fork_slot];
-        let vote_tx = vote_transaction::new_vote_transaction(
-            slots,
-            last_vote_bank_hash,
+        let tower_sync = TowerSync::new_from_slot(last_main_fork_slot, last_vote_bank_hash);
+        let vote_tx = vote_transaction::new_tower_sync_transaction(
+            tower_sync,
             last_vote_blockhash,
             &leader_keypair,
             &validator_keypairs.vote_keypair,
@@ -4589,23 +4592,20 @@ pub mod tests {
         };
 
         let total_stake = 10;
-        let slot = 100;
 
         // Supermajority root should be None
-        assert!(
-            supermajority_root_from_vote_accounts(slot, total_stake, &HashMap::default()).is_none()
-        );
+        assert!(supermajority_root_from_vote_accounts(total_stake, &HashMap::default()).is_none());
 
         // Supermajority root should be None
         let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 1)];
         let accounts = convert_to_vote_accounts(roots_stakes);
-        assert!(supermajority_root_from_vote_accounts(slot, total_stake, &accounts).is_none());
+        assert!(supermajority_root_from_vote_accounts(total_stake, &accounts).is_none());
 
         // Supermajority root should be 4, has 7/10 of the stake
         let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 5)];
         let accounts = convert_to_vote_accounts(roots_stakes);
         assert_eq!(
-            supermajority_root_from_vote_accounts(slot, total_stake, &accounts).unwrap(),
+            supermajority_root_from_vote_accounts(total_stake, &accounts).unwrap(),
             4
         );
 
@@ -4613,7 +4613,7 @@ pub mod tests {
         let roots_stakes = vec![(8, 1), (3, 1), (4, 1), (8, 6)];
         let accounts = convert_to_vote_accounts(roots_stakes);
         assert_eq!(
-            supermajority_root_from_vote_accounts(slot, total_stake, &accounts).unwrap(),
+            supermajority_root_from_vote_accounts(total_stake, &accounts).unwrap(),
             8
         );
     }
@@ -5079,20 +5079,17 @@ pub mod tests {
         let txs = vec![tx.clone(), tx];
         let commit_results = vec![
             Ok(CommittedTransaction {
+                status: Ok(()),
+                log_messages: None,
+                inner_instructions: None,
+                return_data: None,
+                executed_units: actual_execution_cu,
+                fee_details: FeeDetails::default(),
+                rent_debits: RentDebits::default(),
                 loaded_account_stats: TransactionLoadedAccountsStats {
                     loaded_accounts_data_size: actual_loaded_accounts_data_size,
                     loaded_accounts_count: 2,
                 },
-                execution_details: TransactionExecutionDetails {
-                    status: Ok(()),
-                    log_messages: None,
-                    inner_instructions: None,
-                    return_data: None,
-                    executed_units: actual_execution_cu,
-                    accounts_data_len_delta: 0,
-                },
-                fee_details: FeeDetails::default(),
-                rent_debits: RentDebits::default(),
             }),
             Err(TransactionError::AccountNotFound),
         ];

@@ -4,8 +4,9 @@ use {
     crate::{
         account_loader::{
             collect_rent_from_account, load_accounts, validate_fee_payer,
-            CheckedTransactionDetails, LoadedTransaction, TransactionCheckResult,
-            TransactionValidationResult, ValidatedTransactionDetails,
+            CheckedTransactionDetails, LoadedTransaction, LoadedTransactionAccount,
+            TransactionCheckResult, TransactionLoadResult, TransactionValidationResult,
+            ValidatedTransactionDetails,
         },
         account_overrides::AccountOverrides,
         message_processor::MessageProcessor,
@@ -13,10 +14,9 @@ use {
         rollback_accounts::RollbackAccounts,
         transaction_account_state_info::TransactionAccountStateInfo,
         transaction_error_metrics::TransactionErrorMetrics,
-        transaction_execution_result::{
-            ExecutedTransaction, TransactionExecutionDetails, TransactionExecutionResult,
-        },
+        transaction_execution_result::{ExecutedTransaction, TransactionExecutionDetails},
         transaction_processing_callback::TransactionProcessingCallback,
+        transaction_processing_result::{ProcessedTransaction, TransactionProcessingResult},
     },
     log::debug,
     percentage::Percentage,
@@ -37,18 +37,18 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, PROGRAM_OWNERS},
         clock::{Epoch, Slot},
-        feature_set::{remove_rounding_in_fee_calculation, FeatureSet},
+        feature_set::{self, remove_rounding_in_fee_calculation, FeatureSet},
         fee::{FeeBudgetLimits, FeeStructure},
         hash::Hash,
         inner_instruction::{InnerInstruction, InnerInstructionsList},
         instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
-        message::SanitizedMessage,
         pubkey::Pubkey,
         rent_collector::RentCollector,
         saturating_add_assign,
-        transaction::{self, SanitizedTransaction, TransactionError},
+        transaction::{self, TransactionError},
         transaction_context::{ExecutionRecord, TransactionContext},
     },
+    solana_svm_transaction::{svm_message::SVMMessage, svm_transaction::SVMTransaction},
     solana_timings::{ExecuteTimingType, ExecuteTimings},
     solana_type_overrides::sync::{atomic::Ordering, Arc, RwLock, RwLockReadGuard},
     solana_vote::vote_account::VoteAccountsHashMap,
@@ -69,9 +69,10 @@ pub struct LoadAndExecuteSanitizedTransactionsOutput {
     pub error_metrics: TransactionErrorMetrics,
     /// Timings for transaction batch execution.
     pub execute_timings: ExecuteTimings,
-    // Vector of results indicating whether a transaction was executed or could not
-    // be executed. Note executed transactions can still have failed!
-    pub execution_results: Vec<TransactionExecutionResult>,
+    /// Vector of results indicating whether a transaction was processed or
+    /// could not be processed. Note processed transactions can still have a
+    /// failure result meaning that the transaction will be rolled back.
+    pub processing_results: Vec<TransactionProcessingResult>,
 }
 
 /// Configuration of the recording capabilities for transaction execution
@@ -225,7 +226,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     pub fn load_and_execute_sanitized_transactions<CB: TransactionProcessingCallback>(
         &self,
         callbacks: &CB,
-        sanitized_txs: &[SanitizedTransaction],
+        sanitized_txs: &[impl SVMTransaction],
         check_results: Vec<TransactionCheckResult>,
         environment: &TransactionProcessingEnvironment,
         config: &TransactionProcessingConfig,
@@ -268,13 +269,12 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             );
 
             if program_cache_for_tx_batch.hit_max_limit {
-                const ERROR: TransactionError = TransactionError::ProgramCacheHitMaxLimit;
-                let execution_results =
-                    vec![TransactionExecutionResult::NotExecuted(ERROR); sanitized_txs.len()];
                 return LoadAndExecuteSanitizedTransactionsOutput {
                     error_metrics,
                     execute_timings,
-                    execution_results,
+                    processing_results: (0..sanitized_txs.len())
+                        .map(|_| Err(TransactionError::ProgramCacheHitMaxLimit))
+                        .collect(),
                 };
             }
 
@@ -294,13 +294,23 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             &program_cache_for_tx_batch,
         ));
 
-        let (execution_results, execution_us): (Vec<TransactionExecutionResult>, u64) =
+        let enable_transaction_loading_failure_fees = environment
+            .feature_set
+            .is_active(&feature_set::enable_transaction_loading_failure_fees::id());
+        let (processing_results, execution_us): (Vec<TransactionProcessingResult>, u64) =
             measure_us!(loaded_transactions
                 .into_iter()
                 .zip(sanitized_txs.iter())
                 .map(|(load_result, tx)| match load_result {
-                    Err(e) => TransactionExecutionResult::NotExecuted(e.clone()),
-                    Ok(loaded_transaction) => {
+                    TransactionLoadResult::NotLoaded(err) => Err(err),
+                    TransactionLoadResult::FeesOnly(fees_only_tx) => {
+                        if enable_transaction_loading_failure_fees {
+                            Ok(ProcessedTransaction::FeesOnly(Box::new(fees_only_tx)))
+                        } else {
+                            Err(fees_only_tx.load_error)
+                        }
+                    }
+                    TransactionLoadResult::Loaded(loaded_transaction) => {
                         let executed_tx = self.execute_loaded_transaction(
                             tx,
                             loaded_transaction,
@@ -317,7 +327,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                             program_cache_for_tx_batch.merge(&executed_tx.programs_modified_by_tx);
                         }
 
-                        TransactionExecutionResult::Executed(Box::new(executed_tx))
+                        Ok(ProcessedTransaction::Executed(Box::new(executed_tx)))
                     }
                 })
                 .collect());
@@ -354,15 +364,15 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         LoadAndExecuteSanitizedTransactionsOutput {
             error_metrics,
             execute_timings,
-            execution_results,
+            processing_results,
         }
     }
 
-    fn validate_fees<CB: TransactionProcessingCallback>(
+    fn validate_fees<CB: TransactionProcessingCallback, T: SVMMessage>(
         &self,
         callbacks: &CB,
         account_overrides: Option<&AccountOverrides>,
-        sanitized_txs: &[impl core::borrow::Borrow<SanitizedTransaction>],
+        sanitized_txs: &[impl core::borrow::Borrow<T>],
         check_results: Vec<TransactionCheckResult>,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
@@ -374,7 +384,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             .zip(check_results)
             .map(|(sanitized_tx, check_result)| {
                 check_result.and_then(|checked_details| {
-                    let message = sanitized_tx.borrow().message();
+                    let message = sanitized_tx.borrow();
                     self.validate_transaction_fee_payer(
                         callbacks,
                         account_overrides,
@@ -397,7 +407,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         &self,
         callbacks: &CB,
         account_overrides: Option<&AccountOverrides>,
-        message: &SanitizedMessage,
+        message: &impl SVMMessage,
         checked_details: CheckedTransactionDetails,
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
@@ -407,9 +417,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let compute_budget_limits = process_compute_budget_instructions(
             message.program_instructions_iter(),
         )
-        .map_err(|err| {
+        .inspect_err(|_err| {
             error_counters.invalid_compute_budget += 1;
-            err
         })?;
 
         let fee_payer_address = message.fee_payer();
@@ -468,10 +477,13 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         Ok(ValidatedTransactionDetails {
             fee_details,
-            fee_payer_account,
-            fee_payer_rent_debit,
             rollback_accounts,
             compute_budget_limits,
+            loaded_fee_payer_account: LoadedTransactionAccount {
+                loaded_size: fee_payer_account.data().len(),
+                account: fee_payer_account,
+                rent_collected: fee_payer_rent_debit,
+            },
         })
     }
 
@@ -479,15 +491,14 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     /// to their usage counters, for the transactions with a valid blockhash or nonce.
     fn filter_executable_program_accounts<CB: TransactionProcessingCallback>(
         callbacks: &CB,
-        txs: &[SanitizedTransaction],
+        txs: &[impl SVMMessage],
         validation_results: &[TransactionValidationResult],
         program_owners: &[Pubkey],
     ) -> HashMap<Pubkey, u64> {
         let mut result: HashMap<Pubkey, u64> = HashMap::new();
         validation_results.iter().zip(txs).for_each(|etx| {
             if let (Ok(_), tx) = etx {
-                tx.message()
-                    .account_keys()
+                tx.account_keys()
                     .iter()
                     .for_each(|key| match result.entry(*key) {
                         Entry::Occupied(mut entry) => {
@@ -693,7 +704,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
     #[allow(clippy::too_many_arguments)]
     fn execute_loaded_transaction(
         &self,
-        tx: &SanitizedTransaction,
+        tx: &impl SVMTransaction,
         mut loaded_transaction: LoadedTransaction,
         execute_timings: &mut ExecuteTimings,
         error_metrics: &mut TransactionErrorMetrics,
@@ -705,7 +716,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         fn transaction_accounts_lamports_sum(
             accounts: &[(Pubkey, AccountSharedData)],
-            message: &SanitizedMessage,
+            message: &impl SVMMessage,
         ) -> Option<u128> {
             let mut lamports_sum = 0u128;
             for i in 0..message.account_keys().len() {
@@ -721,7 +732,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             .unwrap_or_default();
 
         let lamports_before_tx =
-            transaction_accounts_lamports_sum(&transaction_accounts, tx.message()).unwrap_or(0);
+            transaction_accounts_lamports_sum(&transaction_accounts, tx).unwrap_or(0);
 
         let compute_budget = config
             .compute_budget
@@ -737,7 +748,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         transaction_context.set_signature(tx.signature());
 
         let pre_account_state_info =
-            TransactionAccountStateInfo::new(&rent, &transaction_context, tx.message());
+            TransactionAccountStateInfo::new(&rent, &transaction_context, tx);
 
         let log_collector = if config.recording_config.enable_log_recording {
             match config.log_messages_bytes_limit {
@@ -773,7 +784,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
 
         let mut process_message_time = Measure::start("process_message_time");
         let process_result = MessageProcessor::process_message(
-            tx.message(),
+            tx,
             &loaded_transaction.program_indices,
             &mut invoke_context,
             execute_timings,
@@ -791,7 +802,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         let mut status = process_result
             .and_then(|info| {
                 let post_account_state_info =
-                    TransactionAccountStateInfo::new(&rent, &transaction_context, tx.message());
+                    TransactionAccountStateInfo::new(&rent, &transaction_context, tx);
                 TransactionAccountStateInfo::verify_changes(
                     &pre_account_state_info,
                     &post_account_state_info,
@@ -838,7 +849,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         } = transaction_context.into();
 
         if status.is_ok()
-            && transaction_accounts_lamports_sum(&accounts, tx.message())
+            && transaction_accounts_lamports_sum(&accounts, tx)
                 .filter(|lamports_after_tx| lamports_before_tx == *lamports_after_tx)
                 .is_none()
         {
@@ -989,7 +1000,7 @@ mod tests {
             fee::FeeDetails,
             fee_calculator::FeeCalculator,
             hash::Hash,
-            message::{LegacyMessage, Message, MessageHeader},
+            message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
             nonce,
             rent_collector::{RentCollector, RENT_EXEMPT_RENT_EPOCH},
             rent_debits::RentDebits,
@@ -1809,7 +1820,8 @@ mod tests {
             &Hash::new_unique(),
         ));
         let compute_budget_limits =
-            process_compute_budget_instructions(message.program_instructions_iter()).unwrap();
+            process_compute_budget_instructions(SVMMessage::program_instructions_iter(&message))
+                .unwrap();
         let fee_payer_address = message.fee_payer();
         let current_epoch = 42;
         let rent_collector = RentCollector {
@@ -1875,8 +1887,11 @@ mod tests {
                 ),
                 compute_budget_limits,
                 fee_details: FeeDetails::new(transaction_fee, priority_fee, false),
-                fee_payer_rent_debit,
-                fee_payer_account: post_validation_fee_payer_account,
+                loaded_fee_payer_account: LoadedTransactionAccount {
+                    loaded_size: fee_payer_account.data().len(),
+                    account: post_validation_fee_payer_account,
+                    rent_collected: fee_payer_rent_debit,
+                },
             })
         );
     }
@@ -1890,7 +1905,8 @@ mod tests {
             &Hash::new_unique(),
         ));
         let compute_budget_limits =
-            process_compute_budget_instructions(message.program_instructions_iter()).unwrap();
+            process_compute_budget_instructions(SVMMessage::program_instructions_iter(&message))
+                .unwrap();
         let fee_payer_address = message.fee_payer();
         let mut rent_collector = RentCollector::default();
         rent_collector.rent.lamports_per_byte_year = 1_000_000;
@@ -1948,8 +1964,11 @@ mod tests {
                 ),
                 compute_budget_limits,
                 fee_details: FeeDetails::new(transaction_fee, 0, false),
-                fee_payer_rent_debit,
-                fee_payer_account: post_validation_fee_payer_account,
+                loaded_fee_payer_account: LoadedTransactionAccount {
+                    loaded_size: fee_payer_account.data().len(),
+                    account: post_validation_fee_payer_account,
+                    rent_collected: fee_payer_rent_debit,
+                }
             })
         );
     }
@@ -2133,7 +2152,8 @@ mod tests {
             &Hash::new_unique(),
         ));
         let compute_budget_limits =
-            process_compute_budget_instructions(message.program_instructions_iter()).unwrap();
+            process_compute_budget_instructions(SVMMessage::program_instructions_iter(&message))
+                .unwrap();
         let fee_payer_address = message.fee_payer();
         let min_balance = Rent::default().minimum_balance(nonce::State::size());
         let transaction_fee = lamports_per_signature;
@@ -2195,8 +2215,11 @@ mod tests {
                     ),
                     compute_budget_limits,
                     fee_details: FeeDetails::new(transaction_fee, priority_fee, false),
-                    fee_payer_rent_debit: 0, // rent due
-                    fee_payer_account: post_validation_fee_payer_account,
+                    loaded_fee_payer_account: LoadedTransactionAccount {
+                        loaded_size: fee_payer_account.data().len(),
+                        account: post_validation_fee_payer_account,
+                        rent_collected: 0,
+                    }
                 })
             );
         }

@@ -1895,4 +1895,68 @@ mod tests {
         let circ_buf: CircBuf<()> = bincode::deserialize(data).unwrap();
         assert_eq!(circ_buf.last(), None);
     }
+
+    impl VoteState {
+        fn rand_vote_state_for_tests() -> Self {
+            let mut rng = rand::thread_rng();
+
+            let votes = (0..31)
+                .map(|_| LandedVote {
+                    latency: rng.gen(),
+                    lockout: Lockout::new_with_confirmation_count(rng.gen(), rng.gen()),
+                })
+                .collect();
+
+            let root_slot = rng.gen_bool(0.8).then(|| rng.gen());
+
+            let mut authorized_voters = AuthorizedVoters::default();
+            for _ in 0..=MAX_LEADER_SCHEDULE_EPOCH_OFFSET {
+                authorized_voters.insert(rng.gen(), Pubkey::new_unique());
+            }
+
+            let prior_voters = CircBuf {
+                buf: std::array::from_fn(|_| PriorVotersItem {
+                    voter: Pubkey::new_unique(),
+                    start_epoch_inclusive: rng.gen(),
+                    end_epoch_exclusive: rng.gen(),
+                }),
+                idx: rng.gen_range(0..MAX_ITEMS),
+                is_empty: false,
+            };
+
+            let epoch_credits = (0..MAX_EPOCH_CREDITS_HISTORY)
+                .map(|_| EpochCreditsItem {
+                    epoch: rng.gen(),
+                    credits: rng.gen(),
+                    prev_credits: rng.gen(),
+                })
+                .collect();
+
+            Self {
+                node_pubkey: Pubkey::new_unique(),
+                authorized_withdrawer: Pubkey::new_unique(),
+                commission: rng.gen(),
+                votes,
+                root_slot,
+                authorized_voters,
+                prior_voters,
+                epoch_credits,
+                last_timestamp: BlockTimestamp {
+                    slot: rng.gen(),
+                    timestamp: rng.gen(),
+                },
+            }
+        }
+    }
+
+    #[test]
+    fn test_deserialize_vote_state() {
+        let vote_state = VoteState::rand_vote_state_for_tests();
+        let vote_bytes =
+            bincode::serialize(&VoteStateVersions::new_current(vote_state.clone())).unwrap();
+
+        let mut deserialized_vote_state = VoteState::default();
+        VoteState::deserialize_into(vote_bytes.as_slice(), &mut deserialized_vote_state).unwrap();
+        assert_eq!(vote_state, deserialized_vote_state);
+    }
 }

@@ -1103,12 +1103,12 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^19.4.0":
-  version "19.4.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-19.4.0.tgz#9f93d3ed07e531fcfa371015c8c87e0aa26d974f"
+"@commitlint/cli@^19.4.1":
+  version "19.4.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-19.4.1.tgz#51dbd88750620c9e5fb6f5bc773872728a29674a"
   dependencies:
     "@commitlint/format" "^19.3.0"
-    "@commitlint/lint" "^19.2.2"
+    "@commitlint/lint" "^19.4.1"
     "@commitlint/load" "^19.4.0"
     "@commitlint/read" "^19.4.0"
     "@commitlint/types" "^19.0.3"
@@ -1158,13 +1158,13 @@
     "@commitlint/types" "^19.0.3"
     semver "^7.6.0"
 
-"@commitlint/lint@^19.2.2":
-  version "19.2.2"
-  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-19.2.2.tgz#57f69e24bd832a7dcce8ebf82d11e3bf03ccc2a9"
+"@commitlint/lint@^19.4.1":
+  version "19.4.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-19.4.1.tgz#0760d34fcdaee0bf05befe666ca14c0fc1ecb57e"
   dependencies:
     "@commitlint/is-ignored" "^19.2.2"
     "@commitlint/parse" "^19.0.3"
-    "@commitlint/rules" "^19.0.3"
+    "@commitlint/rules" "^19.4.1"
     "@commitlint/types" "^19.0.3"
 
 "@commitlint/load@^19.4.0":
@@ -1215,9 +1215,9 @@
     lodash.mergewith "^4.6.2"
     resolve-from "^5.0.0"
 
-"@commitlint/rules@^19.0.3":
-  version "19.0.3"
-  resolved "https://registry.yarnpkg.com/@commitlint/rules/-/rules-19.0.3.tgz#de647a9055847cae4f3ae32b4798096b604584f3"
+"@commitlint/rules@^19.4.1":
+  version "19.4.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/rules/-/rules-19.4.1.tgz#df15baad1092e2be1b39aa1aa7cc05e12f59f677"
   dependencies:
     "@commitlint/ensure" "^19.0.3"
     "@commitlint/message" "^19.0.0"
@@ -1236,10 +1236,10 @@
     find-up "^7.0.0"
 
 "@commitlint/travis-cli@^19.0.3":
-  version "19.4.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-19.4.0.tgz#154debe7a525166308b693f8469423f461e994f8"
+  version "19.4.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-19.4.1.tgz#ae3b9bdf515df5032e8d09594a60f9178f1cd805"
   dependencies:
-    "@commitlint/cli" "^19.4.0"
+    "@commitlint/cli" "^19.4.1"
     execa "^8.0.1"
 
 "@commitlint/types@^19.0.3":

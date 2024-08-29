@@ -140,15 +140,15 @@ fn read_epoch_credits<T: AsRef<[u8]>>(
     cursor: &mut Cursor<T>,
 ) -> Result<Vec<EpochCreditsItem>, InstructionError> {
     let epoch_credit_count = read_u64(cursor)? as usize;
-    if epoch_credit_count > MAX_EPOCH_CREDITS_HISTORY {
-        return Err(InstructionError::InvalidAccountData);
-    }
+    let mut epoch_credits = Vec::with_capacity(epoch_credit_count.min(MAX_EPOCH_CREDITS_HISTORY));
 
-    let mut epoch_credits = Vec::with_capacity(epoch_credit_count);
     // Vote state is always serialized using bincode which uses little
     // endian by default so when targeting little endian, we can optimize
-    // deserialization by copying the serialized data directly into memory
-    if cfg!(target_endian = "little") {
+    // deserialization by copying the serialized data directly into memory.
+    // But only do this optimization if the epoch_credits_count isn't bigger
+    // than the max history so that we don't overshoot the allocated vec buffer
+    // bounds.
+    if cfg!(target_endian = "little") && epoch_credit_count <= MAX_EPOCH_CREDITS_HISTORY {
         let total_bytes = epoch_credit_count.saturating_mul(mem::size_of::<EpochCreditsItem>());
 
         // Safety: This is safe because we have pre-allocated enough space in the Vec,

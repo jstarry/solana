@@ -1897,9 +1897,7 @@ mod tests {
     }
 
     impl VoteState {
-        fn rand_vote_state_for_tests() -> Self {
-            let mut rng = rand::thread_rng();
-
+        fn rand_vote_state_for_tests<R: Rng>(rng: &mut R) -> Self {
             let votes = (0..31)
                 .map(|_| LandedVote {
                     latency: rng.gen(),
@@ -1951,7 +1949,31 @@ mod tests {
 
     #[test]
     fn test_deserialize_vote_state() {
-        let vote_state = VoteState::rand_vote_state_for_tests();
+        let mut rng = rand::thread_rng();
+        let vote_state = VoteState::rand_vote_state_for_tests(&mut rng);
+        let vote_bytes =
+            bincode::serialize(&VoteStateVersions::new_current(vote_state.clone())).unwrap();
+
+        let mut deserialized_vote_state = VoteState::default();
+        VoteState::deserialize_into(vote_bytes.as_slice(), &mut deserialized_vote_state).unwrap();
+        assert_eq!(vote_state, deserialized_vote_state);
+    }
+
+    #[test]
+    fn test_deserialize_vote_state_with_too_many_epoch_credits() {
+        // This test ensures that an invalid epoch credits length doesn't cause
+        // any issues with optimized deserialization. This should never actually
+        // happen in the runtime though because the vote program doesn't allow
+        // epoch credits to be too long.
+        let mut rng = rand::thread_rng();
+        let mut vote_state = VoteState::rand_vote_state_for_tests(&mut rng);
+        while vote_state.epoch_credits.len() <= MAX_EPOCH_CREDITS_HISTORY {
+            vote_state.epoch_credits.push(EpochCreditsItem {
+                epoch: rng.gen(),
+                credits: rng.gen(),
+                prev_credits: rng.gen(),
+            });
+        }
         let vote_bytes =
             bincode::serialize(&VoteStateVersions::new_current(vote_state.clone())).unwrap();
 

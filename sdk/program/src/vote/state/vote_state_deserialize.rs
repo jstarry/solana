@@ -11,7 +11,9 @@ use {
     std::{
         collections::VecDeque,
         io::{Cursor, Read},
+        mem,
         ptr::addr_of_mut,
+        slice,
     },
 };
 
@@ -103,13 +105,16 @@ fn read_prior_voters_into<T: AsRef<[u8]>>(
         let prior_voters = addr_of_mut!((*vote_state).prior_voters);
         let prior_voters_buf = addr_of_mut!((*prior_voters).buf) as *mut PriorVotersItem;
 
+        // Vote state is always serialized using bincode which uses little
+        // endian by default so when targeting little endian, we can optimize
+        // deserialization by copying the serialized data directly into memory
         if cfg!(target_endian = "little") {
-            let total_bytes = MAX_ITEMS.saturating_mul(std::mem::size_of::<PriorVotersItem>());
+            let total_bytes = MAX_ITEMS.saturating_mul(mem::size_of::<PriorVotersItem>());
             let buffer_ptr = prior_voters_buf as *mut u8;
 
             // Read the bytes directly into the buffer's uninitialized memory
             cursor
-                .read_exact(std::slice::from_raw_parts_mut(buffer_ptr, total_bytes))
+                .read_exact(slice::from_raw_parts_mut(buffer_ptr, total_bytes))
                 .map_err(|_| InstructionError::InvalidAccountData)?;
         } else {
             for i in 0..MAX_ITEMS {
@@ -140,9 +145,11 @@ fn read_epoch_credits<T: AsRef<[u8]>>(
     }
 
     let mut epoch_credits = Vec::with_capacity(epoch_credit_count);
+    // Vote state is always serialized using bincode which uses little
+    // endian by default so when targeting little endian, we can optimize
+    // deserialization by copying the serialized data directly into memory
     if cfg!(target_endian = "little") {
-        let total_bytes =
-            epoch_credit_count.saturating_mul(std::mem::size_of::<EpochCreditsItem>());
+        let total_bytes = epoch_credit_count.saturating_mul(mem::size_of::<EpochCreditsItem>());
 
         // Safety: This is safe because we have pre-allocated enough space in the Vec,
         // and we will manually initialize each element by reading from the cursor.
@@ -152,7 +159,7 @@ fn read_epoch_credits<T: AsRef<[u8]>>(
 
             // Read the bytes directly into the vector's uninitialized memory
             cursor
-                .read_exact(std::slice::from_raw_parts_mut(buffer_ptr, total_bytes))
+                .read_exact(slice::from_raw_parts_mut(buffer_ptr, total_bytes))
                 .map_err(|_| InstructionError::InvalidAccountData)?;
 
             // Set the length of the vector to reflect the initialized elements

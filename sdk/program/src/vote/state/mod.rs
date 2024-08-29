@@ -1959,4 +1959,14 @@ mod tests {
         VoteState::deserialize_into(vote_bytes.as_slice(), &mut deserialized_vote_state).unwrap();
         assert_eq!(vote_state, deserialized_vote_state);
     }
+
+    #[test]
+    fn test_epoch_credits_item_size_of() {
+        assert_eq!(24, mem::size_of::<EpochCreditsItem>());
+    }
+
+    #[test]
+    fn test_prior_voter_item_size_of() {
+        assert_eq!(48, mem::size_of::<PriorVotersItem>());
+    }
 }

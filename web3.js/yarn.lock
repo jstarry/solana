@@ -1761,9 +1761,9 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@2.3.1":
-  version "2.3.1"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.3.1.tgz#238200dbdce5c00ae28c8f2a55ac053c3be71668"
+"@puppeteer/browsers@2.4.0":
+  version "2.4.0"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.4.0.tgz#a0dd0f4e381e53f509109ae83b891db5972750f5"
   dependencies:
     debug "^4.3.6"
     extract-zip "^2.0.1"
@@ -7619,11 +7619,11 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@23.2.2:
-  version "23.2.2"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-23.2.2.tgz#d90f190087a0c1ec196bc2352c7bc498ddf99988"
+puppeteer-core@23.3.0:
+  version "23.3.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-23.3.0.tgz#e9e7367367e230ab3ed0b6b674170b09ba0a96e3"
   dependencies:
-    "@puppeteer/browsers" "2.3.1"
+    "@puppeteer/browsers" "2.4.0"
     chromium-bidi "0.6.5"
     debug "^4.3.6"
     devtools-protocol "0.0.1330662"
@@ -7631,14 +7631,14 @@ puppeteer-core@23.2.2:
     ws "^8.18.0"
 
 puppeteer@^23.0.1:
-  version "23.2.2"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-23.2.2.tgz#e249e34e993aa02528666444d8702978b5c0dbbe"
+  version "23.3.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-23.3.0.tgz#f2a3b28c05c17504adf1a903247e01f93e27d6b5"
   dependencies:
-    "@puppeteer/browsers" "2.3.1"
+    "@puppeteer/browsers" "2.4.0"
     chromium-bidi "0.6.5"
     cosmiconfig "^9.0.0"
     devtools-protocol "0.0.1330662"
-    puppeteer-core "23.2.2"
+    puppeteer-core "23.3.0"
     typed-query-selector "^2.12.0"
 
 qrcode-terminal@^0.12.0:

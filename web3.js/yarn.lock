@@ -1116,10 +1116,10 @@
     yargs "^17.0.0"
 
 "@commitlint/config-conventional@^19.0.0":
-  version "19.4.1"
-  resolved "https://registry.yarnpkg.com/@commitlint/config-conventional/-/config-conventional-19.4.1.tgz#c6f05d478c7576d5affff82d67d9ca37e96c94e6"
+  version "19.5.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/config-conventional/-/config-conventional-19.5.0.tgz#f838cdaed0e0e223cdc2e865f055d474a49fe18c"
   dependencies:
-    "@commitlint/types" "^19.0.3"
+    "@commitlint/types" "^19.5.0"
     conventional-changelog-conventionalcommits "^7.0.2"
 
 "@commitlint/config-validator@^19.0.3":
@@ -1242,9 +1242,9 @@
     "@commitlint/cli" "^19.4.1"
     execa "^8.0.1"
 
-"@commitlint/types@^19.0.3":
-  version "19.0.3"
-  resolved "https://registry.yarnpkg.com/@commitlint/types/-/types-19.0.3.tgz#feff4ecac2b5c359f2a57f9ab094b2ac80ef0266"
+"@commitlint/types@^19.0.3", "@commitlint/types@^19.5.0":
+  version "19.5.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/types/-/types-19.5.0.tgz#c5084d1231d4dd50e40bdb656ee7601f691400b3"
   dependencies:
     "@types/conventional-commits-parser" "^5.0.0"
     chalk "^5.3.0"

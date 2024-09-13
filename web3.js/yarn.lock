@@ -1241,13 +1241,6 @@
     "@commitlint/cli" "^19.5.0"
     tinyexec "^0.3.0"
 
-"@commitlint/types@^19.0.3", "@commitlint/types@^19.5.0":
-  version "19.5.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/types/-/types-19.5.0.tgz#c5084d1231d4dd50e40bdb656ee7601f691400b3"
-  dependencies:
-    "@types/conventional-commits-parser" "^5.0.0"
-    chalk "^5.3.0"
-
 "@commitlint/types@^19.5.0":
   version "19.5.0"
   resolved "https://registry.yarnpkg.com/@commitlint/types/-/types-19.5.0.tgz#c5084d1231d4dd50e40bdb656ee7601f691400b3"
@@ -2030,35 +2023,29 @@
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/@sindresorhus/merge-streams/-/merge-streams-4.0.0.tgz#abb11d99aeb6d27f1b563c38147a72d50058e339"
 
-"@sinonjs/commons@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@sinonjs/commons/-/commons-2.0.0.tgz#fd4ca5b063554307e8327b4564bd56d3b73924a3"
-  dependencies:
-    type-detect "4.0.8"
-
-"@sinonjs/commons@^3.0.0", "@sinonjs/commons@^3.0.1":
+"@sinonjs/commons@^3.0.1":
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/@sinonjs/commons/-/commons-3.0.1.tgz#1029357e44ca901a615585f6d27738dbc89084cd"
   dependencies:
     type-detect "4.0.8"
 
-"@sinonjs/fake-timers@11.2.2", "@sinonjs/fake-timers@^11.2.2":
-  version "11.2.2"
-  resolved "https://registry.yarnpkg.com/@sinonjs/fake-timers/-/fake-timers-11.2.2.tgz#50063cc3574f4a27bd8453180a04171c85cc9699"
+"@sinonjs/fake-timers@13.0.1", "@sinonjs/fake-timers@^13.0.1":
+  version "13.0.1"
+  resolved "https://registry.yarnpkg.com/@sinonjs/fake-timers/-/fake-timers-13.0.1.tgz#7724d20630f0d306c706fdf36d0a29c8dbd525d0"
   dependencies:
-    "@sinonjs/commons" "^3.0.0"
+    "@sinonjs/commons" "^3.0.1"
 
-"@sinonjs/samsam@^8.0.0":
-  version "8.0.0"
-  resolved "https://registry.yarnpkg.com/@sinonjs/samsam/-/samsam-8.0.0.tgz#0d488c91efb3fa1442e26abea81759dfc8b5ac60"
+"@sinonjs/samsam@^8.0.1":
+  version "8.0.2"
+  resolved "https://registry.yarnpkg.com/@sinonjs/samsam/-/samsam-8.0.2.tgz#e4386bf668ff36c95949e55a38dc5f5892fc2689"
   dependencies:
-    "@sinonjs/commons" "^2.0.0"
+    "@sinonjs/commons" "^3.0.1"
     lodash.get "^4.4.2"
-    type-detect "^4.0.8"
+    type-detect "^4.1.0"
 
-"@sinonjs/text-encoding@^0.7.2":
-  version "0.7.2"
-  resolved "https://registry.yarnpkg.com/@sinonjs/text-encoding/-/text-encoding-0.7.2.tgz#5981a8db18b56ba38ef0efb7d995b12aa7b51918"
+"@sinonjs/text-encoding@^0.7.3":
+  version "0.7.3"
+  resolved "https://registry.yarnpkg.com/@sinonjs/text-encoding/-/text-encoding-0.7.3.tgz#282046f03e886e352b2d5f5da5eb755e01457f3f"
 
 "@solana/buffer-layout-utils@^0.2.0":
   version "0.2.0"
@@ -3692,6 +3679,10 @@ diff@^4.0.1:
 diff@^5.1.0, diff@^5.2.0:
   version "5.2.0"
   resolved "https://registry.yarnpkg.com/diff/-/diff-5.2.0.tgz#26ded047cd1179b78b9537d5ef725503ce1ae531"
+
+diff@^7.0.0:
+  version "7.0.0"
+  resolved "https://registry.yarnpkg.com/diff/-/diff-7.0.0.tgz#3fb34d387cd76d803f6eebea67b921dab0182a9a"
 
 dir-glob@^3.0.1:
   version "3.0.1"
@@ -6640,15 +6631,15 @@ nice-try@^1.0.4:
   version "1.0.5"
   resolved "https://registry.npmjs.org/nice-try/-/nice-try-1.0.5.tgz"
 
-nise@^6.0.0:
-  version "6.0.0"
-  resolved "https://registry.yarnpkg.com/nise/-/nise-6.0.0.tgz#ae56fccb5d912037363c3b3f29ebbfa28bde8b48"
+nise@^6.1.0:
+  version "6.1.0"
+  resolved "https://registry.yarnpkg.com/nise/-/nise-6.1.0.tgz#468a5ea20a114e4ec4ddd18175c18a513bd2ce07"
   dependencies:
-    "@sinonjs/commons" "^3.0.0"
-    "@sinonjs/fake-timers" "^11.2.2"
-    "@sinonjs/text-encoding" "^0.7.2"
+    "@sinonjs/commons" "^3.0.1"
+    "@sinonjs/fake-timers" "^13.0.1"
+    "@sinonjs/text-encoding" "^0.7.3"
     just-extend "^6.2.0"
-    path-to-regexp "^6.2.1"
+    path-to-regexp "^8.1.0"
 
 node-addon-api@^2.0.0:
   version "2.0.2"
@@ -7422,9 +7413,9 @@ path-to-regexp@0.1.7:
   version "0.1.7"
   resolved "https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-0.1.7.tgz"
 
-path-to-regexp@^6.2.1:
-  version "6.2.2"
-  resolved "https://registry.yarnpkg.com/path-to-regexp/-/path-to-regexp-6.2.2.tgz#324377a83e5049cbecadc5554d6a63a9a4866b36"
+path-to-regexp@^8.1.0:
+  version "8.1.0"
+  resolved "https://registry.yarnpkg.com/path-to-regexp/-/path-to-regexp-8.1.0.tgz#4d687606ed0be8ed512ba802eb94d620cb1a86f0"
 
 path-type@^3.0.0:
   version "3.0.0"
@@ -8365,16 +8356,16 @@ sigstore@^2.2.0:
     "@sigstore/tuf" "^2.3.1"
     "@sigstore/verify" "^1.1.0"
 
-sinon@^18.0.0:
-  version "18.0.1"
-  resolved "https://registry.yarnpkg.com/sinon/-/sinon-18.0.1.tgz#464334cdfea2cddc5eda9a4ea7e2e3f0c7a91c5e"
+sinon@^19.0.0:
+  version "19.0.0"
+  resolved "https://registry.yarnpkg.com/sinon/-/sinon-19.0.0.tgz#c75f049da690bfb4d1fcd8b8d6e24de55d208722"
   dependencies:
     "@sinonjs/commons" "^3.0.1"
-    "@sinonjs/fake-timers" "11.2.2"
-    "@sinonjs/samsam" "^8.0.0"
-    diff "^5.2.0"
-    nise "^6.0.0"
-    supports-color "^7"
+    "@sinonjs/fake-timers" "13.0.1"
+    "@sinonjs/samsam" "^8.0.1"
+    diff "^7.0.0"
+    nise "^6.1.0"
+    supports-color "^7.2.0"
 
 skin-tone@^2.0.0:
   version "2.0.0"
@@ -8766,7 +8757,7 @@ supports-color@^5.3.0:
   dependencies:
     has-flag "^3.0.0"
 
-supports-color@^7, supports-color@^7.0.0, supports-color@^7.1.0:
+supports-color@^7.0.0, supports-color@^7.1.0, supports-color@^7.2.0:
   version "7.2.0"
   resolved "https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz"
   dependencies:
@@ -9029,9 +9020,13 @@ type-check@^0.4.0, type-check@~0.4.0:
   dependencies:
     prelude-ls "^1.2.1"
 
-type-detect@4.0.8, type-detect@^4.0.8:
+type-detect@4.0.8:
   version "4.0.8"
   resolved "https://registry.npmjs.org/type-detect/-/type-detect-4.0.8.tgz"
+
+type-detect@^4.1.0:
+  version "4.1.0"
+  resolved "https://registry.yarnpkg.com/type-detect/-/type-detect-4.1.0.tgz#deb2453e8f08dcae7ae98c626b13dddb0155906c"
 
 type-fest@^0.20.2:
   version "0.20.2"

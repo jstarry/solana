@@ -1778,10 +1778,8 @@
     yargs "^17.7.2"
 
 "@rollup/plugin-alias@^5.0.0":
-  version "5.1.0"
-  resolved "https://registry.yarnpkg.com/@rollup/plugin-alias/-/plugin-alias-5.1.0.tgz#99a94accc4ff9a3483be5baeedd5d7da3b597e93"
-  dependencies:
-    slash "^4.0.0"
+  version "5.1.1"
+  resolved "https://registry.yarnpkg.com/@rollup/plugin-alias/-/plugin-alias-5.1.1.tgz#53601d88cda8b1577aa130b4a6e452283605bf26"
 
 "@rollup/plugin-babel@^6.0.0":
   version "6.0.4"
@@ -8357,10 +8355,6 @@ skin-tone@^2.0.0:
 slash@^3.0.0:
   version "3.0.0"
   resolved "https://registry.npmjs.org/slash/-/slash-3.0.0.tgz"
-
-slash@^4.0.0:
-  version "4.0.0"
-  resolved "https://registry.yarnpkg.com/slash/-/slash-4.0.0.tgz#2422372176c4c6c5addb5e2ada885af984b396a7"
 
 slash@^5.1.0:
   version "5.1.0"

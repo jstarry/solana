@@ -1,6 +1,7 @@
 use {
     super::packet_filter::PacketFilterFailure,
     agave_feature_set::FeatureSet,
+    ahash::AHashSet,
     solana_compute_budget::compute_budget_limits::ComputeBudgetLimits,
     solana_compute_budget_instruction::instructions_processor::process_compute_budget_instructions,
     solana_perf::packet::Packet,
@@ -21,7 +22,7 @@ use {
     solana_svm_transaction::{
         instruction::SVMInstruction, message_address_table_lookup::SVMMessageAddressTableLookup,
     },
-    std::{cmp::Ordering, collections::HashSet, mem::size_of},
+    std::{cmp::Ordering, mem::size_of},
     thiserror::Error,
 };
 
@@ -129,7 +130,7 @@ impl ImmutableDeserializedPacket {
         &self,
         votes_only: bool,
         bank: &Bank,
-        reserved_account_keys: &HashSet<Pubkey>,
+        reserved_account_keys: &AHashSet<Pubkey>,
     ) -> Option<(RuntimeTransaction<SanitizedTransaction>, Slot)> {
         if votes_only && !self.is_simple_vote() {
             return None;

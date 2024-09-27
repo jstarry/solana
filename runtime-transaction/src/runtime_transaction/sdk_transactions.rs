@@ -5,6 +5,7 @@ use {
         transaction_meta::{StaticMeta, TransactionMeta},
         transaction_with_meta::TransactionWithMeta,
     },
+    ahash::AHashSet,
     solana_message::{AddressLoader, TransactionSignatureDetails},
     solana_pubkey::Pubkey,
     solana_svm_transaction::instruction::SVMInstruction,
@@ -14,7 +15,7 @@ use {
         versioned::{sanitized::SanitizedVersionedTransaction, VersionedTransaction},
     },
     solana_transaction_error::TransactionResult as Result,
-    std::{borrow::Cow, collections::HashSet},
+    std::borrow::Cow,
 };
 
 impl RuntimeTransaction<SanitizedVersionedTransaction> {
@@ -75,7 +76,7 @@ impl RuntimeTransaction<SanitizedTransaction> {
         message_hash: MessageHash,
         is_simple_vote_tx: Option<bool>,
         address_loader: impl AddressLoader,
-        reserved_account_keys: &HashSet<Pubkey>,
+        reserved_account_keys: &AHashSet<Pubkey>,
     ) -> Result<Self> {
         let statically_loaded_runtime_tx =
             RuntimeTransaction::<SanitizedVersionedTransaction>::try_from(
@@ -96,7 +97,7 @@ impl RuntimeTransaction<SanitizedTransaction> {
     pub fn try_from(
         statically_loaded_runtime_tx: RuntimeTransaction<SanitizedVersionedTransaction>,
         address_loader: impl AddressLoader,
-        reserved_account_keys: &HashSet<Pubkey>,
+        reserved_account_keys: &AHashSet<Pubkey>,
     ) -> Result<Self> {
         let hash = *statically_loaded_runtime_tx.message_hash();
         let is_simple_vote_tx = statically_loaded_runtime_tx.is_simple_vote_transaction();
@@ -105,7 +106,7 @@ impl RuntimeTransaction<SanitizedTransaction> {
             hash,
             is_simple_vote_tx,
             address_loader,
-            reserved_account_keys,
+            todo!(),
         )?;
 
         let mut tx = Self {
@@ -143,7 +144,7 @@ impl RuntimeTransaction<SanitizedTransaction> {
             MessageHash::Compute,
             None,
             solana_message::SimpleAddressLoader::Disabled,
-            &HashSet::new(),
+            &AHashSet::new(),
         )
         .expect("failed to create RuntimeTransaction from Transaction")
     }

@@ -9,6 +9,7 @@ use {
         resolved_transaction_view::ResolvedTransactionView, transaction_data::TransactionData,
         transaction_version::TransactionVersion, transaction_view::SanitizedTransactionView,
     },
+    ahash::AHashSet,
     solana_message::{
         compiled_instruction::CompiledInstruction,
         v0::{LoadedAddresses, LoadedMessage, MessageAddressTableLookup},
@@ -23,7 +24,7 @@ use {
         versioned::VersionedTransaction,
     },
     solana_transaction_error::{TransactionError, TransactionResult as Result},
-    std::{borrow::Cow, collections::HashSet},
+    std::borrow::Cow,
 };
 
 fn is_simple_vote_transaction<D: TransactionData>(
@@ -81,7 +82,7 @@ impl<D: TransactionData> RuntimeTransaction<ResolvedTransactionView<D>> {
     pub fn try_from(
         statically_loaded_runtime_tx: RuntimeTransaction<SanitizedTransactionView<D>>,
         loaded_addresses: Option<LoadedAddresses>,
-        reserved_account_keys: &HashSet<Pubkey>,
+        reserved_account_keys: &AHashSet<Pubkey>,
     ) -> Result<Self> {
         let RuntimeTransaction { transaction, meta } = statically_loaded_runtime_tx;
         // transaction-view does not distinguish between different types of errors here.
@@ -199,6 +200,7 @@ mod tests {
         solana_signature::Signature,
         solana_system_interface::instruction as system_instruction,
         solana_system_transaction as system_transaction,
+        std::collections::HashSet,
     };
 
     #[test]
@@ -245,7 +247,7 @@ mod tests {
         fn assert_translation(
             original_transaction: VersionedTransaction,
             loaded_addresses: Option<LoadedAddresses>,
-            reserved_account_keys: &HashSet<Pubkey>,
+            reserved_account_keys: &AHashSet<Pubkey>,
         ) {
             let bytes = bincode::serialize(&original_transaction).unwrap();
             let transaction_view = SanitizedTransactionView::try_new_sanitized(&bytes[..]).unwrap();
@@ -310,7 +312,7 @@ mod tests {
         fn assert_translation(
             original_transaction: SanitizedTransaction,
             loaded_addresses: Option<LoadedAddresses>,
-            reserved_account_keys: &HashSet<Pubkey>,
+            reserved_account_keys: &AHashSet<Pubkey>,
         ) {
             let bytes =
                 bincode::serialize(&original_transaction.to_versioned_transaction()).unwrap();
@@ -335,7 +337,9 @@ mod tests {
             );
         }
 
-        let reserved_key_set = ReservedAccountKeys::empty_key_set();
+        // TODO
+        let reserved_key_set = AHashSet::default();
+        let empty_key_set = HashSet::default();
 
         // Simple transfer.
         let original_transaction = VersionedTransaction::from(system_transaction::transfer(
@@ -349,7 +353,7 @@ mod tests {
             MessageHash::Compute,
             None,
             SimpleAddressLoader::Disabled,
-            &reserved_key_set,
+            &empty_key_set,
         )
         .unwrap();
         assert_translation(sanitized_transaction, None, &reserved_key_set);
@@ -381,7 +385,7 @@ mod tests {
             MessageHash::Compute,
             None,
             SimpleAddressLoader::Enabled(loaded_addresses.clone()),
-            &reserved_key_set,
+            &empty_key_set,
         )
         .unwrap();
         assert_translation(

@@ -11,7 +11,6 @@ edition = { workspace = true }
 
 [dependencies]
 Inflector = { workspace = true }
-agave-reserved-account-keys = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 borsh = { workspace = true }

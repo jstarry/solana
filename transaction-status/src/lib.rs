@@ -22,7 +22,6 @@ use {
         parse_accounts::{parse_legacy_message_accounts, parse_v0_message_accounts},
         parse_instruction::parse,
     },
-    agave_reserved_account_keys::ReservedAccountKeys,
     base64::{prelude::BASE64_STANDARD, Engine},
     solana_clock::{Slot, UnixTimestamp},
     solana_hash::Hash,
@@ -550,7 +549,7 @@ impl VersionedTransactionWithStatusMeta {
         show_rewards: bool,
     ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
         let version = self.validate_version(max_supported_transaction_version)?;
-        let reserved_account_keys = ReservedAccountKeys::new_all_activated();
+        let reserved_account_keys = HashSet::default();
 
         let account_keys = match &self.transaction.message {
             VersionedMessage::Legacy(message) => parse_legacy_message_accounts(message),
@@ -558,7 +557,7 @@ impl VersionedTransactionWithStatusMeta {
                 let loaded_message = LoadedMessage::new_borrowed(
                     message,
                     &self.meta.loaded_addresses,
-                    &reserved_account_keys.active,
+                    &reserved_account_keys,
                 );
                 parse_v0_message_accounts(&loaded_message)
             }
@@ -803,13 +802,10 @@ impl EncodableWithMeta for v0::Message {
         meta: &TransactionStatusMeta,
     ) -> Self::Encoded {
         if encoding == UiTransactionEncoding::JsonParsed {
-            let reserved_account_keys = ReservedAccountKeys::new_all_activated();
+            let reserved_account_keys = HashSet::default();
             let account_keys = AccountKeys::new(&self.account_keys, Some(&meta.loaded_addresses));
-            let loaded_message = LoadedMessage::new_borrowed(
-                self,
-                &meta.loaded_addresses,
-                &reserved_account_keys.active,
-            );
+            let loaded_message =
+                LoadedMessage::new_borrowed(self, &meta.loaded_addresses, &reserved_account_keys);
             UiMessage::Parsed(UiParsedMessage {
                 account_keys: parse_v0_message_accounts(&loaded_message),
                 recent_blockhash: self.recent_blockhash.to_string(),

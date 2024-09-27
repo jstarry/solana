@@ -5,6 +5,7 @@ use {
         transaction_version::TransactionVersion,
         transaction_view::TransactionView,
     },
+    ahash::AHashSet,
     core::{
         fmt::{Debug, Formatter},
         ops::Deref,
@@ -18,7 +19,6 @@ use {
         instruction::SVMInstruction, message_address_table_lookup::SVMMessageAddressTableLookup,
         svm_message::SVMMessage, svm_transaction::SVMTransaction,
     },
-    std::collections::HashSet,
 };
 
 /// A parsed and sanitized transaction view that has had all address lookups
@@ -48,7 +48,7 @@ impl<D: TransactionData> ResolvedTransactionView<D> {
     pub fn try_new(
         view: TransactionView<true, D>,
         resolved_addresses: Option<LoadedAddresses>,
-        reserved_account_keys: &HashSet<Pubkey>,
+        reserved_account_keys: &AHashSet<Pubkey>,
     ) -> Result<Self> {
         let resolved_addresses_ref = resolved_addresses.as_ref();
 
@@ -89,7 +89,7 @@ impl<D: TransactionData> ResolvedTransactionView<D> {
     fn cache_is_writable(
         view: &TransactionView<true, D>,
         resolved_addresses: Option<&LoadedAddresses>,
-        reserved_account_keys: &HashSet<Pubkey>,
+        reserved_account_keys: &AHashSet<Pubkey>,
     ) -> [bool; 256] {
         // Build account keys so that we can iterate over and check if
         // an address is writable.
@@ -277,7 +277,7 @@ mod tests {
         };
         let bytes = bincode::serialize(&transaction).unwrap();
         let view = SanitizedTransactionView::try_new_sanitized(bytes.as_ref()).unwrap();
-        let result = ResolvedTransactionView::try_new(view, None, &HashSet::default());
+        let result = ResolvedTransactionView::try_new(view, None, &AHashSet::default());
         assert!(matches!(
             result,
             Err(TransactionViewError::AddressLookupMismatch)
@@ -309,7 +309,7 @@ mod tests {
         let bytes = bincode::serialize(&transaction).unwrap();
         let view = SanitizedTransactionView::try_new_sanitized(bytes.as_ref()).unwrap();
         let result =
-            ResolvedTransactionView::try_new(view, Some(loaded_addresses), &HashSet::default());
+            ResolvedTransactionView::try_new(view, Some(loaded_addresses), &AHashSet::default());
         assert!(matches!(
             result,
             Err(TransactionViewError::AddressLookupMismatch)
@@ -346,7 +346,7 @@ mod tests {
         let bytes = bincode::serialize(&transaction).unwrap();
         let view = SanitizedTransactionView::try_new_sanitized(bytes.as_ref()).unwrap();
         let result =
-            ResolvedTransactionView::try_new(view, Some(loaded_addresses), &HashSet::default());
+            ResolvedTransactionView::try_new(view, Some(loaded_addresses), &AHashSet::default());
         assert!(matches!(
             result,
             Err(TransactionViewError::AddressLookupMismatch)
@@ -355,7 +355,8 @@ mod tests {
 
     #[test]
     fn test_is_writable() {
-        let reserved_account_keys = HashSet::from_iter([sysvar::clock::id(), system_program::id()]);
+        let reserved_account_keys =
+            AHashSet::from_iter([sysvar::clock::id(), system_program::id()]);
         // Create a versioned transaction.
         let create_transaction_with_keys =
             |static_keys: Vec<Pubkey>, loaded_addresses: &LoadedAddresses| VersionedTransaction {
@@ -458,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_demote_writable_program() {
-        let reserved_account_keys = HashSet::default();
+        let reserved_account_keys = AHashSet::default();
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let key2 = Pubkey::new_unique();

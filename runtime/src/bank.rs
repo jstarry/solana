@@ -6508,7 +6508,7 @@ impl Bank {
 
     /// Get a set of all actively reserved account keys that are not allowed to
     /// be write-locked during transaction processing.
-    pub fn get_reserved_account_keys(&self) -> &HashSet<Pubkey> {
+    pub fn get_reserved_account_keys(&self) -> &AHashSet<Pubkey> {
         &self.reserved_account_keys.active
     }
 

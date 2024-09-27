@@ -5,6 +5,7 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 use {
     agave_feature_set::{self as feature_set, FeatureSet},
+    ahash::{AHashMap, AHashSet},
     lazy_static::lazy_static,
     solana_pubkey::Pubkey,
     solana_sdk_ids::{
@@ -13,7 +14,6 @@ use {
         secp256k1_program, secp256r1_program, stake, system_program, sysvar, vote,
         zk_elgamal_proof_program, zk_token_proof_program,
     },
-    std::collections::{HashMap, HashSet},
 };
 
 // ReservedAccountKeys is not serialized into or deserialized from bank
@@ -32,10 +32,10 @@ impl ::solana_frozen_abi::abi_example::AbiExample for ReservedAccountKeys {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReservedAccountKeys {
     /// Set of currently active reserved account keys
-    pub active: HashSet<Pubkey>,
+    pub active: AHashSet<Pubkey>,
     /// Set of currently inactive reserved account keys that will be moved to the
     /// active set when their feature id is activated
-    inactive: HashMap<Pubkey, Pubkey>,
+    inactive: AHashMap<Pubkey, Pubkey>,
 }
 
 impl Default for ReservedAccountKeys {
@@ -72,7 +72,7 @@ impl ReservedAccountKeys {
     pub fn new_all_activated() -> Self {
         Self {
             active: Self::all_keys_iter().copied().collect(),
-            inactive: HashMap::default(),
+            inactive: AHashMap::default(),
         }
     }
 
@@ -105,8 +105,8 @@ impl ReservedAccountKeys {
 
     /// Return an empty set of reserved keys for visibility when using in
     /// tests where the dynamic reserved key set is not available
-    pub fn empty_key_set() -> HashSet<Pubkey> {
-        HashSet::default()
+    pub fn empty_key_set() -> AHashSet<Pubkey> {
+        AHashSet::default()
     }
 }
 
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_static_list_compat() {
-        let mut static_set = HashSet::new();
+        let mut static_set = AHashSet::new();
         static_set.extend(ALL_IDS.iter().cloned());
         static_set.extend(BUILTIN_PROGRAMS_KEYS.iter().cloned());
 

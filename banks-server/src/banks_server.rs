@@ -305,7 +305,7 @@ impl Banks for BanksServer {
             MessageHash::Compute,
             Some(false), // is_simple_vote_tx
             bank.as_ref(),
-            bank.get_reserved_account_keys(),
+            todo!(),
         ) {
             Ok(tx) => tx,
             Err(err) => return Some(Err(err)),
@@ -389,9 +389,7 @@ impl Banks for BanksServer {
         commitment: CommitmentLevel,
     ) -> Option<u64> {
         let bank = self.bank(commitment);
-        let sanitized_message =
-            SanitizedMessage::try_from_legacy_message(message, bank.get_reserved_account_keys())
-                .ok()?;
+        let sanitized_message = SanitizedMessage::try_from_legacy_message(message, todo!()).ok()?;
         bank.get_fee_for_message(&sanitized_message)
     }
 }

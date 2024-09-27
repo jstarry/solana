@@ -1,11 +1,11 @@
 pub use solana_transaction_status_client_types::{ParsedAccount, ParsedAccountSource};
 use {
-    agave_reserved_account_keys::ReservedAccountKeys,
     solana_message::{v0::LoadedMessage, Message},
+    std::collections::HashSet,
 };
 
 pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
-    let reserved_account_keys = ReservedAccountKeys::new_all_activated().active;
+    let reserved_account_keys = HashSet::default();
     let mut accounts: Vec<ParsedAccount> = vec![];
     for (i, account_key) in message.account_keys.iter().enumerate() {
         accounts.push(ParsedAccount {

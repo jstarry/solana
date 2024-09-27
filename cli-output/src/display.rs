@@ -1,6 +1,5 @@
 use {
     crate::cli_output::CliSignatureVerificationStatus,
-    agave_reserved_account_keys::ReservedAccountKeys,
     base64::{prelude::BASE64_STANDARD, Engine},
     chrono::{DateTime, Local, SecondsFormat, TimeZone, Utc},
     console::style,
@@ -20,7 +19,11 @@ use {
         Rewards, UiReturnDataEncoding, UiTransactionReturnData, UiTransactionStatusMeta,
     },
     spl_memo::{id as spl_memo_id, v1::id as spl_memo_v1_id},
-    std::{collections::HashMap, fmt, io, time::Duration},
+    std::{
+        collections::{HashMap, HashSet},
+        fmt, io,
+        time::Duration,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -216,7 +219,7 @@ fn write_transaction<W: io::Write>(
     write_recent_blockhash(w, message.recent_blockhash(), prefix)?;
     write_signatures(w, &transaction.signatures, sigverify_status, prefix)?;
 
-    let reserved_account_keys = ReservedAccountKeys::new_all_activated().active;
+    let reserved_account_keys = HashSet::default();
     for (account_index, account) in account_keys.iter().enumerate() {
         let account_meta = CliAccountMeta {
             is_signer: message.is_signer(account_index),

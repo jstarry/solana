@@ -1017,7 +1017,7 @@ pub fn process_blockstore_from_root(
     for (program_id, mut cpi_account_data_items) in
         cpi_account_data_record_list.into_iter().take(20)
     {
-        cpi_account_data_items.sort_by(|a, b| b.total_account_data.cmp(&a.total_account_data));
+        cpi_account_data_items.sort_by(|a, b| a.total_account_data.cmp(&b.total_account_data));
 
         let invocations = cpi_account_data_items.len();
         let pct25 = cpi_account_data_items[invocations / 4].total_account_data;
@@ -1026,7 +1026,7 @@ pub fn process_blockstore_from_root(
         let pct95 = cpi_account_data_items[19 * invocations / 20].total_account_data;
 
         cpi_account_data_items
-            .sort_by(|a, b| b.writable_account_data.cmp(&a.writable_account_data));
+            .sort_by(|a, b| a.writable_account_data.cmp(&b.writable_account_data));
         let wpct25 = cpi_account_data_items[invocations / 4].writable_account_data;
         let wpct50 = cpi_account_data_items[invocations / 2].writable_account_data;
         let wpct75 = cpi_account_data_items[3 * invocations / 4].writable_account_data;

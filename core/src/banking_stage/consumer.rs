@@ -18,6 +18,7 @@ use {
         BankStart, PohRecorderError, RecordTransactionsSummary, RecordTransactionsTimings,
         TransactionRecorder,
     },
+    solana_program_runtime::invoke_context::CpiAccountDataRecord,
     solana_runtime::{
         bank::{Bank, LoadAndExecuteTransactionsOutput},
         transaction_batch::TransactionBatch,
@@ -624,6 +625,7 @@ impl Consumer {
                 MAX_PROCESSING_AGE,
                 &mut execute_and_commit_timings.execute_timings,
                 &mut error_counters,
+                &mut CpiAccountDataRecord::default(),
                 TransactionProcessingConfig {
                     account_overrides: None,
                     check_program_modification_slot: bank.check_program_modification_slot(),

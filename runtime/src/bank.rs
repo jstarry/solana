@@ -98,7 +98,8 @@ use {
     },
     solana_measure::{measure::Measure, measure_time, measure_us},
     solana_program_runtime::{
-        invoke_context::BuiltinFunctionWithContext, loaded_programs::ProgramCacheEntry,
+        invoke_context::{BuiltinFunctionWithContext, CpiAccountDataRecord},
+        loaded_programs::ProgramCacheEntry,
     },
     solana_runtime_transaction::instructions_processor::process_compute_budget_instructions,
     solana_sdk::{
@@ -3433,6 +3434,7 @@ impl Bank {
             MAX_PROCESSING_AGE - MAX_TRANSACTION_FORWARDING_DELAY,
             &mut timings,
             &mut TransactionErrorMetrics::default(),
+            &mut CpiAccountDataRecord::default(),
             TransactionProcessingConfig {
                 account_overrides: Some(&account_overrides),
                 check_program_modification_slot: self.check_program_modification_slot,
@@ -3564,6 +3566,7 @@ impl Bank {
         max_age: usize,
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
+        cpi_account_data_record: &mut CpiAccountDataRecord,
         processing_config: TransactionProcessingConfig,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
@@ -3589,7 +3592,7 @@ impl Bank {
             rent_collector: Some(&rent_collector_with_metrics),
         };
 
-        let sanitized_output = self
+        let mut sanitized_output = self
             .transaction_processor
             .load_and_execute_sanitized_transactions(
                 self,
@@ -3598,6 +3601,9 @@ impl Bank {
                 &processing_environment,
                 &processing_config,
             );
+
+        // Accumulate cpi account data record
+        cpi_account_data_record.accumulate(&mut sanitized_output.cpi_account_data_record);
 
         // Accumulate the errors returned by the batch processor.
         error_counters.accumulate(&sanitized_output.error_metrics);
@@ -4712,6 +4718,7 @@ impl Bank {
         collect_balances: bool,
         recording_config: ExecutionRecordingConfig,
         timings: &mut ExecuteTimings,
+        cpi_account_data_record: &mut CpiAccountDataRecord,
         log_messages_bytes_limit: Option<usize>,
     ) -> (Vec<TransactionCommitResult>, TransactionBalancesSet) {
         let pre_balances = if collect_balances {
@@ -4728,6 +4735,7 @@ impl Bank {
             max_age,
             timings,
             &mut TransactionErrorMetrics::default(),
+            cpi_account_data_record,
             TransactionProcessingConfig {
                 account_overrides: None,
                 check_program_modification_slot: self.check_program_modification_slot,
@@ -4784,6 +4792,7 @@ impl Bank {
                 enable_return_data_recording: true,
             },
             &mut ExecuteTimings::default(),
+            &mut CpiAccountDataRecord::default(),
             Some(1000 * 1000),
         );
 
@@ -4823,6 +4832,7 @@ impl Bank {
             false,
             ExecutionRecordingConfig::new_single_setting(false),
             &mut ExecuteTimings::default(),
+            &mut CpiAccountDataRecord::default(),
             None,
         )
         .0

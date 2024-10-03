@@ -30,7 +30,7 @@ use {
     solana_log_collector::LogCollector,
     solana_measure::{measure::Measure, measure_us},
     solana_program_runtime::{
-        invoke_context::{EnvironmentConfig, InvokeContext},
+        invoke_context::{CpiAccountDataRecord, EnvironmentConfig, InvokeContext},
         loaded_programs::{
             ForkGraph, ProgramCache, ProgramCacheEntry, ProgramCacheForTxBatch,
             ProgramCacheMatchCriteria,
@@ -77,6 +77,7 @@ pub struct LoadAndExecuteSanitizedTransactionsOutput {
     /// could not be processed. Note processed transactions can still have a
     /// failure result meaning that the transaction will be rolled back.
     pub processing_results: Vec<TransactionProcessingResult>,
+    pub cpi_account_data_record: CpiAccountDataRecord,
 }
 
 /// Configuration of the recording capabilities for transaction execution
@@ -238,6 +239,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         // Initialize metrics.
         let mut error_metrics = TransactionErrorMetrics::default();
         let mut execute_timings = ExecuteTimings::default();
+        let mut cpi_account_data_record = CpiAccountDataRecord::default();
 
         let (validation_results, validate_fees_us) = measure_us!(self.validate_fees(
             callbacks,
@@ -279,6 +281,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                     processing_results: (0..sanitized_txs.len())
                         .map(|_| Err(TransactionError::ProgramCacheHitMaxLimit))
                         .collect(),
+                    cpi_account_data_record,
                 };
             }
 
@@ -319,6 +322,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
                             tx,
                             loaded_transaction,
                             &mut execute_timings,
+                            &mut cpi_account_data_record,
                             &mut error_metrics,
                             &mut program_cache_for_tx_batch,
                             environment,
@@ -369,6 +373,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
             error_metrics,
             execute_timings,
             processing_results,
+            cpi_account_data_record,
         }
     }
 
@@ -717,6 +722,7 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         tx: &impl SVMTransaction,
         mut loaded_transaction: LoadedTransaction,
         execute_timings: &mut ExecuteTimings,
+        cpi_account_data_record: &mut CpiAccountDataRecord,
         error_metrics: &mut TransactionErrorMetrics,
         program_cache_for_tx_batch: &mut ProgramCacheForTxBatch,
         environment: &TransactionProcessingEnvironment,
@@ -802,6 +808,8 @@ impl<FG: ForkGraph> TransactionBatchProcessor<FG> {
         );
         process_message_time.stop();
 
+        cpi_account_data_record
+            .accumulate(&mut invoke_context.cpi_account_data_record.borrow_mut());
         drop(invoke_context);
 
         saturating_add_assign!(

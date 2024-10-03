@@ -376,6 +376,7 @@ trait SyscallInvokeSigned {
         invoke_context: &mut InvokeContext,
     ) -> Result<StableInstruction, Error>;
     fn translate_accounts<'a, 'b>(
+        program_id: &Pubkey,
         instruction_accounts: &[InstructionAccount],
         program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
@@ -479,6 +480,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
     }
 
     fn translate_accounts<'a, 'b>(
+        program_id: &Pubkey,
         instruction_accounts: &[InstructionAccount],
         program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
@@ -496,6 +498,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         )?;
 
         translate_and_update_accounts(
+            program_id,
             instruction_accounts,
             program_indices,
             &account_info_keys,
@@ -715,6 +718,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
     }
 
     fn translate_accounts<'a, 'b>(
+        program_id: &Pubkey,
         instruction_accounts: &[InstructionAccount],
         program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
@@ -732,6 +736,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         )?;
 
         translate_and_update_accounts(
+            program_id,
             instruction_accounts,
             program_indices,
             &account_info_keys,
@@ -828,6 +833,7 @@ where
 // Finish translating accounts, build CallerAccount values and update callee
 // accounts in preparation of executing the callee.
 fn translate_and_update_accounts<'a, 'b, T, F>(
+    program_id: &Pubkey,
     instruction_accounts: &[InstructionAccount],
     program_indices: &[IndexOfAccount],
     account_info_keys: &[&Pubkey],
@@ -867,6 +873,9 @@ where
         .get_feature_set()
         .is_active(&feature_set::bpf_account_data_direct_mapping::id());
 
+    let mut total_cpi_account_data = 0;
+    let mut writable_cpi_account_data = 0;
+
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
     {
         if instruction_account_index as IndexOfAccount != instruction_account.index_in_callee {
@@ -889,6 +898,7 @@ where
                     .checked_div(invoke_context.get_compute_budget().cpi_bytes_per_unit)
                     .unwrap_or(u64::MAX),
             )?;
+            total_cpi_account_data += callee_account.get_data().len();
 
             accounts.push((instruction_account.index_in_caller, None));
         } else if let Some(caller_account_index) =
@@ -921,6 +931,7 @@ where
                     serialized_metadata,
                 )?;
 
+            total_cpi_account_data += caller_account.serialized_data.len();
             // before initiating CPI, the caller may have modified the
             // account (caller_account). We need to update the corresponding
             // BorrowedAccount (callee_account) so the callee can see the
@@ -933,6 +944,10 @@ where
                 callee_account,
                 direct_mapping,
             )?;
+
+            if instruction_account.is_writable {
+                writable_cpi_account_data += caller_account.serialized_data.len();
+            }
 
             let caller_account = if instruction_account.is_writable || update_caller {
                 Some(caller_account)
@@ -949,6 +964,12 @@ where
             return Err(Box::new(InstructionError::MissingAccount));
         }
     }
+
+    invoke_context.record_cpi_account_data(
+        program_id,
+        total_cpi_account_data,
+        writable_cpi_account_data,
+    );
 
     Ok(accounts)
 }
@@ -1097,6 +1118,7 @@ fn cpi_common<S: SyscallInvokeSigned>(
     check_authorized_program(&instruction.program_id, &instruction.data, invoke_context)?;
 
     let mut accounts = S::translate_accounts(
+        &instruction.program_id,
         &instruction_accounts,
         &program_indices,
         account_infos_addr,

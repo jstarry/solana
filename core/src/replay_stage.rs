@@ -51,6 +51,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
+    solana_program_runtime::invoke_context::CpiAccountDataRecord,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSenderConfig},
         rpc_subscriptions::RpcSubscriptions,
@@ -2223,6 +2224,7 @@ impl ReplayStage {
             blockstore,
             bank,
             replay_tx_thread_pool,
+            &mut CpiAccountDataRecord::default(),
             &mut w_replay_stats,
             &mut w_replay_progress,
             false,

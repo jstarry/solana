@@ -32,6 +32,7 @@ use {
         clock::{Epoch, Slot},
         hash::Hash,
     },
+    solana_program_runtime::invoke_context::CpiAccountDataRecord,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank::Bank,
@@ -609,6 +610,7 @@ pub(crate) fn find_bankhash_of_heaviest_fork(
                     &opts,
                     &recyclers,
                     &mut progress,
+                    &mut CpiAccountDataRecord::default(),
                     None,
                     None,
                     None,

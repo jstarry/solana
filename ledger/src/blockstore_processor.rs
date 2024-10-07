@@ -27,6 +27,7 @@ use {
     },
     solana_measure::{measure::Measure, measure_us},
     solana_metrics::datapoint_error,
+    solana_program_runtime::invoke_context::CpiAccountDataRecord,
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
@@ -138,6 +139,7 @@ pub fn execute_batch(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
@@ -161,6 +163,7 @@ pub fn execute_batch(
         transaction_status_sender.is_some(),
         ExecutionRecordingConfig::new_single_setting(transaction_status_sender.is_some()),
         timings,
+        cpi_account_data_record,
         log_messages_bytes_limit,
     );
 
@@ -287,10 +290,11 @@ fn execute_batches_internal(
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
-) -> Result<ExecuteBatchesInternalMetrics> {
+) -> Result<(ExecuteBatchesInternalMetrics, CpiAccountDataRecord)> {
     assert!(!batches.is_empty());
     let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
         Mutex::new(HashMap::new());
+    let cpi_account_data_record = Mutex::new(CpiAccountDataRecord::default());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let results: Vec<Result<()>> = replay_tx_thread_pool.install(|| {
@@ -300,15 +304,22 @@ fn execute_batches_internal(
                 let transaction_count =
                     transaction_batch.batch.sanitized_transactions().len() as u64;
                 let mut timings = ExecuteTimings::default();
+                let mut thread_cpi_account_data_record = CpiAccountDataRecord::default();
                 let (result, execute_batches_us) = measure_us!(execute_batch(
                     transaction_batch,
                     bank,
                     transaction_status_sender,
                     replay_vote_sender,
                     &mut timings,
+                    &mut thread_cpi_account_data_record,
                     log_messages_bytes_limit,
                     prioritization_fee_cache,
                 ));
+
+                cpi_account_data_record
+                    .lock()
+                    .unwrap()
+                    .accumulate(&mut thread_cpi_account_data_record);
 
                 let thread_index = replay_tx_thread_pool.current_thread_index().unwrap();
                 execution_timings_per_thread
@@ -340,11 +351,14 @@ fn execute_batches_internal(
 
     first_err(&results)?;
 
-    Ok(ExecuteBatchesInternalMetrics {
-        execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
-        total_batches_len: batches.len() as u64,
-        execute_batches_us: execute_batches_elapsed.as_us(),
-    })
+    Ok((
+        ExecuteBatchesInternalMetrics {
+            execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
+            total_batches_len: batches.len() as u64,
+            execute_batches_us: execute_batches_elapsed.as_us(),
+        },
+        cpi_account_data_record.into_inner().unwrap(),
+    ))
 }
 
 // This fn diverts the code-path into two variants. Both must provide exactly the same set of
@@ -364,6 +378,7 @@ fn process_batches(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     batch_execution_timing: &mut BatchExecutionTiming,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
@@ -407,6 +422,7 @@ fn process_batches(
             transaction_status_sender,
             replay_vote_sender,
             batch_execution_timing,
+            cpi_account_data_record,
             log_messages_bytes_limit,
             prioritization_fee_cache,
         )
@@ -460,6 +476,7 @@ fn rebatch_and_execute_batches(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut BatchExecutionTiming,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
@@ -522,16 +539,18 @@ fn rebatch_and_execute_batches(
         batches
     };
 
-    let execute_batches_internal_metrics = execute_batches_internal(
-        bank,
-        replay_tx_thread_pool,
-        rebatched_txs,
-        transaction_status_sender,
-        replay_vote_sender,
-        log_messages_bytes_limit,
-        prioritization_fee_cache,
-    )?;
+    let (execute_batches_internal_metrics, mut batches_cpi_account_data_record) =
+        execute_batches_internal(
+            bank,
+            replay_tx_thread_pool,
+            rebatched_txs,
+            transaction_status_sender,
+            replay_vote_sender,
+            log_messages_bytes_limit,
+            prioritization_fee_cache,
+        )?;
 
+    cpi_account_data_record.accumulate(&mut batches_cpi_account_data_record);
     // Pass false because this code-path is never touched by unified scheduler.
     timing.accumulate(execute_batches_internal_metrics, false);
     Ok(())
@@ -587,6 +606,7 @@ pub fn process_entries_for_tests(
         transaction_status_sender,
         replay_vote_sender,
         &mut batch_timing,
+        &mut CpiAccountDataRecord::default(),
         None,
         &ignored_prioritization_fee_cache,
     );
@@ -602,6 +622,7 @@ fn process_entries(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     batch_timing: &mut BatchExecutionTiming,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
@@ -628,6 +649,7 @@ fn process_entries(
                         transaction_status_sender,
                         replay_vote_sender,
                         batch_timing,
+                        cpi_account_data_record,
                         log_messages_bytes_limit,
                         prioritization_fee_cache,
                     )?;
@@ -683,6 +705,7 @@ fn process_entries(
                             transaction_status_sender,
                             replay_vote_sender,
                             batch_timing,
+                            cpi_account_data_record,
                             log_messages_bytes_limit,
                             prioritization_fee_cache,
                         )?;
@@ -699,6 +722,7 @@ fn process_entries(
         transaction_status_sender,
         replay_vote_sender,
         batch_timing,
+        cpi_account_data_record,
         log_messages_bytes_limit,
         prioritization_fee_cache,
     )?;
@@ -928,6 +952,7 @@ pub fn process_blockstore_from_root(
 
     info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
+    let mut cpi_account_data_record = CpiAccountDataRecord::default();
 
     // Ensure start_slot is rooted for correct replay; also ensure start_slot and
     // qualifying children are marked as connected
@@ -965,6 +990,7 @@ pub fn process_blockstore_from_root(
             &replay_tx_thread_pool,
             leader_schedule_cache,
             opts,
+            &mut cpi_account_data_record,
             transaction_status_sender,
             cache_block_meta_sender,
             entry_notification_sender,
@@ -983,6 +1009,33 @@ pub fn process_blockstore_from_root(
         );
         (0, 0)
     };
+
+    let total_invocations = cpi_account_data_record.len();
+    info!("found {total_invocations} cpi invocations");
+    let mut cpi_account_data_record_list: Vec<_> = cpi_account_data_record.0.into_iter().collect();
+    cpi_account_data_record_list.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    for (program_id, mut cpi_account_data_items) in
+        cpi_account_data_record_list.into_iter().take(20)
+    {
+        cpi_account_data_items.sort_by(|a, b| b.total_account_data.cmp(&a.total_account_data));
+
+        let invocations = cpi_account_data_items.len();
+        let pct25 = cpi_account_data_items[invocations / 4].total_account_data;
+        let pct50 = cpi_account_data_items[invocations / 2].total_account_data;
+        let pct75 = cpi_account_data_items[3 * invocations / 4].total_account_data;
+        let pct95 = cpi_account_data_items[19 * invocations / 20].total_account_data;
+
+        cpi_account_data_items
+            .sort_by(|a, b| b.writable_account_data.cmp(&a.writable_account_data));
+        let wpct25 = cpi_account_data_items[invocations / 4].writable_account_data;
+        let wpct50 = cpi_account_data_items[invocations / 2].writable_account_data;
+        let wpct75 = cpi_account_data_items[3 * invocations / 4].writable_account_data;
+        let wpct95 = cpi_account_data_items[19 * invocations / 20].writable_account_data;
+        info!("Program {program_id} stats: {invocations} cpi invocations, \
+        total account input data size: [25%: {pct25}, 50%: {pct50}, 75%: {pct75}, 95%: {pct95}] \
+        writable account input data size: [25%: {wpct25}, 50%: {wpct50}, 75%: {wpct75}, 95%: {wpct95}] \
+        ");
+    }
 
     let processing_time = now.elapsed();
 
@@ -1075,6 +1128,7 @@ fn confirm_full_slot(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     transaction_status_sender: Option<&TransactionStatusSender>,
     entry_notification_sender: Option<&EntryNotifierSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -1088,6 +1142,7 @@ fn confirm_full_slot(
         blockstore,
         bank,
         replay_tx_thread_pool,
+        cpi_account_data_record,
         &mut confirmation_timing,
         progress,
         skip_verification,
@@ -1426,6 +1481,7 @@ pub fn confirm_slot(
     blockstore: &Blockstore,
     bank: &BankWithScheduler,
     replay_tx_thread_pool: &ThreadPool,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
@@ -1457,6 +1513,7 @@ pub fn confirm_slot(
         bank,
         replay_tx_thread_pool,
         slot_entries_load_result,
+        cpi_account_data_record,
         timing,
         progress,
         skip_verification,
@@ -1474,6 +1531,7 @@ fn confirm_slot_entries(
     bank: &BankWithScheduler,
     replay_tx_thread_pool: &ThreadPool,
     slot_entries_load_result: (Vec<Entry>, u64, bool),
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     timing: &mut ConfirmationTiming,
     progress: &mut ConfirmationProgress,
     skip_verification: bool,
@@ -1623,6 +1681,7 @@ fn confirm_slot_entries(
         transaction_status_sender,
         replay_vote_sender,
         batch_execute_timing,
+        cpi_account_data_record,
         log_messages_bytes_limit,
         prioritization_fee_cache,
     )
@@ -1692,6 +1751,7 @@ fn process_bank_0(
         opts,
         recyclers,
         &mut progress,
+        &mut CpiAccountDataRecord::default(),
         None,
         entry_notification_sender,
         None,
@@ -1779,6 +1839,7 @@ fn load_frozen_forks(
     replay_tx_thread_pool: &ThreadPool,
     leader_schedule_cache: &LeaderScheduleCache,
     opts: &ProcessOptions,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     entry_notification_sender: Option<&EntryNotifierSender>,
@@ -1863,6 +1924,7 @@ fn load_frozen_forks(
                 opts,
                 &recyclers,
                 &mut progress,
+                cpi_account_data_record,
                 transaction_status_sender,
                 cache_block_meta_sender,
                 entry_notification_sender,
@@ -2055,6 +2117,7 @@ pub fn process_single_slot(
     opts: &ProcessOptions,
     recyclers: &VerifyRecyclers,
     progress: &mut ConfirmationProgress,
+    cpi_account_data_record: &mut CpiAccountDataRecord,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     entry_notification_sender: Option<&EntryNotifierSender>,
@@ -2070,6 +2133,7 @@ pub fn process_single_slot(
         opts,
         recyclers,
         progress,
+        cpi_account_data_record,
         transaction_status_sender,
         entry_notification_sender,
         replay_vote_sender,

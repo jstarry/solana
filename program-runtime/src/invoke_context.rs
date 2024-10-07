@@ -41,7 +41,9 @@ use {
     std::{
         alloc::Layout,
         cell::RefCell,
+        collections::HashMap,
         fmt::{self, Debug},
+        ops::{Deref, DerefMut},
         rc::Rc,
     },
 };
@@ -188,6 +190,39 @@ pub struct SerializedAccountMetadata {
     pub vm_owner_addr: u64,
 }
 
+#[derive(Default)]
+pub struct CpiAccountDataRecord(pub HashMap<Pubkey, Vec<CpiAccountDataRecordItem>>);
+
+impl Deref for CpiAccountDataRecord {
+    type Target = HashMap<Pubkey, Vec<CpiAccountDataRecordItem>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for CpiAccountDataRecord {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl CpiAccountDataRecord {
+    pub fn accumulate(&mut self, other: &mut Self) {
+        for (program_id, cpi_account_data_records) in other.0.drain() {
+            self.0
+                .entry(program_id)
+                .or_default()
+                .extend(cpi_account_data_records);
+        }
+    }
+}
+
+pub struct CpiAccountDataRecordItem {
+    pub total_account_data: usize,
+    pub writable_account_data: usize,
+}
+
 /// Main pipeline from runtime to program execution.
 pub struct InvokeContext<'a> {
     /// Information about the currently executing transaction.
@@ -204,6 +239,8 @@ pub struct InvokeContext<'a> {
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     /// Latest measurement not yet accumulated in [ExecuteDetailsTimings::execute_us]
     pub execute_time: Option<Measure>,
+    /// Record of the account data passed to CPIs, grouped by program id
+    pub cpi_account_data_record: RefCell<CpiAccountDataRecord>,
     pub timings: ExecuteDetailsTimings,
     pub syscall_context: Vec<Option<SyscallContext>>,
     traces: Vec<Vec<[u64; 12]>>,
@@ -225,6 +262,7 @@ impl<'a> InvokeContext<'a> {
             log_collector,
             compute_budget,
             compute_meter: RefCell::new(compute_budget.compute_unit_limit),
+            cpi_account_data_record: RefCell::default(),
             execute_time: None,
             timings: ExecuteDetailsTimings::default(),
             syscall_context: Vec::new(),
@@ -608,6 +646,22 @@ impl<'a> InvokeContext<'a> {
             return Err(Box::new(InstructionError::ComputationalBudgetExceeded));
         }
         Ok(())
+    }
+
+    pub fn record_cpi_account_data(
+        &self,
+        program_id: &Pubkey,
+        total_account_data: usize,
+        writable_account_data: usize,
+    ) {
+        self.cpi_account_data_record
+            .borrow_mut()
+            .entry(*program_id)
+            .or_default()
+            .push(CpiAccountDataRecordItem {
+                total_account_data,
+                writable_account_data,
+            });
     }
 
     /// Set compute units

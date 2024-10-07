@@ -20,6 +20,7 @@ use {
     solana_ledger::blockstore_processor::{
         execute_batch, TransactionBatchWithIndexes, TransactionStatusSender,
     },
+    solana_program_runtime::invoke_context::CpiAccountDataRecord,
     solana_runtime::{
         bank::Bank,
         installed_scheduler_pool::{
@@ -443,6 +444,7 @@ impl TaskHandler for DefaultTaskHandler {
             handler_context.transaction_status_sender.as_ref(),
             handler_context.replay_vote_sender.as_ref(),
             timings,
+            &mut CpiAccountDataRecord::default(),
             handler_context.log_messages_bytes_limit,
             &handler_context.prioritization_fee_cache,
         );

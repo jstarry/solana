@@ -7519,9 +7519,9 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@23.5.0:
-  version "23.5.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-23.5.0.tgz#f7fb015f0a39b2d85f54df10864c0761b05953db"
+puppeteer-core@23.5.1:
+  version "23.5.1"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-23.5.1.tgz#fac4268820c35d3172e783a1f1a39773b2c0f7c6"
   dependencies:
     "@puppeteer/browsers" "2.4.0"
     chromium-bidi "0.8.0"
@@ -7531,14 +7531,14 @@ puppeteer-core@23.5.0:
     ws "^8.18.0"
 
 puppeteer@^23.0.1:
-  version "23.5.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-23.5.0.tgz#5cafaff6181beb930567c860482eccfe79dad3a8"
+  version "23.5.1"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-23.5.1.tgz#4ed2388a55ef6c0b0d8af8f83cb33d9a4cc40444"
   dependencies:
     "@puppeteer/browsers" "2.4.0"
     chromium-bidi "0.8.0"
     cosmiconfig "^9.0.0"
     devtools-protocol "0.0.1342118"
-    puppeteer-core "23.5.0"
+    puppeteer-core "23.5.1"
     typed-query-selector "^2.12.0"
 
 qrcode-terminal@^0.12.0:

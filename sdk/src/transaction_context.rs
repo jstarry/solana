@@ -323,6 +323,12 @@ impl TransactionContext {
             .ok_or(InstructionError::CallDepth)?;
         let callee_instruction_accounts_lamport_sum =
             self.instruction_accounts_lamport_sum(caller_instruction_context)?;
+
+        // First check if the caller program has minted new SOL in the CPI accounts
+        // We take a sum of all caller context account lamports and compare with the value saved when this ix was first invoked
+        // Basically the idea is that the caller could have modified these account lamport balances and when it makes a CPI, we check if they were inflated
+        // So with tips, you would want to know how many tips were made after the caller was invoked up until now
+        // This means you save the latest accumulator balance when the caller is invoked, and compare with the total acc balance
         if !self.instruction_stack.is_empty() {
             let caller_instruction_context = self.get_current_instruction_context()?;
             let original_caller_instruction_accounts_lamport_sum =
@@ -335,6 +341,7 @@ impl TransactionContext {
                 return Err(InstructionError::UnbalancedInstruction);
             }
         }
+        // Next we are about to CPI so take a snapshot of callee account lamport sum and with tips, we would snapshot the acc as well
         {
             let instruction_context = self.get_next_instruction_context()?;
             instruction_context.nesting_level = nesting_level;

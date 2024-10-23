@@ -1141,6 +1141,7 @@ pub fn process_blockstore_from_root(
             );
         }
     }
+    info!("IX ACCOUNT STATS!!!\n{}", out);
 
     let processing_time = now.elapsed();
 

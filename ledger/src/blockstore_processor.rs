@@ -1051,30 +1051,18 @@ pub fn process_blockstore_from_root(
     }
 
     #[derive(Default)]
-    struct BucketedStats {
-        sm: Vec<u64>,
-        md: Vec<u64>,
-        lg: Vec<u64>,
-        xl: Vec<u64>,
-        xxl: Vec<u64>,
-    }
+    struct BucketedStats([Vec<u64>; 11]);
 
     impl BucketedStats {
-        fn bucket_items_mut(&mut self, bucket: Bucket) -> &mut Vec<u64> {
-            match bucket {
-                Bucket::Sm => &mut self.sm,
-                Bucket::Md => &mut self.md,
-                Bucket::Lg => &mut self.lg,
-                Bucket::Xl => &mut self.xl,
-                Bucket::Xx => &mut self.xxl,
-            }
+        fn bucket_items_mut(&mut self, size: u64) -> &mut Vec<u64> {
+            let bucket_index = (size / 100_000).min(10);
+            &mut self.0[bucket_index as usize]
         }
 
         fn append_item(&mut self, item: CpiAccountDataRecordItem) {
             let account_data_size: u64 = item.total_account_data as u64;
             let cu: u64 = item.pre_cu - item.post_cu;
-            self.bucket_items_mut(Bucket::get(account_data_size))
-                .push(cu);
+            self.bucket_items_mut(account_data_size).push(cu);
         }
     }
 
@@ -1101,8 +1089,8 @@ pub fn process_blockstore_from_root(
 
         writeln!(&mut out, "Program {program_id} stats");
         writeln!(&mut out, "- {program_invocations} tx-level invocations");
-        for bucket in Bucket::all() {
-            let bucket_items = program_bucketed_stats.bucket_items_mut(bucket);
+        for bucket_index in 0..11 {
+            let bucket_items = &mut program_bucketed_stats.0[bucket_index];
             bucket_items.sort_by(|a, b| a.cmp(&b));
             let bucket_items_len = bucket_items.len();
             if bucket_items_len > 0 {
@@ -1111,7 +1099,11 @@ pub fn process_blockstore_from_root(
                 let pct75 = bucket_items[3 * bucket_items_len / 4];
                 let pct95 = bucket_items[19 * bucket_items_len / 20];
 
-                let bucket_name = bucket.name();
+                let bucket_name = if bucket_index < 10 {
+                    format!("{}-{}KB", bucket_index * 100, (bucket_index + 1) * 100)
+                } else {
+                    "1MB+".to_string()
+                };
                 write!(
                     &mut out,
                     "- [Bucket {bucket_name} ({bucket_items_len} items)]: "
@@ -1125,8 +1117,8 @@ pub fn process_blockstore_from_root(
     }
 
     writeln!(&mut out, "Total stats");
-    for bucket in Bucket::all() {
-        let bucket_items = total_bucketed_stats.bucket_items_mut(bucket);
+    for bucket_index in 0..11 {
+        let bucket_items = &mut total_bucketed_stats.0[bucket_index];
         bucket_items.sort_by(|a, b| a.cmp(&b));
         let bucket_items_len = bucket_items.len();
         if bucket_items_len > 0 {
@@ -1135,7 +1127,11 @@ pub fn process_blockstore_from_root(
             let pct75 = bucket_items[3 * bucket_items_len / 4];
             let pct95 = bucket_items[19 * bucket_items_len / 20];
 
-            let bucket_name = bucket.name();
+            let bucket_name = if bucket_index < 10 {
+                format!("{}-{}KB", bucket_index * 100, (bucket_index + 1) * 100)
+            } else {
+                "1MB+".to_string()
+            };
             write!(
                 &mut out,
                 "- [Bucket {bucket_name} ({bucket_items_len} items)]: "

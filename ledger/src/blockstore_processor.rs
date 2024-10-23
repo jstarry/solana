@@ -1016,12 +1016,13 @@ pub fn process_blockstore_from_root(
         Sm, // 0 - 1KB
         Md, // 1KB - 10KB
         Lg, // 10KB - 100KB
-        Xl, // 100KB -
+        Xl, // 100KB - 1MB
+        Xx, // 1MB -
     }
 
     impl Bucket {
-        const fn all() -> [Self; 4] {
-            [Self::Sm, Self::Md, Self::Lg, Self::Xl]
+        const fn all() -> [Self; 5] {
+            [Self::Sm, Self::Md, Self::Lg, Self::Xl, Self::Xx]
         }
 
         const fn name(&self) -> &'static str {
@@ -1030,6 +1031,7 @@ pub fn process_blockstore_from_root(
                 Self::Md => "md",
                 Self::Lg => "lg",
                 Self::Xl => "xl",
+                Self::Xx => "xxl",
             }
         }
 
@@ -1040,8 +1042,10 @@ pub fn process_blockstore_from_root(
                 Bucket::Md
             } else if account_data_size < 100_000 {
                 Bucket::Lg
-            } else {
+            } else if account_data_size < 1_000_000 {
                 Bucket::Xl
+            } else {
+                Bucket::Xx
             }
         }
     }
@@ -1052,6 +1056,7 @@ pub fn process_blockstore_from_root(
         md: Vec<u64>,
         lg: Vec<u64>,
         xl: Vec<u64>,
+        xxl: Vec<u64>,
     }
 
     impl BucketedStats {
@@ -1061,6 +1066,7 @@ pub fn process_blockstore_from_root(
                 Bucket::Md => &mut self.md,
                 Bucket::Lg => &mut self.lg,
                 Bucket::Xl => &mut self.xl,
+                Bucket::Xx => &mut self.xxl,
             }
         }
 

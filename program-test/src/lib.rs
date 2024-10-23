@@ -131,7 +131,7 @@ pub fn invoke_builtin_function(
 
     // Serialize entrypoint parameters with SBF ABI
     let (mut parameter_bytes, _regions, _account_lengths) = serialize_parameters(
-        transaction_context,
+        invoke_context,
         instruction_context,
         true, // copy_account_data // There is no VM so direct mapping can not be implemented here
     )?;

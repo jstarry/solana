@@ -1075,6 +1075,7 @@ pub fn process_blockstore_from_root(
     let total_invocations = cpi_account_data_record.len();
     let mut total_bucketed_stats = BucketedStats::default();
     info!("found {total_invocations} cpi invocations");
+    let mut out = String::new();
     let mut cpi_account_data_record_list: Vec<_> = cpi_account_data_record.0.into_iter().collect();
     cpi_account_data_record_list.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
     for (list_index, (program_id, cpi_account_data_items)) in
@@ -1092,12 +1093,11 @@ pub fn process_blockstore_from_root(
             continue;
         }
 
-        let mut out = String::new();
         writeln!(&mut out, "Program {program_id} stats");
         writeln!(&mut out, "- {program_invocations} tx-level invocations");
         for bucket in Bucket::all() {
             let bucket_items = program_bucketed_stats.bucket_items_mut(bucket);
-            bucket_items.sort_by(|a, b| b.cmp(&a));
+            bucket_items.sort_by(|a, b| a.cmp(&b));
             let bucket_items_len = bucket_items.len();
             if bucket_items_len > 0 {
                 let pct25 = bucket_items[bucket_items_len / 4];
@@ -1118,11 +1118,10 @@ pub fn process_blockstore_from_root(
         }
     }
 
-    let mut out = String::new();
     writeln!(&mut out, "Total stats");
     for bucket in Bucket::all() {
         let bucket_items = total_bucketed_stats.bucket_items_mut(bucket);
-        bucket_items.sort_by(|a, b| b.cmp(&a));
+        bucket_items.sort_by(|a, b| a.cmp(&b));
         let bucket_items_len = bucket_items.len();
         if bucket_items_len > 0 {
             let pct25 = bucket_items[bucket_items_len / 4];

@@ -2,7 +2,7 @@
 
 use {
     byteorder::{ByteOrder, LittleEndian},
-    solana_program_runtime::invoke_context::SerializedAccountMetadata,
+    solana_program_runtime::invoke_context::{InvokeContext, SerializedAccountMetadata},
     solana_rbpf::{
         aligned_memory::{AlignedMemory, Pod},
         ebpf::{HOST_ALIGN, MM_INPUT_START},
@@ -189,7 +189,7 @@ impl Serializer {
 }
 
 pub fn serialize_parameters(
-    transaction_context: &TransactionContext,
+    invoke_context: &InvokeContext,
     instruction_context: &InstructionContext,
     copy_account_data: bool,
 ) -> Result<
@@ -200,6 +200,7 @@ pub fn serialize_parameters(
     ),
     InstructionError,
 > {
+    let transaction_context: &TransactionContext = &invoke_context.transaction_context;
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
     if num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
@@ -214,6 +215,8 @@ pub fn serialize_parameters(
         )
     };
 
+    let mut total_account_data = 0;
+    let mut writable_account_data = 0;
     let accounts = (0..instruction_context.get_number_of_instruction_accounts())
         .map(|instruction_account_index| {
             if let Some(index) = instruction_context
@@ -225,6 +228,10 @@ pub fn serialize_parameters(
                 let account = instruction_context
                     .try_borrow_instruction_account(transaction_context, instruction_account_index)
                     .unwrap();
+                total_account_data += account.get_data().len();
+                if account.is_writable() {
+                    writable_account_data += account.get_data().len();
+                }
                 SerializeAccount::Account(instruction_account_index, account)
             }
         })
@@ -234,6 +241,7 @@ pub fn serialize_parameters(
         // time it's iterated on.
         .collect::<Vec<_>>();
 
+    invoke_context.record_ix_account_data(&program_id, total_account_data, writable_account_data);
     if is_loader_deprecated {
         serialize_parameters_unaligned(
             accounts,

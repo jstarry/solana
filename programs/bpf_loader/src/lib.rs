@@ -1363,11 +1363,8 @@ pub fn execute<'a, 'b: 'a>(
         .is_active(&bpf_account_data_direct_mapping::id());
 
     let mut serialize_time = Measure::start("serialize");
-    let (parameter_bytes, regions, accounts_metadata) = serialization::serialize_parameters(
-        invoke_context.transaction_context,
-        instruction_context,
-        !direct_mapping,
-    )?;
+    let (parameter_bytes, regions, accounts_metadata) =
+        serialization::serialize_parameters(invoke_context, instruction_context, !direct_mapping)?;
     serialize_time.stop();
 
     // save the account addresses so in case we hit an AccessViolation error we
@@ -1409,6 +1406,7 @@ pub fn execute<'a, 'b: 'a>(
             debug_assert!(memory_pool.heap_len() <= MAX_INSTRUCTION_STACK_DEPTH);
         });
         drop(vm);
+        invoke_context.record_cu(&program_id);
         if let Some(execute_time) = invoke_context.execute_time.as_mut() {
             execute_time.stop();
             saturating_add_assign!(invoke_context.timings.execute_us, execute_time.as_us());

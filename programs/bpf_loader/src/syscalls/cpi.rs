@@ -965,11 +965,11 @@ where
         }
     }
 
-    invoke_context.record_cpi_account_data(
-        program_id,
-        total_cpi_account_data,
-        writable_cpi_account_data,
-    );
+    // invoke_context.record_ix_account_data(
+    //     program_id,
+    //     total_cpi_account_data,
+    //     writable_cpi_account_data,
+    // );
 
     Ok(accounts)
 }

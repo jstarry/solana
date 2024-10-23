@@ -218,9 +218,12 @@ impl CpiAccountDataRecord {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct CpiAccountDataRecordItem {
     pub total_account_data: usize,
     pub writable_account_data: usize,
+    pub pre_cu: u64,
+    pub post_cu: u64,
 }
 
 /// Main pipeline from runtime to program execution.
@@ -648,7 +651,19 @@ impl<'a> InvokeContext<'a> {
         Ok(())
     }
 
-    pub fn record_cpi_account_data(
+    pub fn record_cu(&self, program_id: &Pubkey) {
+        if let Some(record_item) = self
+            .cpi_account_data_record
+            .borrow_mut()
+            .entry(*program_id)
+            .or_default()
+            .last_mut()
+        {
+            record_item.post_cu = *self.compute_meter.borrow();
+        }
+    }
+
+    pub fn record_ix_account_data(
         &self,
         program_id: &Pubkey,
         total_account_data: usize,
@@ -661,6 +676,8 @@ impl<'a> InvokeContext<'a> {
             .push(CpiAccountDataRecordItem {
                 total_account_data,
                 writable_account_data,
+                pre_cu: *self.compute_meter.borrow(),
+                post_cu: 0,
             });
     }
 

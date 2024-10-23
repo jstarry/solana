@@ -27,7 +27,7 @@ use {
     },
     solana_measure::{measure::Measure, measure_us},
     solana_metrics::datapoint_error,
-    solana_program_runtime::invoke_context::CpiAccountDataRecord,
+    solana_program_runtime::invoke_context::{CpiAccountDataRecord, CpiAccountDataRecordItem},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
         accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
@@ -63,6 +63,7 @@ use {
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{
         collections::{HashMap, HashSet},
+        fmt::Write,
         ops::Index,
         path::PathBuf,
         result,
@@ -1010,31 +1011,135 @@ pub fn process_blockstore_from_root(
         (0, 0)
     };
 
+    #[derive(Copy, Clone)]
+    enum Bucket {
+        Sm, // 0 - 1KB
+        Md, // 1KB - 10KB
+        Lg, // 10KB - 100KB
+        Xl, // 100KB -
+    }
+
+    impl Bucket {
+        const fn all() -> [Self; 4] {
+            [Self::Sm, Self::Md, Self::Lg, Self::Xl]
+        }
+
+        const fn name(&self) -> &'static str {
+            match self {
+                Self::Sm => "sm",
+                Self::Md => "md",
+                Self::Lg => "lg",
+                Self::Xl => "xl",
+            }
+        }
+
+        const fn get(account_data_size: u64) -> Self {
+            if account_data_size < 1000 {
+                Bucket::Sm
+            } else if account_data_size < 10_000 {
+                Bucket::Md
+            } else if account_data_size < 100_000 {
+                Bucket::Lg
+            } else {
+                Bucket::Xl
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct BucketedStats {
+        sm: Vec<u64>,
+        md: Vec<u64>,
+        lg: Vec<u64>,
+        xl: Vec<u64>,
+    }
+
+    impl BucketedStats {
+        fn bucket_items_mut(&mut self, bucket: Bucket) -> &mut Vec<u64> {
+            match bucket {
+                Bucket::Sm => &mut self.sm,
+                Bucket::Md => &mut self.md,
+                Bucket::Lg => &mut self.lg,
+                Bucket::Xl => &mut self.xl,
+            }
+        }
+
+        fn append_item(&mut self, item: CpiAccountDataRecordItem) {
+            let account_data_size: u64 = item.total_account_data as u64;
+            let cu: u64 = item.pre_cu - item.post_cu;
+            self.bucket_items_mut(Bucket::get(account_data_size))
+                .push(cu);
+        }
+    }
+
     let total_invocations = cpi_account_data_record.len();
+    let mut total_bucketed_stats = BucketedStats::default();
     info!("found {total_invocations} cpi invocations");
     let mut cpi_account_data_record_list: Vec<_> = cpi_account_data_record.0.into_iter().collect();
     cpi_account_data_record_list.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
-    for (program_id, mut cpi_account_data_items) in
-        cpi_account_data_record_list.into_iter().take(20)
+    for (list_index, (program_id, cpi_account_data_items)) in
+        cpi_account_data_record_list.into_iter().enumerate()
     {
-        cpi_account_data_items.sort_by(|a, b| b.total_account_data.cmp(&a.total_account_data));
+        let program_invocations = cpi_account_data_items.len();
+        let mut program_bucketed_stats = BucketedStats::default();
+        for item in cpi_account_data_items {
+            total_bucketed_stats.append_item(item);
+            if list_index < 20 {
+                program_bucketed_stats.append_item(item);
+            }
+        }
+        if list_index >= 20 {
+            continue;
+        }
 
-        let invocations = cpi_account_data_items.len();
-        let pct25 = cpi_account_data_items[invocations / 4].total_account_data;
-        let pct50 = cpi_account_data_items[invocations / 2].total_account_data;
-        let pct75 = cpi_account_data_items[3 * invocations / 4].total_account_data;
-        let pct95 = cpi_account_data_items[19 * invocations / 20].total_account_data;
+        let mut out = String::new();
+        writeln!(&mut out, "Program {program_id} stats");
+        writeln!(&mut out, "- {program_invocations} tx-level invocations");
+        for bucket in Bucket::all() {
+            let bucket_items = program_bucketed_stats.bucket_items_mut(bucket);
+            bucket_items.sort_by(|a, b| b.cmp(&a));
+            let bucket_items_len = bucket_items.len();
+            if bucket_items_len > 0 {
+                let pct25 = bucket_items[bucket_items_len / 4];
+                let pct50 = bucket_items[bucket_items_len / 2];
+                let pct75 = bucket_items[3 * bucket_items_len / 4];
+                let pct95 = bucket_items[19 * bucket_items_len / 20];
 
-        cpi_account_data_items
-            .sort_by(|a, b| b.writable_account_data.cmp(&a.writable_account_data));
-        let wpct25 = cpi_account_data_items[invocations / 4].writable_account_data;
-        let wpct50 = cpi_account_data_items[invocations / 2].writable_account_data;
-        let wpct75 = cpi_account_data_items[3 * invocations / 4].writable_account_data;
-        let wpct95 = cpi_account_data_items[19 * invocations / 20].writable_account_data;
-        info!("Program {program_id} stats: {invocations} cpi invocations, \
-        total account input data size: [25%: {pct25}, 50%: {pct50}, 75%: {pct75}, 95%: {pct95}] \
-        writable account input data size: [25%: {wpct25}, 50%: {wpct50}, 75%: {wpct75}, 95%: {wpct95}] \
-        ");
+                let bucket_name = bucket.name();
+                write!(
+                    &mut out,
+                    "- [Bucket {bucket_name} ({bucket_items_len} items)]: "
+                );
+                writeln!(
+                    &mut out,
+                    "[25%: {pct25}, 50%: {pct50}, 75%: {pct75}, 95%: {pct95}]"
+                );
+            }
+        }
+    }
+
+    let mut out = String::new();
+    writeln!(&mut out, "Total stats");
+    for bucket in Bucket::all() {
+        let bucket_items = total_bucketed_stats.bucket_items_mut(bucket);
+        bucket_items.sort_by(|a, b| b.cmp(&a));
+        let bucket_items_len = bucket_items.len();
+        if bucket_items_len > 0 {
+            let pct25 = bucket_items[bucket_items_len / 4];
+            let pct50 = bucket_items[bucket_items_len / 2];
+            let pct75 = bucket_items[3 * bucket_items_len / 4];
+            let pct95 = bucket_items[19 * bucket_items_len / 20];
+
+            let bucket_name = bucket.name();
+            write!(
+                &mut out,
+                "- [Bucket {bucket_name} ({bucket_items_len} items)]: "
+            );
+            writeln!(
+                &mut out,
+                "[25%: {pct25}, 50%: {pct50}, 75%: {pct75}, 95%: {pct95}]"
+            );
+        }
     }
 
     let processing_time = now.elapsed();

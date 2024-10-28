@@ -810,8 +810,8 @@
     esutils "^2.0.2"
 
 "@babel/preset-typescript@^7.12.16":
-  version "7.25.9"
-  resolved "https://registry.yarnpkg.com/@babel/preset-typescript/-/preset-typescript-7.25.9.tgz#bb82f26cda46dc2eb1ee10bf72fa994e759a08ba"
+  version "7.26.0"
+  resolved "https://registry.yarnpkg.com/@babel/preset-typescript/-/preset-typescript-7.26.0.tgz#4a570f1b8d104a242d923957ffa1eaff142a106d"
   dependencies:
     "@babel/helper-plugin-utils" "^7.25.9"
     "@babel/helper-validator-option" "^7.25.9"

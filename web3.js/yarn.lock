@@ -1928,8 +1928,10 @@
     "@types/chai" "*"
 
 "@types/chai@*", "@types/chai@^5.0.0":
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-5.0.0.tgz#7f981e71e69c9b2d422f58f78de1c59179782133"
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-5.0.1.tgz#2c3705555cf11f5f59c836a84c44afcfe4e5689d"
+  dependencies:
+    "@types/deep-eql" "*"
 
 "@types/connect@^3.4.33":
   version "3.4.35"
@@ -1946,6 +1948,10 @@
 "@types/cors@^2.8.6":
   version "2.8.12"
   resolved "https://registry.npmjs.org/@types/cors/-/cors-2.8.12.tgz"
+
+"@types/deep-eql@*":
+  version "4.0.2"
+  resolved "https://registry.yarnpkg.com/@types/deep-eql/-/deep-eql-4.0.2.tgz#334311971d3a07121e7eb91b684a605e7eea9cbd"
 
 "@types/estree@*":
   version "0.0.39"

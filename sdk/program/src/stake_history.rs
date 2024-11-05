@@ -7,7 +7,7 @@
 //! [`sysvar::stake_history`]: crate::sysvar::stake_history
 
 pub use solana_clock::Epoch;
-use std::ops::Deref;
+use {crate::stake::state::StakeActivationStatus, std::ops::Deref};
 
 pub const MAX_ENTRIES: usize = 512; // it should never take as many as 512 epochs to warm up or cool down
 
@@ -20,34 +20,19 @@ pub struct StakeHistoryEntry {
     pub deactivating: u64, // requested to be cooled down, not fully deactivated yet
 }
 
-impl StakeHistoryEntry {
-    pub fn with_effective(effective: u64) -> Self {
+impl std::ops::Add for StakeHistoryEntry {
+    type Output = StakeHistoryEntry;
+    fn add(self, rhs: StakeHistoryEntry) -> Self::Output {
         Self {
-            effective,
-            ..Self::default()
-        }
-    }
-
-    pub fn with_effective_and_activating(effective: u64, activating: u64) -> Self {
-        Self {
-            effective,
-            activating,
-            ..Self::default()
-        }
-    }
-
-    pub fn with_deactivating(deactivating: u64) -> Self {
-        Self {
-            effective: deactivating,
-            deactivating,
-            ..Self::default()
+            effective: self.effective.saturating_add(rhs.effective),
+            activating: self.activating.saturating_add(rhs.activating),
+            deactivating: self.deactivating.saturating_add(rhs.deactivating),
         }
     }
 }
 
-impl std::ops::Add for StakeHistoryEntry {
-    type Output = StakeHistoryEntry;
-    fn add(self, rhs: StakeHistoryEntry) -> Self::Output {
+impl StakeHistoryEntry {
+    pub fn add_stake_status(self, rhs: StakeActivationStatus) -> Self {
         Self {
             effective: self.effective.saturating_add(rhs.effective),
             activating: self.activating.saturating_add(rhs.activating),

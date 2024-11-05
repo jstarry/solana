@@ -14,6 +14,7 @@ use {
         clock::{Epoch, Slot},
         pubkey::Pubkey,
         stake::state::{Delegation, StakeActivationStatus},
+        stake_history::StakeHistoryEntry,
         vote::state::VoteStateVersions,
     },
     solana_stake_program::stake_state::Stake,
@@ -346,15 +347,15 @@ impl Stakes<StakeAccount> {
         let stake_history_entry = thread_pool.install(|| {
             stake_delegations
                 .par_iter()
-                .fold(StakeActivationStatus::default, |acc, stake_account| {
+                .fold(StakeHistoryEntry::default, |acc, stake_account| {
                     let delegation = stake_account.delegation();
-                    acc + delegation.stake_activating_and_deactivating(
+                    acc.add_stake_status(delegation.stake_activating_and_deactivating(
                         self.epoch,
                         &self.stake_history,
                         new_rate_activation_epoch,
-                    )
+                    ))
                 })
-                .reduce(StakeActivationStatus::default, Add::add)
+                .reduce(StakeHistoryEntry::default, Add::add)
         });
         self.stake_history.add(self.epoch, stake_history_entry);
         self.epoch = next_epoch;

@@ -1111,10 +1111,15 @@ impl MergeKind {
                     new_warmup_cooldown_rate_epoch(invoke_context),
                 );
 
-                match (status.effective, status.activating, status.deactivating) {
-                    (0, 0, 0) => Ok(Self::Inactive(*meta, stake_lamports, *stake_flags)),
-                    (0, _, _) => Ok(Self::ActivationEpoch(*meta, *stake, *stake_flags)),
-                    (_, 0, 0) => Ok(Self::FullyActive(*meta, *stake)),
+                match (
+                    status.effective,
+                    status.activating,
+                    status.deactivating,
+                    status.cooling_down,
+                ) {
+                    (0, 0, 0, 0) => Ok(Self::Inactive(*meta, stake_lamports, *stake_flags)),
+                    (0, _, 0, 0) => Ok(Self::ActivationEpoch(*meta, *stake, *stake_flags)),
+                    (_, 0, 0, 0) => Ok(Self::FullyActive(*meta, *stake)),
                     _ => {
                         let err = StakeError::MergeTransientStake;
                         ic_msg!(invoke_context, "{}", err);
@@ -1309,7 +1314,11 @@ where
     I: Iterator<Item = &'a Delegation>,
 {
     stakes.fold(StakeHistoryEntry::default(), |sum, stake| {
-        sum + stake.stake_activating_and_deactivating(epoch, history, new_rate_activation_epoch)
+        sum.add_stake_status(stake.stake_activating_and_deactivating(
+            epoch,
+            history,
+            new_rate_activation_epoch,
+        ))
     })
 }
 

@@ -14,19 +14,60 @@ use {
             instruction::{LockupArgs, StakeError},
             stake_flags::StakeFlags,
         },
-        stake_history::{StakeHistoryEntry, StakeHistoryGetEntry},
+        stake_history::StakeHistoryGetEntry,
     },
     solana_clock::{Clock, Epoch, UnixTimestamp},
     std::collections::HashSet,
 };
 
-pub type StakeActivationStatus = StakeHistoryEntry;
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
+pub struct StakeActivationStatus {
+    pub effective: u64,    // effective stake at this epoch
+    pub activating: u64,   // sum of portion of stakes not fully warmed up
+    pub deactivating: u64, // requested to be cooled down, not fully deactivated yet
+    pub cooling_down: u64, // amount of stake not available for withdrawal yet
+}
+
+impl StakeActivationStatus {
+    pub fn with_effective(effective: u64) -> Self {
+        Self {
+            effective,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_effective_and_activating(effective: u64, activating: u64) -> Self {
+        Self {
+            effective,
+            activating,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_deactivating_and_cooling_down(deactivating: u64, cooling_down: u64) -> Self {
+        Self {
+            effective: deactivating,
+            deactivating,
+            cooling_down,
+            ..Self::default()
+        }
+    }
+
+    pub fn with_deactivating(deactivating: u64) -> Self {
+        Self {
+            effective: deactivating,
+            deactivating,
+            ..Self::default()
+        }
+    }
+}
 
 // means that no more than RATE of current effective stake may be added or subtracted per
 // epoch
 pub const DEFAULT_WARMUP_COOLDOWN_RATE: f64 = 0.25;
 pub const NEW_WARMUP_COOLDOWN_RATE: f64 = 0.09;
 pub const DEFAULT_SLASH_PENALTY: u8 = ((5 * u8::MAX as usize) / 100) as u8;
+pub const COOLDOWN_EPOCHS: u64 = 1;
 
 pub fn warmup_cooldown_rate(current_epoch: Epoch, new_rate_activation_epoch: Option<Epoch>) -> f64 {
     if current_epoch < new_rate_activation_epoch.unwrap_or(u64::MAX) {
@@ -670,15 +711,7 @@ impl Delegation {
 
         // then de-activate some portion if necessary
         if target_epoch < self.deactivation_epoch {
-            // not deactivated
-            if activating_stake == 0 {
-                StakeActivationStatus::with_effective(effective_stake)
-            } else {
-                StakeActivationStatus::with_effective_and_activating(
-                    effective_stake,
-                    activating_stake,
-                )
-            }
+            StakeActivationStatus::with_effective_and_activating(effective_stake, activating_stake)
         } else if target_epoch == self.deactivation_epoch {
             // can only deactivate what's activated
             StakeActivationStatus::with_deactivating(effective_stake)
@@ -698,8 +731,11 @@ impl Delegation {
             // current effective stake is updated using its previous epoch's cluster stake
             let mut current_epoch;
             let mut current_effective_stake = effective_stake;
+            let mut current_epoch_cooling_down_stake: u64;
             loop {
                 current_epoch = prev_epoch + 1;
+                current_epoch_cooling_down_stake = 0;
+
                 // if there is no deactivating stake at prev epoch, we should have been
                 // fully undelegated at this moment
                 if prev_cluster_stake.deactivating == 0 {
@@ -721,11 +757,13 @@ impl Delegation {
 
                 current_effective_stake =
                     current_effective_stake.saturating_sub(newly_not_effective_stake);
-                if current_effective_stake == 0 {
-                    break;
-                }
+                current_epoch_cooling_down_stake = newly_not_effective_stake;
 
                 if current_epoch >= target_epoch {
+                    break;
+                }
+                if current_effective_stake == 0 {
+                    current_epoch_cooling_down_stake = 0;
                     break;
                 }
                 if let Some(current_cluster_stake) = history.get_entry(current_epoch) {
@@ -737,7 +775,10 @@ impl Delegation {
             }
 
             // deactivating stake should equal to all of currently remaining effective stake
-            StakeActivationStatus::with_deactivating(current_effective_stake)
+            StakeActivationStatus::with_deactivating_and_cooling_down(
+                current_effective_stake,
+                current_epoch_cooling_down_stake,
+            )
         } else {
             // no history or I've dropped out of history, so assume fully deactivated
             StakeActivationStatus::default()

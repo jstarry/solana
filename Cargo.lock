@@ -6156,7 +6156,12 @@ dependencies = [
  "solana-bpf-loader-program",
  "solana-compute-budget",
  "solana-compute-budget-program",
+<<<<<<< HEAD
  "solana-config-program",
+=======
+ "solana-cost-model",
+ "solana-feature-set",
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-loader-v4-program",

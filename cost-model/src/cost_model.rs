@@ -7,10 +7,16 @@
 
 use {
     crate::{block_cost_limits::*, transaction_cost::*},
+<<<<<<< HEAD
     log::*,
     solana_compute_budget::compute_budget_processor::{
         process_compute_budget_instructions, DEFAULT_HEAP_COST,
         DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
+=======
+    solana_builtins_default_costs::get_builtin_instruction_cost,
+    solana_compute_budget::compute_budget_limits::{
+        DEFAULT_HEAP_COST, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_COMPUTE_UNIT_LIMIT,
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
     },
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
@@ -171,8 +177,13 @@ impl CostModel {
 
         for (program_id, instruction) in transaction.message().program_instructions_iter() {
             let ix_execution_cost =
+<<<<<<< HEAD
                 if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
                     *builtin_cost
+=======
+                if let Some(builtin_cost) = get_builtin_instruction_cost(program_id, feature_set) {
+                    builtin_cost
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
                 } else {
                     has_user_space_instructions = true;
                     u64::from(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
@@ -521,6 +532,7 @@ mod tests {
         );
 
         // expected cost for one system transfer instructions
+<<<<<<< HEAD
         let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
@@ -533,6 +545,16 @@ mod tests {
         );
         assert_eq!(*expected_execution_cost, tx_cost.programs_execution_cost);
         assert_eq!(3, tx_cost.data_bytes_cost);
+=======
+        let expected_execution_cost =
+            solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
+
+        let (program_execution_cost, _loaded_accounts_data_size_cost, data_bytes_cost) =
+            CostModel::get_transaction_cost(&simple_transaction, &FeatureSet::all_enabled());
+
+        assert_eq!(expected_execution_cost, program_execution_cost);
+        assert_eq!(3, data_bytes_cost);
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
     }
 
     #[test]
@@ -689,9 +711,13 @@ mod tests {
         debug!("many transfer transaction {:?}", tx);
 
         // expected cost for two system transfer instructions
+<<<<<<< HEAD
         let program_cost = BUILT_IN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
+=======
+        let program_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
         let expected_cost = program_cost * 2;
 
         let mut tx_cost = UsageCostDetails::default();
@@ -773,9 +799,14 @@ mod tests {
         ));
 
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
+<<<<<<< HEAD
         let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap();
+=======
+        let expected_execution_cost =
+            solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
         const DEFAULT_PAGE_COST: u64 = 8;
         let expected_loaded_accounts_data_size_cost =
             solana_compute_budget::compute_budget_processor::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
@@ -785,8 +816,13 @@ mod tests {
 
         let tx_cost = CostModel::calculate_cost(&tx, &FeatureSet::all_enabled());
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
+<<<<<<< HEAD
         assert_eq!(*expected_execution_cost, tx_cost.programs_execution_cost());
         assert_eq!(2, tx_cost.writable_accounts().len());
+=======
+        assert_eq!(expected_execution_cost, tx_cost.programs_execution_cost());
+        assert_eq!(2, tx_cost.writable_accounts().count());
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
         assert_eq!(
             expected_loaded_accounts_data_size_cost,
             tx_cost.loaded_accounts_data_size_cost()
@@ -811,12 +847,17 @@ mod tests {
 
         let feature_set = FeatureSet::all_enabled();
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
+<<<<<<< HEAD
         let expected_execution_cost = BUILT_IN_INSTRUCTION_COSTS
             .get(&system_program::id())
             .unwrap()
             + BUILT_IN_INSTRUCTION_COSTS
                 .get(&compute_budget::id())
                 .unwrap();
+=======
+        let expected_execution_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+            + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS;
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
         let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
 
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
@@ -844,9 +885,13 @@ mod tests {
                 start_hash,
             ));
         // transaction has one builtin instruction, and one bpf instruction, no ComputeBudget::compute_unit_limit
+<<<<<<< HEAD
         let expected_builtin_cost = *BUILT_IN_INSTRUCTION_COSTS
             .get(&solana_system_program::id())
             .unwrap();
+=======
+        let expected_builtin_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
         let expected_bpf_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT;
 
         let mut tx_cost = UsageCostDetails::default();
@@ -873,12 +918,17 @@ mod tests {
                 start_hash,
             ));
         // transaction has one builtin instruction, and one ComputeBudget::compute_unit_limit
+<<<<<<< HEAD
         let expected_cost = *BUILT_IN_INSTRUCTION_COSTS
             .get(&solana_system_program::id())
             .unwrap()
             + BUILT_IN_INSTRUCTION_COSTS
                 .get(&compute_budget::id())
                 .unwrap();
+=======
+        let expected_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+            + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS;
+>>>>>>> d791c9a76c (Fix builtin default cost dependents on migration (#3768))
 
         let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(&mut tx_cost, &transaction, &FeatureSet::all_enabled());

@@ -7302,8 +7302,8 @@ prettier-linter-helpers@^1.0.0:
     fast-diff "^1.1.2"
 
 prettier@^3.0.0:
-  version "3.3.3"
-  resolved "https://registry.yarnpkg.com/prettier/-/prettier-3.3.3.tgz#30c54fe0be0d8d12e6ae61dbb10109ea00d53105"
+  version "3.4.0"
+  resolved "https://registry.yarnpkg.com/prettier/-/prettier-3.4.0.tgz#9dcd5e617cf103db8e4bd00924baecfd32bf9971"
 
 pretty-ms@^9.0.0:
   version "9.0.0"

@@ -163,7 +163,29 @@ impl CostModel {
         tx_cost: &mut UsageCostDetails,
         transaction: &SanitizedTransaction,
         feature_set: &FeatureSet,
+<<<<<<< HEAD
     ) {
+=======
+    ) -> (u64, u64, u64) {
+        if feature_set.is_active(&feature_set::reserve_minimal_cus_for_builtin_instructions::id()) {
+            let data_bytes_cost = Self::get_instructions_data_cost(transaction);
+            let (programs_execution_cost, loaded_accounts_data_size_cost) =
+                Self::get_estimated_execution_cost(transaction, feature_set);
+            (
+                programs_execution_cost,
+                loaded_accounts_data_size_cost,
+                data_bytes_cost,
+            )
+        } else {
+            Self::get_transaction_cost_without_minimal_builtin_cus(transaction, feature_set)
+        }
+    }
+
+    fn get_transaction_cost_without_minimal_builtin_cus(
+        transaction: &impl TransactionWithMeta,
+        feature_set: &FeatureSet,
+    ) -> (u64, u64, u64) {
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
         let mut programs_execution_costs = 0u64;
         let mut loaded_accounts_data_size_cost = 0u64;
         let mut data_bytes_len_total = 0u64;
@@ -195,9 +217,18 @@ impl CostModel {
             }
         }
 
+<<<<<<< HEAD
         // if failed to process compute_budget instructions, the transaction will not be executed
         // by `bank`, therefore it should be considered as no execution cost by cost model.
         match process_compute_budget_instructions(transaction.message().program_instructions_iter())
+=======
+        // if failed to process compute budget instructions, the transaction
+        // will not be executed by `bank`, therefore it should be considered
+        // as no execution cost by cost model.
+        match transaction
+            .compute_budget_instruction_details()
+            .sanitize_and_convert_to_compute_budget_limits(feature_set)
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
         {
             Ok(compute_budget_limits) => {
                 // if tx contained user-space instructions and a more accurate estimate available correct it,
@@ -224,10 +255,39 @@ impl CostModel {
         tx_cost.data_bytes_cost = data_bytes_len_total / INSTRUCTION_DATA_BYTES_COST;
     }
 
+<<<<<<< HEAD
     fn get_instructions_data_cost(
         tx_cost: &mut UsageCostDetails,
         transaction: &SanitizedTransaction,
     ) {
+=======
+    /// Return (programs_execution_cost, loaded_accounts_data_size_cost)
+    fn get_estimated_execution_cost(
+        transaction: &impl TransactionWithMeta,
+        feature_set: &FeatureSet,
+    ) -> (u64, u64) {
+        // if failed to process compute_budget instructions, the transaction will not be executed
+        // by `bank`, therefore it should be considered as no execution cost by cost model.
+        let (programs_execution_costs, loaded_accounts_data_size_cost) = match transaction
+            .compute_budget_instruction_details()
+            .sanitize_and_convert_to_compute_budget_limits(feature_set)
+        {
+            Ok(compute_budget_limits) => (
+                u64::from(compute_budget_limits.compute_unit_limit),
+                Self::calculate_loaded_accounts_data_size_cost(
+                    compute_budget_limits.loaded_accounts_bytes.get(),
+                    feature_set,
+                ),
+            ),
+            Err(_) => (0, 0),
+        };
+
+        (programs_execution_costs, loaded_accounts_data_size_cost)
+    }
+
+    /// Return the instruction data bytes cost.
+    fn get_instructions_data_cost(transaction: &impl SVMMessage) -> u64 {
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
         let ix_data_bytes_len_total: u64 = transaction
             .message()
             .instructions()
@@ -319,6 +379,14 @@ impl CostModel {
 mod tests {
     use {
         super::*,
+<<<<<<< HEAD
+=======
+        itertools::Itertools,
+        solana_compute_budget::compute_budget_limits::{
+            DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT, MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT,
+        },
+        solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
         solana_sdk::{
             compute_budget::{self, ComputeBudgetInstruction},
             fee::ACCOUNT_DATA_COST_PAGE_SIZE,
@@ -516,15 +584,21 @@ mod tests {
         let simple_transaction = SanitizedTransaction::from_transaction_for_tests(
             system_transaction::transfer(&mint_keypair, &keypair.pubkey(), 2, start_hash),
         );
-        debug!(
-            "system_transaction simple_transaction {:?}",
-            simple_transaction
-        );
 
-        // expected cost for one system transfer instructions
-        let expected_execution_cost =
-            solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
+        for (feature_set, expected_execution_cost) in [
+            (
+                FeatureSet::default(),
+                solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS,
+            ),
+            (
+                FeatureSet::all_enabled(),
+                u64::from(MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT),
+            ),
+        ] {
+            let (program_execution_cost, _loaded_accounts_data_size_cost, _data_bytes_cost) =
+                CostModel::get_transaction_cost(&simple_transaction, &feature_set);
 
+<<<<<<< HEAD
         let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(
             &mut tx_cost,
@@ -534,6 +608,10 @@ mod tests {
 
         assert_eq!(expected_execution_cost, tx_cost.programs_execution_cost);
         assert_eq!(3, tx_cost.data_bytes_cost);
+=======
+            assert_eq!(expected_execution_cost, program_execution_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -551,6 +629,7 @@ mod tests {
             vec![Pubkey::new_unique()],
             instructions,
         );
+<<<<<<< HEAD
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
         debug!("token_transaction {:?}", token_transaction);
 
@@ -565,6 +644,26 @@ mod tests {
             tx_cost.programs_execution_cost
         );
         assert_eq!(0, tx_cost.data_bytes_cost);
+=======
+        let token_transaction = RuntimeTransaction::from_transaction_for_tests(tx);
+
+        for (feature_set, expected_execution_cost) in [
+            (
+                FeatureSet::default(),
+                DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+            ),
+            (
+                FeatureSet::all_enabled(),
+                DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+            ),
+        ] {
+            let (program_execution_cost, _loaded_accounts_data_size_cost, data_bytes_cost) =
+                CostModel::get_transaction_cost(&token_transaction, &feature_set);
+
+            assert_eq!(expected_execution_cost, program_execution_cost);
+            assert_eq!(0, data_bytes_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -596,12 +695,13 @@ mod tests {
     #[test]
     fn test_cost_model_compute_budget_transaction() {
         let (mint_keypair, start_hash) = test_setup();
+        let expected_cu_limit = 12_345;
 
         let instructions = vec![
             CompiledInstruction::new(3, &(), vec![1, 2, 0]),
             CompiledInstruction::new_from_raw_parts(
                 4,
-                ComputeBudgetInstruction::SetComputeUnitLimit(12_345)
+                ComputeBudgetInstruction::SetComputeUnitLimit(expected_cu_limit)
                     .pack()
                     .unwrap(),
                 vec![],
@@ -617,6 +717,7 @@ mod tests {
             vec![Pubkey::new_unique(), compute_budget::id()],
             instructions,
         );
+<<<<<<< HEAD
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
 
         let mut tx_cost = UsageCostDetails::default();
@@ -628,6 +729,21 @@ mod tests {
         // If cu-limit is specified, that would the cost for all programs
         assert_eq!(12_345, tx_cost.programs_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
+=======
+        let token_transaction = RuntimeTransaction::from_transaction_for_tests(tx);
+
+        // If cu-limit is specified, that would the cost for all programs
+        for (feature_set, expected_execution_cost) in [
+            (FeatureSet::default(), expected_cu_limit as u64),
+            (FeatureSet::all_enabled(), expected_cu_limit as u64),
+        ] {
+            let (program_execution_cost, _loaded_accounts_data_size_cost, data_bytes_cost) =
+                CostModel::get_transaction_cost(&token_transaction, &feature_set);
+
+            assert_eq!(expected_execution_cost, program_execution_cost);
+            assert_eq!(1, data_bytes_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -664,6 +780,7 @@ mod tests {
         );
         let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
 
+<<<<<<< HEAD
         let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(
             &mut tx_cost,
@@ -671,6 +788,13 @@ mod tests {
             &FeatureSet::all_enabled(),
         );
         assert_eq!(0, tx_cost.programs_execution_cost);
+=======
+        for feature_set in [FeatureSet::default(), FeatureSet::all_enabled()] {
+            let (program_execution_cost, _loaded_accounts_data_size_cost, _data_bytes_cost) =
+                CostModel::get_transaction_cost(&token_transaction, &feature_set);
+            assert_eq!(0, program_execution_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -687,9 +811,9 @@ mod tests {
             message,
             start_hash,
         ));
-        debug!("many transfer transaction {:?}", tx);
 
         // expected cost for two system transfer instructions
+<<<<<<< HEAD
         let program_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
         let expected_cost = program_cost * 2;
 
@@ -697,6 +821,23 @@ mod tests {
         CostModel::get_transaction_cost(&mut tx_cost, &tx, &FeatureSet::all_enabled());
         assert_eq!(expected_cost, tx_cost.programs_execution_cost);
         assert_eq!(6, tx_cost.data_bytes_cost);
+=======
+        for (feature_set, expected_execution_cost) in [
+            (
+                FeatureSet::default(),
+                2 * solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS,
+            ),
+            (
+                FeatureSet::all_enabled(),
+                2 * u64::from(MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT),
+            ),
+        ] {
+            let (programs_execution_cost, _loaded_accounts_data_size_cost, data_bytes_cost) =
+                CostModel::get_transaction_cost(&tx, &feature_set);
+            assert_eq!(expected_execution_cost, programs_execution_cost);
+            assert_eq!(6, data_bytes_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -721,13 +862,30 @@ mod tests {
                 instructions,
             ),
         );
-        debug!("many random transaction {:?}", tx);
 
+<<<<<<< HEAD
         let expected_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 2;
         let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(&mut tx_cost, &tx, &FeatureSet::all_enabled());
         assert_eq!(expected_cost, tx_cost.programs_execution_cost);
         assert_eq!(0, tx_cost.data_bytes_cost);
+=======
+        for (feature_set, expected_cost) in [
+            (
+                FeatureSet::default(),
+                DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 2,
+            ),
+            (
+                FeatureSet::all_enabled(),
+                DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 2,
+            ),
+        ] {
+            let (program_execution_cost, _loaded_accounts_data_size_cost, data_bytes_cost) =
+                CostModel::get_transaction_cost(&tx, &feature_set);
+            assert_eq!(expected_cost, program_execution_cost);
+            assert_eq!(0, data_bytes_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -772,6 +930,7 @@ mod tests {
         ));
 
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
+<<<<<<< HEAD
         let expected_execution_cost =
             solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
         const DEFAULT_PAGE_COST: u64 = 8;
@@ -789,6 +948,34 @@ mod tests {
             expected_loaded_accounts_data_size_cost,
             tx_cost.loaded_accounts_data_size_cost()
         );
+=======
+        for (feature_set, expected_execution_cost) in [
+            (
+                FeatureSet::default(),
+                solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS,
+            ),
+            (
+                FeatureSet::all_enabled(),
+                u64::from(MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT),
+            ),
+        ] {
+            const DEFAULT_PAGE_COST: u64 = 8;
+            let expected_loaded_accounts_data_size_cost =
+                solana_compute_budget::compute_budget_limits::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+                    .get() as u64
+                    / ACCOUNT_DATA_COST_PAGE_SIZE
+                    * DEFAULT_PAGE_COST;
+
+            let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
+            assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
+            assert_eq!(expected_execution_cost, tx_cost.programs_execution_cost());
+            assert_eq!(2, tx_cost.writable_accounts().count());
+            assert_eq!(
+                expected_loaded_accounts_data_size_cost,
+                tx_cost.loaded_accounts_data_size_cost()
+            );
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -807,12 +994,21 @@ mod tests {
                 start_hash,
             ));
 
-        let feature_set = FeatureSet::all_enabled();
         let expected_account_cost = WRITE_LOCK_UNITS * 2;
-        let expected_execution_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
-            + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS;
-        let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
+        for (feature_set, expected_execution_cost) in [
+            (
+                FeatureSet::default(),
+                solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+                    + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS,
+            ),
+            (
+                FeatureSet::all_enabled(),
+                2 * u64::from(MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT),
+            ),
+        ] {
+            let expected_loaded_accounts_data_size_cost = (data_limit as u64) / (32 * 1024) * 8;
 
+<<<<<<< HEAD
         let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
         assert_eq!(expected_execution_cost, tx_cost.programs_execution_cost());
@@ -821,6 +1017,17 @@ mod tests {
             expected_loaded_accounts_data_size_cost,
             tx_cost.loaded_accounts_data_size_cost()
         );
+=======
+            let tx_cost = CostModel::calculate_cost(&tx, &feature_set);
+            assert_eq!(expected_account_cost, tx_cost.write_lock_cost());
+            assert_eq!(expected_execution_cost, tx_cost.programs_execution_cost());
+            assert_eq!(2, tx_cost.writable_accounts().count());
+            assert_eq!(
+                expected_loaded_accounts_data_size_cost,
+                tx_cost.loaded_accounts_data_size_cost()
+            );
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
@@ -838,9 +1045,22 @@ mod tests {
                 start_hash,
             ));
         // transaction has one builtin instruction, and one bpf instruction, no ComputeBudget::compute_unit_limit
-        let expected_builtin_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS;
-        let expected_bpf_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT;
+        for (feature_set, expected_execution_cost) in [
+            (
+                FeatureSet::default(),
+                solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+                    + DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64,
+            ),
+            (
+                FeatureSet::all_enabled(),
+                u64::from(MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT)
+                    + u64::from(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
+            ),
+        ] {
+            let (programs_execution_cost, _loaded_accounts_data_size_cost, _data_bytes_cost) =
+                CostModel::get_transaction_cost(&transaction, &feature_set);
 
+<<<<<<< HEAD
         let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(&mut tx_cost, &transaction, &FeatureSet::all_enabled());
 
@@ -848,29 +1068,46 @@ mod tests {
             expected_builtin_cost + expected_bpf_cost as u64,
             tx_cost.programs_execution_cost
         );
+=======
+            assert_eq!(expected_execution_cost, programs_execution_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 
     #[test]
     fn test_transaction_cost_with_mix_instruction_with_cu_limit() {
         let (mint_keypair, start_hash) = test_setup();
+        let cu_limit: u32 = 12_345;
 
         let transaction =
             SanitizedTransaction::from_transaction_for_tests(Transaction::new_signed_with_payer(
                 &[
                     system_instruction::transfer(&mint_keypair.pubkey(), &Pubkey::new_unique(), 2),
-                    ComputeBudgetInstruction::set_compute_unit_limit(12_345),
+                    ComputeBudgetInstruction::set_compute_unit_limit(cu_limit),
                 ],
                 Some(&mint_keypair.pubkey()),
                 &[&mint_keypair],
                 start_hash,
             ));
-        // transaction has one builtin instruction, and one ComputeBudget::compute_unit_limit
-        let expected_cost = solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
-            + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS;
+        for (feature_set, expected_execution_cost) in [
+            (
+                FeatureSet::default(),
+                solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS
+                    + solana_compute_budget_program::DEFAULT_COMPUTE_UNITS,
+            ),
+            (FeatureSet::all_enabled(), cu_limit as u64),
+        ] {
+            let (programs_execution_cost, _loaded_accounts_data_size_cost, _data_bytes_cost) =
+                CostModel::get_transaction_cost(&transaction, &feature_set);
 
+<<<<<<< HEAD
         let mut tx_cost = UsageCostDetails::default();
         CostModel::get_transaction_cost(&mut tx_cost, &transaction, &FeatureSet::all_enabled());
 
         assert_eq!(expected_cost, tx_cost.programs_execution_cost);
+=======
+            assert_eq!(expected_execution_cost, programs_execution_cost);
+        }
+>>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
     }
 }

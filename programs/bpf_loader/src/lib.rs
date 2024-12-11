@@ -36,7 +36,7 @@ use {
         clock::Slot,
         entrypoint::{MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            apply_cost_tracker_during_replay, bpf_account_data_direct_mapping,
+            bpf_account_data_direct_mapping, deplete_cu_meter_on_vm_failure,
             enable_bpf_loader_set_authority_checked_ix,
         },
         instruction::{AccountMeta, InstructionError},
@@ -1436,7 +1436,7 @@ fn execute<'a, 'b: 'a>(
             ProgramResult::Err(mut error) => {
                 if invoke_context
                     .get_feature_set()
-                    .is_active(&apply_cost_tracker_during_replay::id())
+                    .is_active(&deplete_cu_meter_on_vm_failure::id())
                     && !matches!(error, EbpfError::SyscallError(_))
                 {
                     // when an exception is thrown during the execution of a

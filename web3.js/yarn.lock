@@ -866,13 +866,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^19.6.0":
-  version "19.6.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-19.6.0.tgz#98e7fc8501cc38b6eef4b7f61e19b15f3c53700e"
+"@commitlint/cli@^19.6.1":
+  version "19.6.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-19.6.1.tgz#24edd26595d911cc6b680cdfbb1fb083bfd5f73d"
   dependencies:
     "@commitlint/format" "^19.5.0"
     "@commitlint/lint" "^19.6.0"
-    "@commitlint/load" "^19.5.0"
+    "@commitlint/load" "^19.6.1"
     "@commitlint/read" "^19.5.0"
     "@commitlint/types" "^19.5.0"
     tinyexec "^0.3.0"
@@ -930,9 +930,9 @@
     "@commitlint/rules" "^19.6.0"
     "@commitlint/types" "^19.5.0"
 
-"@commitlint/load@^19.5.0":
-  version "19.5.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-19.5.0.tgz#67f90a294894d1f99b930b6152bed2df44a81794"
+"@commitlint/load@^19.6.1":
+  version "19.6.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-19.6.1.tgz#5fae8843a6048a2d3d1cc16da0af8ee532fa9db4"
   dependencies:
     "@commitlint/config-validator" "^19.5.0"
     "@commitlint/execute-rule" "^19.5.0"
@@ -940,7 +940,7 @@
     "@commitlint/types" "^19.5.0"
     chalk "^5.3.0"
     cosmiconfig "^9.0.0"
-    cosmiconfig-typescript-loader "^5.0.0"
+    cosmiconfig-typescript-loader "^6.1.0"
     lodash.isplainobject "^4.0.6"
     lodash.merge "^4.6.2"
     lodash.uniq "^4.5.0"
@@ -998,10 +998,10 @@
     find-up "^7.0.0"
 
 "@commitlint/travis-cli@^19.0.3":
-  version "19.6.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-19.6.0.tgz#11ecce7722ef2a1e79aef78eef9517fba204fc6c"
+  version "19.6.1"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-19.6.1.tgz#607d0afeb2a7cf35c66fc81d09ff56595af5806e"
   dependencies:
-    "@commitlint/cli" "^19.6.0"
+    "@commitlint/cli" "^19.6.1"
     tinyexec "^0.3.0"
 
 "@commitlint/types@^19.5.0":
@@ -3216,11 +3216,11 @@ corser@^2.0.1:
   version "2.0.1"
   resolved "https://registry.npmjs.org/corser/-/corser-2.0.1.tgz"
 
-cosmiconfig-typescript-loader@^5.0.0:
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/cosmiconfig-typescript-loader/-/cosmiconfig-typescript-loader-5.0.0.tgz#0d3becfe022a871f7275ceb2397d692e06045dc8"
+cosmiconfig-typescript-loader@^6.1.0:
+  version "6.1.0"
+  resolved "https://registry.yarnpkg.com/cosmiconfig-typescript-loader/-/cosmiconfig-typescript-loader-6.1.0.tgz#7f644503e1c2bff90aed2d29a637008f279646bb"
   dependencies:
-    jiti "^1.19.1"
+    jiti "^2.4.1"
 
 cosmiconfig@^9.0.0:
   version "9.0.0"
@@ -5558,9 +5558,9 @@ jest-worker@^26.2.1:
     merge-stream "^2.0.0"
     supports-color "^7.0.0"
 
-jiti@^1.19.1:
-  version "1.20.0"
-  resolved "https://registry.yarnpkg.com/jiti/-/jiti-1.20.0.tgz#2d823b5852ee8963585c8dd8b7992ffc1ae83b42"
+jiti@^2.4.1:
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/jiti/-/jiti-2.4.1.tgz#4de9766ccbfa941d9b6390d2b159a4b295a52e6b"
 
 joi@^17.13.3:
   version "17.13.3"

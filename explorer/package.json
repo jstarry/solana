@@ -39,7 +39,7 @@
     "chart.js": "^2.9.4",
     "classnames": "2.5.1",
     "coingecko-api": "^1.0.10",
-    "cross-fetch": "^4.0.0",
+    "cross-fetch": "^4.1.0",
     "humanize-duration-ts": "^2.1.1",
     "prettier": "^3.4.2",
     "react": "^19.0.0",

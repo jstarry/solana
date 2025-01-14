@@ -2470,9 +2470,9 @@ available-typed-arrays@^1.0.7:
   dependencies:
     possible-typed-array-names "^1.0.0"
 
-axios@^1.7.7:
-  version "1.7.7"
-  resolved "https://registry.yarnpkg.com/axios/-/axios-1.7.7.tgz#2f554296f9892a72ac8d8e4c5b79c14a91d0a47f"
+axios@^1.7.9:
+  version "1.7.9"
+  resolved "https://registry.yarnpkg.com/axios/-/axios-1.7.9.tgz#d7d071380c132a24accda1b2cfc1535b79ec650a"
   dependencies:
     follow-redirects "^1.15.6"
     form-data "^4.0.0"
@@ -8359,8 +8359,8 @@ ssri@^9.0.0:
     minipass "^3.1.1"
 
 start-server-and-test@^2.0.0:
-  version "2.0.9"
-  resolved "https://registry.yarnpkg.com/start-server-and-test/-/start-server-and-test-2.0.9.tgz#a58160fa95e072aeb41e104472dea01b052b7443"
+  version "2.0.10"
+  resolved "https://registry.yarnpkg.com/start-server-and-test/-/start-server-and-test-2.0.10.tgz#cb0ee4bd86a611f7a4e702028a86d0793a2a8342"
   dependencies:
     arg "^5.0.2"
     bluebird "3.7.2"
@@ -8369,7 +8369,7 @@ start-server-and-test@^2.0.0:
     execa "5.1.1"
     lazy-ass "1.6.0"
     ps-tree "1.2.0"
-    wait-on "8.0.1"
+    wait-on "8.0.2"
 
 "statuses@>= 1.5.0 < 2", statuses@~1.5.0:
   version "1.5.0"
@@ -9174,11 +9174,11 @@ vary@^1, vary@~1.1.2:
   version "1.1.2"
   resolved "https://registry.npmjs.org/vary/-/vary-1.1.2.tgz"
 
-wait-on@8.0.1:
-  version "8.0.1"
-  resolved "https://registry.yarnpkg.com/wait-on/-/wait-on-8.0.1.tgz#13c8ec77115517f8fbc2d670521a444201f03f53"
+wait-on@8.0.2:
+  version "8.0.2"
+  resolved "https://registry.yarnpkg.com/wait-on/-/wait-on-8.0.2.tgz#0c7929abf7c5e625b733e992a9c0bd8b7691afe3"
   dependencies:
-    axios "^1.7.7"
+    axios "^1.7.9"
     joi "^17.13.3"
     lodash "^4.17.21"
     minimist "^1.2.8"

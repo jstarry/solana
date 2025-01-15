@@ -5,13 +5,47 @@ use {
     lazy_static::lazy_static,
     solana_sdk::{
         address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
-        compute_budget, ed25519_program,
+        compute_budget, config, ed25519_program,
         feature_set::{self, FeatureSet},
         loader_v4,
         pubkey::Pubkey,
-        secp256k1_program,
+        secp256k1_program, stake, system_program as system, vote,
     },
 };
+
+pub mod address_lookup_table_program {
+    pub const DEFAULT_COMPUTE_UNITS: u64 = 750;
+}
+
+pub mod bpf_loader_program {
+    pub const DEFAULT_LOADER_COMPUTE_UNITS: u64 = 570;
+    pub const DEPRECATED_LOADER_COMPUTE_UNITS: u64 = 1_140;
+    pub const UPGRADEABLE_LOADER_COMPUTE_UNITS: u64 = 2_370;
+}
+
+pub mod compute_budget_program {
+    pub const DEFAULT_COMPUTE_UNITS: u64 = 150;
+}
+
+pub mod config_program {
+    pub const DEFAULT_COMPUTE_UNITS: u64 = 450;
+}
+
+pub mod loader_v4_program {
+    pub const DEFAULT_COMPUTE_UNITS: u64 = 2_000;
+}
+
+pub mod stake_program {
+    pub const DEFAULT_COMPUTE_UNITS: u64 = 750;
+}
+
+pub mod system_program {
+    pub const DEFAULT_COMPUTE_UNITS: u64 = 150;
+}
+
+pub mod vote_program {
+    pub const DEFAULT_COMPUTE_UNITS: u64 = 2_100;
+}
 
 /// DEVELOPER: when a builtin is migrated to sbpf, please add its corresponding
 /// migration feature ID to BUILTIN_INSTRUCTION_COSTS, so the builtin's default
@@ -36,74 +70,73 @@ lazy_static! {
     /// https://github.com/solana-labs/solana/issues/29595.
     static ref BUILTIN_INSTRUCTION_COSTS: AHashMap<Pubkey, BuiltinCost> = [
     (
-        solana_stake_program::id(),
+        stake::program::id(),
         BuiltinCost {
-            native_cost: solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: Some(feature_set::migrate_stake_program_to_core_bpf::id()),
-        },
-    ),
-    (
-        solana_config_program::id(),
-        BuiltinCost {
-            native_cost: solana_config_program::config_processor::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: Some(feature_set::migrate_config_program_to_core_bpf::id()),
-        },
-    ),
-    (
-        solana_vote_program::id(),
-        BuiltinCost {
-            native_cost: solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
+            native_cost: stake_program::DEFAULT_COMPUTE_UNITS,
             core_bpf_migration_feature: None,
         },
     ),
     (
-        solana_system_program::id(),
+        config::program::id(),
         BuiltinCost {
-            native_cost: solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS,
+            native_cost: config_program::DEFAULT_COMPUTE_UNITS,
+            core_bpf_migration_feature: Some(feature_set::migrate_config_program_to_core_bpf::id()),
+        },
+    ),
+    (
+        vote::program::id(),
+        BuiltinCost {
+            native_cost: vote_program::DEFAULT_COMPUTE_UNITS,
+            core_bpf_migration_feature: None,
+        },
+    ),
+    (
+        system::id(),
+        BuiltinCost{
+            native_cost: system_program::DEFAULT_COMPUTE_UNITS,
             core_bpf_migration_feature: None,
         },
     ),
     (
         compute_budget::id(),
         BuiltinCost {
-            native_cost: solana_compute_budget_program::DEFAULT_COMPUTE_UNITS,
+            native_cost: compute_budget_program::DEFAULT_COMPUTE_UNITS,
             core_bpf_migration_feature: None,
         },
     ),
     (
         address_lookup_table::program::id(),
         BuiltinCost {
-            native_cost: solana_address_lookup_table_program::processor::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: Some(
-                feature_set::migrate_address_lookup_table_program_to_core_bpf::id(),
-            ),
+            native_cost: address_lookup_table_program::DEFAULT_COMPUTE_UNITS,
+            core_bpf_migration_feature:
+                Some(feature_set::migrate_address_lookup_table_program_to_core_bpf::id()),
         },
     ),
     (
         bpf_loader_upgradeable::id(),
         BuiltinCost {
-            native_cost: solana_bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS,
+            native_cost: bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS,
             core_bpf_migration_feature: None,
         },
     ),
     (
         bpf_loader_deprecated::id(),
         BuiltinCost {
-            native_cost: solana_bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS,
+            native_cost: bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS,
             core_bpf_migration_feature: None,
         },
     ),
     (
         bpf_loader::id(),
         BuiltinCost {
-            native_cost: solana_bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS,
+            native_cost: bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS,
             core_bpf_migration_feature: None,
         },
     ),
     (
         loader_v4::id(),
         BuiltinCost {
-            native_cost: solana_loader_v4_program::DEFAULT_COMPUTE_UNITS,
+            native_cost: loader_v4_program::DEFAULT_COMPUTE_UNITS,
             core_bpf_migration_feature: None,
         },
     ),
@@ -170,22 +203,21 @@ mod test {
     fn test_get_builtin_instruction_cost() {
         // use native cost if no migration planned
         assert_eq!(
-            Some(solana_compute_budget_program::DEFAULT_COMPUTE_UNITS),
+            Some(compute_budget_program::DEFAULT_COMPUTE_UNITS),
             get_builtin_instruction_cost(&compute_budget::id(), &FeatureSet::all_enabled())
         );
 
         // use native cost if migration is planned but not activated
         assert_eq!(
-            Some(solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS),
-            get_builtin_instruction_cost(&solana_stake_program::id(), &FeatureSet::default())
+            Some(stake_program::DEFAULT_COMPUTE_UNITS),
+            get_builtin_instruction_cost(&stake::program::id(), &FeatureSet::default())
         );
 
         // None if migration is planned and activated, in which case, it's no longer builtin
-        assert!(get_builtin_instruction_cost(
-            &solana_stake_program::id(),
-            &FeatureSet::all_enabled()
-        )
-        .is_none());
+        assert!(
+            get_builtin_instruction_cost(&stake::program::id(), &FeatureSet::all_enabled())
+                .is_none()
+        );
 
         // None if not builtin
         assert!(

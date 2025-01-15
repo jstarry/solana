@@ -1,5 +1,7 @@
 use {
-    solana_builtins_default_costs::{is_builtin_program, MAYBE_BUILTIN_KEY},
+    solana_builtins_default_costs::{
+        get_builtin_migration_feature_index, BuiltinMigrationFeatureIndex, MAYBE_BUILTIN_KEY,
+    },
     solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey},
 };
 
@@ -13,6 +15,12 @@ const FILTER_SIZE: u8 = (PACKET_DATA_SIZE / core::mem::size_of::<Pubkey>()) as u
 pub(crate) enum ProgramKind {
     NotBuiltin,
     Builtin,
+    // Builtin program maybe in process of being migrated to core bpf,
+    // if core_bpf_migration_feature is activated, then the migration has
+    // completed and it should no longer be considered as builtin
+    MigratingBuiltin {
+        core_bpf_migration_feature_index: usize,
+    },
 }
 
 pub(crate) struct BuiltinProgramsFilter {
@@ -43,10 +51,14 @@ impl BuiltinProgramsFilter {
             return ProgramKind::NotBuiltin;
         }
 
-        if is_builtin_program(program_id) {
-            ProgramKind::Builtin
-        } else {
-            ProgramKind::NotBuiltin
+        match get_builtin_migration_feature_index(program_id) {
+            BuiltinMigrationFeatureIndex::NotBuiltin => ProgramKind::NotBuiltin,
+            BuiltinMigrationFeatureIndex::BuiltinNoMigrationFeature => ProgramKind::Builtin,
+            BuiltinMigrationFeatureIndex::BuiltinWithMigrationFeature(
+                core_bpf_migration_feature_index,
+            ) => ProgramKind::MigratingBuiltin {
+                core_bpf_migration_feature_index,
+            },
         }
     }
 }

@@ -31,9 +31,3 @@ frozen-abi = [
     "dep:solana-frozen-abi",
 ]
 dev-context-only-utils = []
-<<<<<<< HEAD
-=======
-
-[lints]
-workspace = true
->>>>>>> 9379fbcba4 (Accounting migrating builtin programs default Compute Unit Limit with feature status (#3975))

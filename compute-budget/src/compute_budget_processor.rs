@@ -3,6 +3,7 @@ use {
         builtin_programs_filter::{BuiltinProgramsFilter, ProgramKind},
         prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
     },
+    solana_builtins_default_costs::{get_migration_feature_id, MIGRATING_BUILTINS_COSTS},
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
@@ -69,6 +70,24 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
     }
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
+#[cfg_attr(feature = "dev-context-only-utils", derive(Clone))]
+#[derive(Debug)]
+struct MigrationBuiltinFeatureCounter {
+    // The vector of counters, matching the size of the static vector MIGRATION_FEATURE_IDS,
+    // each counter representing the number of times its corresponding feature ID is
+    // referenced in this transaction.
+    migrating_builtin: [u16; MIGRATING_BUILTINS_COSTS.len()],
+}
+
+impl Default for MigrationBuiltinFeatureCounter {
+    fn default() -> Self {
+        Self {
+            migrating_builtin: [0; MIGRATING_BUILTINS_COSTS.len()],
+        }
+    }
+}
+
 /// Processing compute_budget could be part of tx sanitizing, failed to process
 /// these instructions will drop the transaction eventually without execution,
 /// may as well fail it early.
@@ -84,8 +103,9 @@ pub fn process_compute_budget_instructions<'a>(
     let mut requested_heap_size = None;
     let mut updated_loaded_accounts_data_size_limit = None;
     // Additional builtin program counters
-    let mut num_builtin_instructions: u16 = 0;
+    let mut num_non_migratable_builtin_instructions: u16 = 0;
     let mut num_non_builtin_instructions: u16 = 0;
+    let mut migrating_builtin_feature_counters = MigrationBuiltinFeatureCounter::default();
 
     for (i, (program_id, instruction)) in instructions.clone().enumerate() {
         if compute_budget::check_id(program_id) {
@@ -139,10 +159,23 @@ pub fn process_compute_budget_instructions<'a>(
         for (program_id, instruction) in instructions {
             match filter.get_program_kind(instruction.program_id_index as usize, program_id) {
                 ProgramKind::Builtin => {
-                    saturating_add_assign!(num_builtin_instructions, 1);
+                    saturating_add_assign!(num_non_migratable_builtin_instructions, 1);
                 }
                 ProgramKind::NotBuiltin => {
                     saturating_add_assign!(num_non_builtin_instructions, 1);
+                }
+                ProgramKind::MigratingBuiltin {
+                    core_bpf_migration_feature_index,
+                } => {
+                    saturating_add_assign!(
+                        *migrating_builtin_feature_counters
+                            .migrating_builtin
+                            .get_mut(core_bpf_migration_feature_index)
+                            .expect(
+                                "migrating feature index within range of MIGRATION_FEATURE_IDS"
+                            ),
+                        1
+                    );
                 }
             }
         }
@@ -158,10 +191,25 @@ pub fn process_compute_budget_instructions<'a>(
             if feature_set
                 .is_active(&feature_set::reserve_minimal_cus_for_builtin_instructions::id())
             {
-                u32::from(num_builtin_instructions)
+                // evaluate if any builtin has migrated with feature_set
+                let (num_migrated, num_not_migrated) = migrating_builtin_feature_counters
+                    .migrating_builtin
+                    .iter()
+                    .enumerate()
+                    .fold((0, 0), |(migrated, not_migrated), (index, count)| {
+                        if *count > 0 && feature_set.is_active(get_migration_feature_id(index)) {
+                            (migrated + count, not_migrated)
+                        } else {
+                            (migrated, not_migrated + count)
+                        }
+                    });
+
+                u32::from(num_non_migratable_builtin_instructions)
+                    .saturating_add(u32::from(num_not_migrated))
                     .saturating_mul(MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT)
                     .saturating_add(
                         u32::from(num_non_builtin_instructions)
+                            .saturating_add(u32::from(num_migrated))
                             .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
                     )
             } else {

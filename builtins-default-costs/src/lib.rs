@@ -13,7 +13,6 @@ use {
     },
 };
 
-<<<<<<< HEAD
 pub mod address_lookup_table_program {
     pub const DEFAULT_COMPUTE_UNITS: u64 = 750;
 }
@@ -48,13 +47,6 @@ pub mod vote_program {
     pub const DEFAULT_COMPUTE_UNITS: u64 = 2_100;
 }
 
-/// DEVELOPER: when a builtin is migrated to sbpf, please add its corresponding
-/// migration feature ID to BUILTIN_INSTRUCTION_COSTS, so the builtin's default
-/// cost can be determined properly based on feature status.
-/// When migration completed, eg the feature gate is enabled everywhere, please
-/// remove that builtin entry from BUILTIN_INSTRUCTION_COSTS.
-=======
->>>>>>> 9379fbcba4 (Accounting migrating builtin programs default Compute Unit Limit with feature status (#3975))
 #[derive(Clone)]
 pub struct MigratingBuiltinCost {
     native_cost: u64,
@@ -154,146 +146,72 @@ static_assertions::const_assert_eq!(
 
 pub const MIGRATING_BUILTINS_COSTS: &[(Pubkey, BuiltinCost)] = &[
     (
-<<<<<<< HEAD
-        stake::program::id(),
-        BuiltinCost {
-            native_cost: stake_program::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-    ),
-    (
         config::program::id(),
-        BuiltinCost {
-            native_cost: config_program::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: Some(feature_set::migrate_config_program_to_core_bpf::id()),
-        },
-    ),
-    (
-        vote::program::id(),
-        BuiltinCost {
-            native_cost: vote_program::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-    ),
-    (
-        system::id(),
-        BuiltinCost{
-            native_cost: system_program::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-    ),
-    (
-        compute_budget::id(),
-        BuiltinCost {
-            native_cost: compute_budget_program::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-    ),
-    (
-        address_lookup_table::program::id(),
-        BuiltinCost {
-            native_cost: address_lookup_table_program::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature:
-                Some(feature_set::migrate_address_lookup_table_program_to_core_bpf::id()),
-        },
-    ),
-    (
-        bpf_loader_upgradeable::id(),
-        BuiltinCost {
-            native_cost: bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-    ),
-    (
-        bpf_loader_deprecated::id(),
-        BuiltinCost {
-            native_cost: bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-    ),
-    (
-        bpf_loader::id(),
-        BuiltinCost {
-            native_cost: bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-    ),
-    (
-        loader_v4::id(),
-        BuiltinCost {
-            native_cost: loader_v4_program::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: None,
-        },
-=======
-        stake::id(),
         BuiltinCost::Migrating(MigratingBuiltinCost {
-            native_cost: solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: feature_set::migrate_stake_program_to_core_bpf::id(),
+            native_cost: config_program::DEFAULT_COMPUTE_UNITS,
+            core_bpf_migration_feature: feature_set::migrate_config_program_to_core_bpf::id(),
             position: 0,
         }),
     ),
     (
-        config::id(),
+        address_lookup_table::program::id(),
         BuiltinCost::Migrating(MigratingBuiltinCost {
-            native_cost: solana_config_program::config_processor::DEFAULT_COMPUTE_UNITS,
-            core_bpf_migration_feature: feature_set::migrate_config_program_to_core_bpf::id(),
-            position: 1,
-        }),
-    ),
-    (
-        address_lookup_table::id(),
-        BuiltinCost::Migrating(MigratingBuiltinCost {
-            native_cost: solana_address_lookup_table_program::processor::DEFAULT_COMPUTE_UNITS,
+            native_cost: address_lookup_table_program::DEFAULT_COMPUTE_UNITS,
             core_bpf_migration_feature:
                 feature_set::migrate_address_lookup_table_program_to_core_bpf::id(),
-            position: 2,
+            position: 1,
         }),
     ),
 ];
 
 pub const NON_MIGRATING_BUILTINS_COSTS: &[(Pubkey, BuiltinCost)] = &[
     (
-        vote::id(),
+        stake::program::id(),
         BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
-            native_cost: solana_vote_program::vote_processor::DEFAULT_COMPUTE_UNITS,
+            native_cost: stake_program::DEFAULT_COMPUTE_UNITS,
         }),
     ),
     (
-        system_program::id(),
+        vote::program::id(),
         BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
-            native_cost: solana_system_program::system_processor::DEFAULT_COMPUTE_UNITS,
+            native_cost: vote_program::DEFAULT_COMPUTE_UNITS,
+        }),
+    ),
+    (
+        system::id(),
+        BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
+            native_cost: system_program::DEFAULT_COMPUTE_UNITS,
         }),
     ),
     (
         compute_budget::id(),
         BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
-            native_cost: solana_compute_budget_program::DEFAULT_COMPUTE_UNITS,
+            native_cost: compute_budget_program::DEFAULT_COMPUTE_UNITS,
         }),
     ),
     (
         bpf_loader_upgradeable::id(),
         BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
-            native_cost: solana_bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS,
+            native_cost: bpf_loader_program::UPGRADEABLE_LOADER_COMPUTE_UNITS,
         }),
     ),
     (
         bpf_loader_deprecated::id(),
         BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
-            native_cost: solana_bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS,
+            native_cost: bpf_loader_program::DEPRECATED_LOADER_COMPUTE_UNITS,
         }),
     ),
     (
         bpf_loader::id(),
         BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
-            native_cost: solana_bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS,
+            native_cost: bpf_loader_program::DEFAULT_LOADER_COMPUTE_UNITS,
         }),
     ),
     (
         loader_v4::id(),
         BuiltinCost::NotMigrating(NotMigratingBuiltinCost {
-            native_cost: solana_loader_v4_program::DEFAULT_COMPUTE_UNITS,
+            native_cost: loader_v4_program::DEFAULT_COMPUTE_UNITS,
         }),
->>>>>>> 9379fbcba4 (Accounting migrating builtin programs default Compute Unit Limit with feature status (#3975))
     ),
     // Note: These are precompile, run directly in bank during sanitizing;
     (
@@ -414,7 +332,6 @@ mod test {
 
         // use native cost if migration is planned but not activated
         assert_eq!(
-<<<<<<< HEAD
             Some(stake_program::DEFAULT_COMPUTE_UNITS),
             get_builtin_instruction_cost(&stake::program::id(), &FeatureSet::default())
         );
@@ -424,14 +341,6 @@ mod test {
             get_builtin_instruction_cost(&stake::program::id(), &FeatureSet::all_enabled())
                 .is_none()
         );
-=======
-            Some(solana_stake_program::stake_instruction::DEFAULT_COMPUTE_UNITS),
-            get_builtin_instruction_cost(&stake::id(), &FeatureSet::default())
-        );
-
-        // None if migration is planned and activated, in which case, it's no longer builtin
-        assert!(get_builtin_instruction_cost(&stake::id(), &FeatureSet::all_enabled()).is_none());
->>>>>>> 9379fbcba4 (Accounting migrating builtin programs default Compute Unit Limit with feature status (#3975))
 
         // None if not builtin
         assert!(
@@ -453,21 +362,7 @@ mod test {
             get_builtin_migration_feature_index(&compute_budget::id()),
             BuiltinMigrationFeatureIndex::BuiltinNoMigrationFeature,
         ));
-        let feature_index = get_builtin_migration_feature_index(&stake::id());
-        assert!(matches!(
-            feature_index,
-            BuiltinMigrationFeatureIndex::BuiltinWithMigrationFeature(_)
-        ));
-        let BuiltinMigrationFeatureIndex::BuiltinWithMigrationFeature(feature_index) =
-            feature_index
-        else {
-            panic!("expect migrating builtin")
-        };
-        assert_eq!(
-            get_migration_feature_id(feature_index),
-            &feature_set::migrate_stake_program_to_core_bpf::id()
-        );
-        let feature_index = get_builtin_migration_feature_index(&config::id());
+        let feature_index = get_builtin_migration_feature_index(&compute_budget::id());
         assert!(matches!(
             feature_index,
             BuiltinMigrationFeatureIndex::BuiltinWithMigrationFeature(_)
@@ -481,7 +376,8 @@ mod test {
             get_migration_feature_id(feature_index),
             &feature_set::migrate_config_program_to_core_bpf::id()
         );
-        let feature_index = get_builtin_migration_feature_index(&address_lookup_table::id());
+        let feature_index =
+            get_builtin_migration_feature_index(&address_lookup_table::program::id());
         assert!(matches!(
             feature_index,
             BuiltinMigrationFeatureIndex::BuiltinWithMigrationFeature(_)

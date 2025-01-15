@@ -5768,7 +5768,6 @@ dependencies = [
  "lazy_static",
  "log",
  "solana-frozen-abi",
-<<<<<<< HEAD
  "solana-sdk",
  "static_assertions",
 ]
@@ -5779,15 +5778,6 @@ version = "2.0.23"
 dependencies = [
  "log",
  "solana-logger",
-=======
- "solana-loader-v4-program",
- "solana-pubkey",
- "solana-sdk-ids",
- "solana-stake-program",
- "solana-system-program",
- "solana-vote-program",
- "static_assertions",
->>>>>>> 9379fbcba4 (Accounting migrating builtin programs default Compute Unit Limit with feature status (#3975))
 ]
 
 [[package]]

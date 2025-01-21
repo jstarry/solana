@@ -39,17 +39,13 @@ pub enum DeserializedPacketError {
     FailedFilter(#[from] PacketFilterFailure),
 }
 
-<<<<<<< HEAD
-#[derive(Debug, PartialEq, Eq)]
-=======
 lazy_static::lazy_static! {
     // Make a dummy feature_set with all features enabled to
     // fetch compute_unit_price and compute_unit_limit for legacy leader.
     static ref FEATURE_SET: FeatureSet = FeatureSet::all_enabled();
 }
 
-#[derive(Debug)]
->>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
+#[derive(Debug, PartialEq, Eq)]
 pub struct ImmutableDeserializedPacket {
     original_packet: Packet,
     transaction: SanitizedVersionedTransaction,
@@ -67,24 +63,9 @@ impl ImmutableDeserializedPacket {
         let is_simple_vote = packet.meta().is_simple_vote_tx();
 
         // drop transaction if prioritization fails.
-<<<<<<< HEAD
         let mut compute_budget_details = sanitized_transaction
-            .get_compute_budget_details(packet.meta().round_compute_unit_price())
+            .get_compute_budget_details(&FEATURE_SET)
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
-=======
-        let ComputeBudgetLimits {
-            mut compute_unit_price,
-            compute_unit_limit,
-            ..
-        } = process_compute_budget_instructions(
-            sanitized_transaction
-                .get_message()
-                .program_instructions_iter()
-                .map(|(pubkey, ix)| (pubkey, SVMInstruction::from(ix))),
-            &FEATURE_SET,
-        )
-        .map_err(|_| DeserializedPacketError::PrioritizationFailure)?;
->>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799))
 
         // set compute unit price to zero for vote transactions
         if is_simple_vote {

@@ -206,7 +206,7 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
     let mut rent_debits = RentDebits::default();
 
     let requested_loaded_accounts_data_size_limit =
-        get_requested_loaded_accounts_data_size_limit(message)?;
+        get_requested_loaded_accounts_data_size_limit(message, feature_set)?;
     let mut accumulated_accounts_data_size: usize = 0;
 
     let disable_account_loader_special_case =
@@ -381,10 +381,13 @@ fn load_transaction_accounts<CB: TransactionProcessingCallback>(
 ///     Note, requesting zero bytes will result transaction error
 fn get_requested_loaded_accounts_data_size_limit(
     sanitized_message: &SanitizedMessage,
+    feature_set: &FeatureSet,
 ) -> Result<Option<NonZeroUsize>> {
-    let compute_budget_limits =
-        process_compute_budget_instructions(sanitized_message.program_instructions_iter())
-            .unwrap_or_default();
+    let compute_budget_limits = process_compute_budget_instructions(
+        sanitized_message.program_instructions_iter(),
+        feature_set,
+    )
+    .unwrap_or_default();
     // sanitize against setting size limit to zero
     NonZeroUsize::new(
         usize::try_from(compute_budget_limits.loaded_accounts_bytes).unwrap_or_default(),
@@ -924,7 +927,7 @@ mod tests {
             ));
             assert_eq!(
                 *expected_result,
-                get_requested_loaded_accounts_data_size_limit(tx.message())
+                get_requested_loaded_accounts_data_size_limit(tx.message(), &FeatureSet::default())
             );
         }
 

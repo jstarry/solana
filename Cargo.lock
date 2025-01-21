@@ -6019,6 +6019,7 @@ name = "solana-compute-budget"
 version = "2.0.23"
 dependencies = [
  "rustc_version 0.4.0",
+ "solana-builtins-default-costs",
  "solana-frozen-abi",
  "solana-sdk",
 ]

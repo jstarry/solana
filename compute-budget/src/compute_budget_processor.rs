@@ -1,27 +1,28 @@
 use {
-<<<<<<< HEAD:compute-budget/src/compute_budget_processor.rs
-    crate::prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+    crate::{
+        builtin_programs_filter::{BuiltinProgramsFilter, ProgramKind},
+        prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
+    },
     solana_sdk::{
         borsh1::try_from_slice_unchecked,
         compute_budget::{self, ComputeBudgetInstruction},
         entrypoint::HEAP_LENGTH,
+        feature_set::{self, FeatureSet},
         fee::FeeBudgetLimits,
         instruction::{CompiledInstruction, InstructionError},
         pubkey::Pubkey,
+        saturating_add_assign,
         transaction::TransactionError,
     },
-=======
-    crate::compute_budget_instruction_details::*,
-    solana_compute_budget::compute_budget_limits::*,
-    solana_sdk::{feature_set::FeatureSet, pubkey::Pubkey, transaction::TransactionError},
-    solana_svm_transaction::instruction::SVMInstruction,
->>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799)):runtime-transaction/src/instructions_processor.rs
 };
 
 /// Roughly 0.5us/page, where page is 32K; given roughly 15CU/us, the
 /// default heap page cost = 0.5 * 15 ~= 8CU/page
 pub const DEFAULT_HEAP_COST: u64 = 8;
 pub const DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT: u32 = 200_000;
+// SIMD-170 defines max CUs to be allocated for any builtin program instructions, that
+// have not been migrated to sBPF programs.
+pub const MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT: u32 = 3_000;
 pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
 pub const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 pub const MIN_HEAP_FRAME_BYTES: u32 = HEAP_LENGTH as u32;
@@ -74,16 +75,19 @@ impl From<ComputeBudgetLimits> for FeeBudgetLimits {
 /// If succeeded, the transaction's specific limits/requests (could be default)
 /// are retrieved and returned,
 pub fn process_compute_budget_instructions<'a>(
-<<<<<<< HEAD:compute-budget/src/compute_budget_processor.rs
-    instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+    instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)> + Clone,
+    feature_set: &FeatureSet,
 ) -> Result<ComputeBudgetLimits, TransactionError> {
     let mut num_non_compute_budget_instructions: u32 = 0;
     let mut updated_compute_unit_limit = None;
     let mut updated_compute_unit_price = None;
     let mut requested_heap_size = None;
     let mut updated_loaded_accounts_data_size_limit = None;
+    // Additional builtin program counters
+    let mut num_builtin_instructions: u16 = 0;
+    let mut num_non_builtin_instructions: u16 = 0;
 
-    for (i, (program_id, instruction)) in instructions.enumerate() {
+    for (i, (program_id, instruction)) in instructions.clone().enumerate() {
         if compute_budget::check_id(program_id) {
             let invalid_instruction_data_error = TransactionError::InstructionError(
                 i as u8,
@@ -129,6 +133,21 @@ pub fn process_compute_budget_instructions<'a>(
         }
     }
 
+    if updated_compute_unit_limit.is_none() {
+        let mut filter = BuiltinProgramsFilter::new();
+        // reiterate to collect builtin details
+        for (program_id, instruction) in instructions {
+            match filter.get_program_kind(instruction.program_id_index as usize, program_id) {
+                ProgramKind::Builtin => {
+                    saturating_add_assign!(num_builtin_instructions, 1);
+                }
+                ProgramKind::NotBuiltin => {
+                    saturating_add_assign!(num_non_builtin_instructions, 1);
+                }
+            }
+        }
+    }
+
     // sanitize limits
     let updated_heap_bytes = requested_heap_size
         .unwrap_or(MIN_HEAP_FRAME_BYTES) // loader's default heap_size
@@ -136,8 +155,19 @@ pub fn process_compute_budget_instructions<'a>(
 
     let compute_unit_limit = updated_compute_unit_limit
         .unwrap_or_else(|| {
-            num_non_compute_budget_instructions
-                .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
+            if feature_set
+                .is_active(&feature_set::reserve_minimal_cus_for_builtin_instructions::id())
+            {
+                u32::from(num_builtin_instructions)
+                    .saturating_mul(MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT)
+                    .saturating_add(
+                        u32::from(num_non_builtin_instructions)
+                            .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
+                    )
+            } else {
+                u32::from(num_non_compute_budget_instructions)
+                    .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT)
+            }
         })
         .min(MAX_COMPUTE_UNIT_LIMIT);
 
@@ -157,13 +187,6 @@ pub fn process_compute_budget_instructions<'a>(
 
 fn sanitize_requested_heap_size(bytes: u32) -> bool {
     (MIN_HEAP_FRAME_BYTES..=MAX_HEAP_FRAME_BYTES).contains(&bytes) && bytes % 1024 == 0
-=======
-    instructions: impl Iterator<Item = (&'a Pubkey, SVMInstruction<'a>)> + Clone,
-    feature_set: &FeatureSet,
-) -> Result<ComputeBudgetLimits, TransactionError> {
-    ComputeBudgetInstructionDetails::try_from(instructions)?
-        .sanitize_and_convert_to_compute_budget_limits(feature_set)
->>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799)):runtime-transaction/src/instructions_processor.rs
 }
 
 #[cfg(test)]
@@ -195,16 +218,10 @@ mod tests {
                 Message::new($instructions, Some(&payer_keypair.pubkey())),
                 Hash::default(),
             ));
-<<<<<<< HEAD:compute-budget/src/compute_budget_processor.rs
-            let result =
-                process_compute_budget_instructions(tx.message().program_instructions_iter());
-=======
-
             let result = process_compute_budget_instructions(
-                SVMMessage::program_instructions_iter(&tx),
+                tx.message().program_instructions_iter(),
                 $feature_set,
             );
->>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799)):runtime-transaction/src/instructions_processor.rs
             assert_eq!($expected_result, result);
         };
     }
@@ -478,7 +495,7 @@ mod tests {
         let expected_result = Ok(ComputeBudgetLimits {
             compute_unit_limit: DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
                 + MAX_BUILTIN_ALLOCATION_COMPUTE_UNIT_LIMIT,
-            loaded_accounts_bytes: NonZeroU32::new(data_size).unwrap(),
+            loaded_accounts_bytes: data_size,
             ..ComputeBudgetLimits::default()
         });
         test!(
@@ -569,10 +586,6 @@ mod tests {
                 Hash::default(),
             ));
 
-<<<<<<< HEAD:compute-budget/src/compute_budget_processor.rs
-        let result =
-            process_compute_budget_instructions(transaction.message().program_instructions_iter());
-=======
         for (feature_set, expected_result) in [
             (
                 FeatureSet::default(),
@@ -591,10 +604,9 @@ mod tests {
             ),
         ] {
             let result = process_compute_budget_instructions(
-                SVMMessage::program_instructions_iter(&transaction),
+                transaction.message().program_instructions_iter(),
                 &feature_set,
             );
->>>>>>> 3e9af14f3a (Fix reserve minimal compute units for builtins  (#3799)):runtime-transaction/src/instructions_processor.rs
 
             // assert process_instructions will be successful with default,
             // and the default compute_unit_limit is 2 times default: one for bpf ix, one for

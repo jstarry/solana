@@ -4784,6 +4784,8 @@ dependencies = [
 name = "solana-compute-budget"
 version = "2.0.23"
 dependencies = [
+ "ahash 0.8.10",
+ "lazy_static",
  "rustc_version",
  "solana-sdk",
 ]

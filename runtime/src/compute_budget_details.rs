@@ -1,6 +1,7 @@
 use {
     solana_compute_budget::compute_budget_processor::process_compute_budget_instructions,
     solana_sdk::{
+        feature_set::FeatureSet,
         instruction::CompiledInstruction,
         pubkey::Pubkey,
         transaction::{SanitizedTransaction, SanitizedVersionedTransaction},
@@ -14,16 +15,14 @@ pub struct ComputeBudgetDetails {
 }
 
 pub trait GetComputeBudgetDetails {
-    fn get_compute_budget_details(
-        &self,
-        round_compute_unit_price_enabled: bool,
-    ) -> Option<ComputeBudgetDetails>;
+    fn get_compute_budget_details(&self, feature_set: &FeatureSet) -> Option<ComputeBudgetDetails>;
 
     fn process_compute_budget_instruction<'a>(
-        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        _round_compute_unit_price_enabled: bool,
+        instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)> + Clone,
+        feature_set: &FeatureSet,
     ) -> Option<ComputeBudgetDetails> {
-        let compute_budget_limits = process_compute_budget_instructions(instructions).ok()?;
+        let compute_budget_limits =
+            process_compute_budget_instructions(instructions, feature_set).ok()?;
         Some(ComputeBudgetDetails {
             compute_unit_price: compute_budget_limits.compute_unit_price,
             compute_unit_limit: u64::from(compute_budget_limits.compute_unit_limit),
@@ -32,25 +31,19 @@ pub trait GetComputeBudgetDetails {
 }
 
 impl GetComputeBudgetDetails for SanitizedVersionedTransaction {
-    fn get_compute_budget_details(
-        &self,
-        round_compute_unit_price_enabled: bool,
-    ) -> Option<ComputeBudgetDetails> {
+    fn get_compute_budget_details(&self, feature_set: &FeatureSet) -> Option<ComputeBudgetDetails> {
         Self::process_compute_budget_instruction(
             self.get_message().program_instructions_iter(),
-            round_compute_unit_price_enabled,
+            feature_set,
         )
     }
 }
 
 impl GetComputeBudgetDetails for SanitizedTransaction {
-    fn get_compute_budget_details(
-        &self,
-        round_compute_unit_price_enabled: bool,
-    ) -> Option<ComputeBudgetDetails> {
+    fn get_compute_budget_details(&self, feature_set: &FeatureSet) -> Option<ComputeBudgetDetails> {
         Self::process_compute_budget_instruction(
             self.message().program_instructions_iter(),
-            round_compute_unit_price_enabled,
+            feature_set,
         )
     }
 }
@@ -85,7 +78,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_compute_budget_details(false),
+            sanitized_versioned_transaction.get_compute_budget_details(&FeatureSet::default()),
             Some(ComputeBudgetDetails {
                 compute_unit_price: 0,
                 compute_unit_limit:
@@ -97,7 +90,7 @@ mod tests {
         // assert for SanitizedTransaction
         let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
-            sanitized_transaction.get_compute_budget_details(false),
+            sanitized_transaction.get_compute_budget_details(&FeatureSet::default()),
             Some(ComputeBudgetDetails {
                 compute_unit_price: 0,
                 compute_unit_limit:
@@ -124,7 +117,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_compute_budget_details(false),
+            sanitized_versioned_transaction.get_compute_budget_details(&FeatureSet::default()),
             Some(ComputeBudgetDetails {
                 compute_unit_price: 0,
                 compute_unit_limit: requested_cu as u64,
@@ -134,7 +127,7 @@ mod tests {
         // assert for SanitizedTransaction
         let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
-            sanitized_transaction.get_compute_budget_details(false),
+            sanitized_transaction.get_compute_budget_details(&FeatureSet::default()),
             Some(ComputeBudgetDetails {
                 compute_unit_price: 0,
                 compute_unit_limit: requested_cu as u64,
@@ -159,7 +152,7 @@ mod tests {
         let sanitized_versioned_transaction =
             SanitizedVersionedTransaction::try_new(versioned_transaction).unwrap();
         assert_eq!(
-            sanitized_versioned_transaction.get_compute_budget_details(false),
+            sanitized_versioned_transaction.get_compute_budget_details(&FeatureSet::default()),
             Some(ComputeBudgetDetails {
                 compute_unit_price: requested_price,
                 compute_unit_limit:
@@ -171,7 +164,7 @@ mod tests {
         // assert for SanitizedTransaction
         let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
-            sanitized_transaction.get_compute_budget_details(false),
+            sanitized_transaction.get_compute_budget_details(&FeatureSet::default()),
             Some(ComputeBudgetDetails {
                 compute_unit_price: requested_price,
                 compute_unit_limit:

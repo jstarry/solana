@@ -542,11 +542,12 @@ impl SchedulerController {
                     .is_ok()
                 })
                 .filter_map(|(packet, tx, deactivation_slot)| {
-                    process_compute_budget_instructions(tx.message().program_instructions_iter())
-                        .map(|compute_budget| {
-                            (packet, tx, deactivation_slot, compute_budget.into())
-                        })
-                        .ok()
+                    process_compute_budget_instructions(
+                        tx.message().program_instructions_iter(),
+                        &working_bank.feature_set,
+                    )
+                    .map(|compute_budget| (packet, tx, deactivation_slot, compute_budget.into()))
+                    .ok()
                 })
                 .for_each(|(packet, tx, deactivation_slot, fee_budget_limits)| {
                     arc_packets.push(packet);

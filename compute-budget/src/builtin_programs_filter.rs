@@ -1,8 +1,13 @@
 use {
-    agave_transaction_view::static_account_keys_frame::MAX_STATIC_ACCOUNTS_PER_PACKET as FILTER_SIZE,
     solana_builtins_default_costs::{is_builtin_program, MAYBE_BUILTIN_KEY},
-    solana_sdk::pubkey::Pubkey,
+    solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey},
 };
+
+// The packet has a maximum length of 1232 bytes.
+// This means the maximum number of 32 byte keys is 38.
+// 38 as an min-sized encoded u16 is 1 byte.
+// We can simply read this byte, if it's >38 we can return None.
+const FILTER_SIZE: u8 = (PACKET_DATA_SIZE / core::mem::size_of::<Pubkey>()) as u8;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum ProgramKind {

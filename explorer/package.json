@@ -36,7 +36,7 @@
     "bootstrap": "~5.3.3",
     "bs58": "^6.0.0",
     "chai": "^5.1.2",
-    "chart.js": "^2.9.4",
+    "chart.js": "^4.4.7",
     "classnames": "2.5.1",
     "coingecko-api": "^1.0.10",
     "cross-fetch": "^4.1.0",

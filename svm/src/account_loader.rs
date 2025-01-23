@@ -678,6 +678,7 @@ mod tests {
         solana_transaction_context::{TransactionAccount, TransactionContext},
         solana_transaction_error::{TransactionError, TransactionResult as Result},
         std::{borrow::Cow, cell::RefCell, collections::HashMap, fs::File, io::Read, sync::Arc},
+        test_case::test_case,
     };
 
     #[derive(Clone, Default)]
@@ -2060,9 +2061,16 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_collect_rent_from_account() {
-        let feature_set = FeatureSet::all_enabled();
+    #[test_case(true; "disable rent epoch updates")]
+    #[test_case(false; "enable rent epoch updates")]
+    fn test_collect_rent_from_account(disable_account_rent_epoch_updates: bool) {
+        let feature_set = if !disable_account_rent_epoch_updates {
+            all_features_except(Some(&[
+                feature_set::disable_account_rent_epoch_updates::id(),
+            ]))
+        } else {
+            FeatureSet::all_enabled()
+        };
         let rent_collector = RentCollector {
             epoch: 1,
             ..RentCollector::default()
@@ -2079,7 +2087,13 @@ mod tests {
             collect_rent_from_account(&feature_set, &rent_collector, &address, &mut account),
             CollectedInfo::default()
         );
-        assert_eq!(account.rent_epoch(), RENT_EXEMPT_RENT_EPOCH);
+
+        let expected_rent_epoch = if disable_account_rent_epoch_updates {
+            0
+        } else {
+            RENT_EXEMPT_RENT_EPOCH
+        };
+        assert_eq!(account.rent_epoch(), expected_rent_epoch);
     }
 
     #[test]

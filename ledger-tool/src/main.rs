@@ -81,7 +81,7 @@ use {
     solana_unified_scheduler_pool::DefaultSchedulerPool,
     solana_vote_program::{
         self,
-        vote_state::{self, VoteState},
+        vote_state::{self, VoteStateV3},
     },
     std::{
         collections::{HashMap, HashSet},
@@ -250,7 +250,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
     dot.push("  subgraph cluster_banks {".to_string());
     dot.push("    style=invis".to_string());
     let mut styled_slots = HashSet::new();
-    let mut all_votes: HashMap<Pubkey, HashMap<Slot, VoteState>> = HashMap::new();
+    let mut all_votes: HashMap<Pubkey, HashMap<Slot, VoteStateV3>> = HashMap::new();
     for fork_slot in &fork_slots {
         let mut bank = bank_forks[*fork_slot].clone();
 
@@ -911,7 +911,7 @@ fn main() {
 
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
-        .max(VoteState::get_rent_exempt_reserve(&rent))
+        .max(VoteStateV3::get_rent_exempt_reserve(&rent))
         .to_string();
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
         .max(rent.minimum_balance(StakeStateV2::size_of()))
@@ -2271,7 +2271,7 @@ fn main() {
                                 identity_pubkey,
                                 identity_pubkey,
                                 100,
-                                VoteState::get_rent_exempt_reserve(&rent).max(1),
+                                VoteStateV3::get_rent_exempt_reserve(&rent).max(1),
                             );
 
                             bank.store_account(

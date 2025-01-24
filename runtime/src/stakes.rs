@@ -606,7 +606,7 @@ pub(crate) mod tests {
         rayon::ThreadPoolBuilder,
         solana_sdk::{account::WritableAccount, pubkey::Pubkey, rent::Rent, stake},
         solana_stake_program::stake_state,
-        solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
+        solana_vote_program::vote_state::{self, VoteStateV3, VoteStateVersions},
     };
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
@@ -815,7 +815,7 @@ pub(crate) mod tests {
         }
 
         // Vote account uninitialized
-        let default_vote_state = VoteState::default();
+        let default_vote_state = VoteStateV3::default();
         let versioned = VoteStateVersions::new_current(default_vote_state);
         vote_state::to(&versioned, &mut vote_account).unwrap();
         stakes_cache.check_and_store(&vote_pubkey, &vote_account, None);

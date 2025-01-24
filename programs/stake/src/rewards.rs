@@ -14,7 +14,7 @@ use {
         state::{Stake, StakeStateV2},
     },
     solana_sysvar::stake_history::StakeHistory,
-    solana_vote_program::vote_state::VoteState,
+    solana_vote_program::vote_state::VoteStateV3,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -31,7 +31,7 @@ pub fn redeem_rewards(
     rewarded_epoch: Epoch,
     stake_state: StakeStateV2,
     stake_account: &mut AccountSharedData,
-    vote_state: &VoteState,
+    vote_state: &VoteStateV3,
     point_value: &PointValue,
     stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
@@ -79,7 +79,7 @@ fn redeem_stake_rewards(
     rewarded_epoch: Epoch,
     stake: &mut Stake,
     point_value: &PointValue,
-    vote_state: &VoteState,
+    vote_state: &VoteStateV3,
     stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
@@ -126,7 +126,7 @@ fn calculate_stake_rewards(
     rewarded_epoch: Epoch,
     stake: &Stake,
     point_value: &PointValue,
-    vote_state: &VoteState,
+    vote_state: &VoteStateV3,
     stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_stake_state_redeem_rewards() {
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteStateV3::default();
         // assume stake.stake() is right
         // bootstrap means fully-vested stake at epoch 0
         let stake_lamports = 1;
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_stake_state_calculate_rewards() {
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteStateV3::default();
         // assume stake.stake() is right
         // bootstrap means fully-vested stake at epoch 0
         let mut stake = new_stake(1, &Pubkey::default(), &vote_state, u64::MAX);
@@ -613,7 +613,7 @@ mod tests {
     #[test_case(u64::MAX, 1_000, u64::MAX => panics "Rewards intermediate calculation should fit within u128")]
     #[test_case(1, u64::MAX, u64::MAX => panics "Rewards should fit within u64")]
     fn calculate_rewards_tests(stake: u64, rewards: u64, credits: u64) {
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteStateV3::default();
 
         let stake = new_stake(stake, &Pubkey::default(), &vote_state, u64::MAX);
 
@@ -632,7 +632,7 @@ mod tests {
 
     #[test]
     fn test_stake_state_calculate_points_with_typical_values() {
-        let vote_state = VoteState::default();
+        let vote_state = VoteStateV3::default();
 
         // bootstrap means fully-vested stake at epoch 0 with
         //  10_000_000 SOL is a big but not unreasaonable stake

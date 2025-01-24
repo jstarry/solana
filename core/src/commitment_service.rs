@@ -9,7 +9,7 @@ use {
         commitment::{BlockCommitment, BlockCommitmentCache, CommitmentSlots, VOTE_THRESHOLD_SIZE},
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey},
-    solana_vote_program::vote_state::VoteState,
+    solana_vote_program::vote_state::VoteStateV3,
     std::{
         cmp::max,
         collections::HashMap,
@@ -28,7 +28,7 @@ pub struct CommitmentAggregationData {
     total_stake: Stake,
     // The latest local vote state of the node running this service.
     // Used for commitment aggregation if the node's vote account is staked.
-    node_vote_state: (Pubkey, VoteState),
+    node_vote_state: (Pubkey, VoteStateV3),
 }
 
 impl CommitmentAggregationData {
@@ -36,7 +36,7 @@ impl CommitmentAggregationData {
         bank: Arc<Bank>,
         root: Slot,
         total_stake: Stake,
-        node_vote_state: (Pubkey, VoteState),
+        node_vote_state: (Pubkey, VoteStateV3),
     ) -> Self {
         Self {
             bank,
@@ -185,7 +185,7 @@ impl AggregateCommitmentService {
     pub fn aggregate_commitment(
         ancestors: &[Slot],
         bank: &Bank,
-        (node_vote_pubkey, node_vote_state): &(Pubkey, VoteState),
+        (node_vote_pubkey, node_vote_state): &(Pubkey, VoteStateV3),
     ) -> (HashMap<Slot, BlockCommitment>, Vec<(Slot, u64)>) {
         assert!(!ancestors.is_empty());
 
@@ -221,7 +221,7 @@ impl AggregateCommitmentService {
     fn aggregate_commitment_for_vote_account(
         commitment: &mut HashMap<Slot, BlockCommitment>,
         rooted_stake: &mut Vec<(Slot, u64)>,
-        vote_state: &VoteState,
+        vote_state: &VoteStateV3,
         ancestors: &[Slot],
         lamports: u64,
     ) {
@@ -312,7 +312,7 @@ mod tests {
         let mut commitment = HashMap::new();
         let mut rooted_stake = vec![];
         let lamports = 5;
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteStateV3::default();
 
         let root = *ancestors.last().unwrap();
         vote_state.root_slot = Some(root);
@@ -338,7 +338,7 @@ mod tests {
         let mut commitment = HashMap::new();
         let mut rooted_stake = vec![];
         let lamports = 5;
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteStateV3::default();
 
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
@@ -369,7 +369,7 @@ mod tests {
         let mut commitment = HashMap::new();
         let mut rooted_stake = vec![];
         let lamports = 5;
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteStateV3::default();
 
         let root = ancestors[2];
         vote_state.root_slot = Some(root);
@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_highest_super_majority_root_advance() {
-        fn get_vote_state(vote_pubkey: Pubkey, bank: &Bank) -> VoteState {
+        fn get_vote_state(vote_pubkey: Pubkey, bank: &Bank) -> VoteStateV3 {
             let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
             vote_account.vote_state().clone()
         }

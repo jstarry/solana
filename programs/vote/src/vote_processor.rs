@@ -265,7 +265,7 @@ mod tests {
             },
             vote_state::{
                 self, Lockout, TowerSync, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
-                VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate, VoteStateVersions,
+                VoteAuthorizeWithSeedArgs, VoteInit, VoteStateV3, VoteStateUpdate, VoteStateVersions,
             },
         },
         bincode::serialize,
@@ -383,7 +383,7 @@ mod tests {
 
     fn create_test_account() -> (Pubkey, AccountSharedData) {
         let rent = Rent::default();
-        let balance = VoteState::get_rent_exempt_reserve(&rent);
+        let balance = VoteStateV3::get_rent_exempt_reserve(&rent);
         let vote_pubkey = solana_pubkey::new_rand();
         (
             vote_pubkey,
@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn test_initialize_vote_account() {
         let vote_pubkey = solana_pubkey::new_rand();
-        let vote_account = AccountSharedData::new(100, VoteState::size_of(), &id());
+        let vote_account = AccountSharedData::new(100, VoteStateV3::size_of(), &id());
         let node_pubkey = solana_pubkey::new_rand();
         let node_account = AccountSharedData::default();
         let instruction_data = serialize(&VoteInstruction::InitializeAccount(VoteInit {
@@ -581,7 +581,7 @@ mod tests {
             vec![
                 (
                     vote_pubkey,
-                    AccountSharedData::new(100, 2 * VoteState::size_of(), &id()),
+                    AccountSharedData::new(100, 2 * VoteStateV3::size_of(), &id()),
                 ),
                 (sysvar::rent::id(), create_default_rent_account()),
                 (sysvar::clock::id(), create_default_clock_account()),
@@ -644,7 +644,7 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
         );
         instruction_accounts[1].is_signer = true;
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+        let vote_state: VoteStateV3 = StateMut::<VoteStateVersions>::state(&accounts[0])
             .unwrap()
             .convert_to_current();
         assert_ne!(vote_state.node_pubkey, node_pubkey);
@@ -658,7 +658,7 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
         );
         instruction_accounts[2].is_signer = true;
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+        let vote_state: VoteStateV3 = StateMut::<VoteStateVersions>::state(&accounts[0])
             .unwrap()
             .convert_to_current();
         assert_ne!(vote_state.node_pubkey, node_pubkey);
@@ -670,7 +670,7 @@ mod tests {
             instruction_accounts,
             Ok(()),
         );
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+        let vote_state: VoteStateV3 = StateMut::<VoteStateVersions>::state(&accounts[0])
             .unwrap()
             .convert_to_current();
         assert_eq!(vote_state.node_pubkey, node_pubkey);
@@ -714,7 +714,7 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+        let vote_state: VoteStateV3 = StateMut::<VoteStateVersions>::state(&accounts[0])
             .unwrap()
             .convert_to_current();
         assert_eq!(vote_state.commission, u8::MAX);
@@ -726,7 +726,7 @@ mod tests {
             instruction_accounts.clone(),
             Ok(()),
         );
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+        let vote_state: VoteStateV3 = StateMut::<VoteStateVersions>::state(&accounts[0])
             .unwrap()
             .convert_to_current();
         assert_eq!(vote_state.commission, 42);
@@ -739,7 +739,7 @@ mod tests {
             instruction_accounts,
             Err(InstructionError::MissingRequiredSignature),
         );
-        let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+        let vote_state: VoteStateV3 = StateMut::<VoteStateVersions>::state(&accounts[0])
             .unwrap()
             .convert_to_current();
         assert_eq!(vote_state.commission, 0);
@@ -806,7 +806,7 @@ mod tests {
                 },
             );
             if is_tower_sync {
-                let vote_state: VoteState = StateMut::<VoteStateVersions>::state(&accounts[0])
+                let vote_state: VoteStateV3 = StateMut::<VoteStateVersions>::state(&accounts[0])
                     .unwrap()
                     .convert_to_current();
                 assert_eq!(
@@ -859,7 +859,7 @@ mod tests {
             transaction_accounts[1] = (sysvar::slot_hashes::id(), slot_hashes_account.clone());
 
             // should fail, uninitialized
-            let vote_account = AccountSharedData::new(100, VoteState::size_of(), &id());
+            let vote_account = AccountSharedData::new(100, VoteStateV3::size_of(), &id());
             transaction_accounts[0] = (vote_pubkey, vote_account);
             process_instruction(
                 &instruction_data,
@@ -1813,14 +1813,14 @@ mod tests {
             },
             101,
             CreateVoteAccountConfig {
-                space: vote_state::VoteState::size_of() as u64,
+                space: vote_state::VoteStateV3::size_of() as u64,
                 ..CreateVoteAccountConfig::default()
             },
         );
         // grab the `space` value from SystemInstruction::CreateAccount by directly indexing, for
         // expediency
         let space = usize::from_le_bytes(instructions[0].data[12..20].try_into().unwrap());
-        assert_eq!(space, vote_state::VoteState::size_of());
+        assert_eq!(space, vote_state::VoteStateV3::size_of());
         let empty_vote_account = AccountSharedData::new(101, space, &id());
 
         let transaction_accounts = vec![
@@ -2001,7 +2001,7 @@ mod tests {
         );
 
         // Test with new_authorized_pubkey signer
-        let vote_account = AccountSharedData::new(100, VoteState::size_of(), &id());
+        let vote_account = AccountSharedData::new(100, VoteStateV3::size_of(), &id());
         let clock_address = sysvar::clock::id();
         let clock_account = account::create_account_shared_data_for_test(&Clock::default());
         let default_authorized_pubkey = Pubkey::default();

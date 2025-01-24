@@ -114,7 +114,7 @@ use {
     solana_vote_program::{
         vote_instruction,
         vote_state::{
-            self, create_account_with_authorized, BlockTimestamp, Vote, VoteInit, VoteState,
+            self, create_account_with_authorized, BlockTimestamp, Vote, VoteInit, VoteStateV3,
             VoteStateVersions, MAX_LOCKOUT_HISTORY,
         },
     },
@@ -1948,7 +1948,7 @@ impl Bank {
             // vote_accounts_cache_miss_count is shown to be always zero.
             let account = self.get_account_with_fixed_root(vote_pubkey)?;
             if account.owner() == &solana_vote_program
-                && VoteState::deserialize(account.data()).is_ok()
+                && VoteStateV3::deserialize(account.data()).is_ok()
             {
                 vote_accounts_cache_miss_count.fetch_add(1, Relaxed);
             }
@@ -4555,7 +4555,7 @@ fn test_bank_cloned_stake_delegations() {
 
     let (vote_balance, stake_balance) = {
         let rent = &bank.rent_collector().rent;
-        let vote_rent_exempt_reserve = rent.minimum_balance(VoteState::size_of());
+        let vote_rent_exempt_reserve = rent.minimum_balance(VoteStateV3::size_of());
         let stake_rent_exempt_reserve = rent.minimum_balance(StakeStateV2::size_of());
         let minimum_delegation = solana_stake_program::get_minimum_delegation(&bank.feature_set);
         (

@@ -27,7 +27,7 @@ use {
     solana_transaction_context::{
         BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
     },
-    solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::{self, VoteStateV3, VoteStateVersions},
     std::{collections::HashSet, convert::TryFrom},
 };
 
@@ -88,7 +88,7 @@ fn redelegate_stake(
     stake: &mut Stake,
     stake_lamports: u64,
     voter_pubkey: &Pubkey,
-    vote_state: &VoteState,
+    vote_state: &VoteStateV3,
     clock: &Clock,
     stake_history: &StakeHistory,
 ) -> Result<(), StakeError> {
@@ -203,7 +203,7 @@ fn move_stake_or_lamports_shared_checks(
 pub(crate) fn new_stake(
     stake: u64,
     voter_pubkey: &Pubkey,
-    vote_state: &VoteState,
+    vote_state: &VoteStateV3,
     activation_epoch: Epoch,
 ) -> Stake {
     Stake {

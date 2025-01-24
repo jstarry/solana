@@ -4561,7 +4561,7 @@ pub mod tests {
             transaction::{
                 self, SimpleAddressLoader, Transaction, TransactionError, TransactionVersion,
             },
-            vote::state::VoteState,
+            vote::state::VoteStateV3,
         },
         solana_send_transaction_service::tpu_info::NullTpuInfo,
         solana_transaction_status::{
@@ -4916,10 +4916,10 @@ pub mod tests {
             bank
         }
 
-        fn store_vote_account(&self, vote_pubkey: &Pubkey, vote_state: VoteState) {
+        fn store_vote_account(&self, vote_pubkey: &Pubkey, vote_state: VoteStateV3) {
             let bank = self.working_bank();
             let versioned = VoteStateVersions::new_current(vote_state);
-            let space = VoteState::size_of();
+            let space = VoteStateV3::size_of();
             let balance = bank.get_minimum_balance_for_rent_exemption(space);
             let mut vote_account =
                 AccountSharedData::new(balance, space, &solana_vote_program::id());
@@ -7433,7 +7433,7 @@ pub mod tests {
 
         // Create a vote account with no stake.
         let alice_vote_keypair = Keypair::new();
-        let alice_vote_state = VoteState::new(
+        let alice_vote_state = VoteStateV3::new(
             &VoteInit {
                 node_pubkey: mint_keypair.pubkey(),
                 authorized_voter: alice_vote_keypair.pubkey(),

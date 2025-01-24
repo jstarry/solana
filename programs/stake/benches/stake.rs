@@ -22,7 +22,7 @@ use {
         stake_state::{Delegation, Meta, Stake},
     },
     solana_sysvar::stake_history::StakeHistory,
-    solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::{self, VoteStateV3, VoteStateVersions},
     std::sync::Arc,
 };
 
@@ -620,7 +620,7 @@ fn bench_deactivate_delinquent(c: &mut Criterion) {
     let mut test_setup = TestSetup::new();
 
     // reference vote account has been consistently voting
-    let mut vote_state = VoteState::default();
+    let mut vote_state = VoteStateV3::default();
     for epoch in 0..=solana_program::stake::MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION {
         vote_state.increment_credits(epoch as Epoch, 1);
     }
@@ -628,7 +628,7 @@ fn bench_deactivate_delinquent(c: &mut Criterion) {
     let reference_vote_account = AccountSharedData::new_data_with_space(
         1,
         &VoteStateVersions::new_current(vote_state),
-        VoteState::size_of(),
+        VoteStateV3::size_of(),
         &solana_vote_program::id(),
     )
     .unwrap();
@@ -641,7 +641,7 @@ fn bench_deactivate_delinquent(c: &mut Criterion) {
             Meta::default(),
             Stake {
                 delegation: Delegation::new(&vote_address, 1, 1),
-                credits_observed: VoteState::default().credits(),
+                credits_observed: VoteStateV3::default().credits(),
             },
             StakeFlags::empty(),
         ),

@@ -7,7 +7,7 @@ use {
     solana_program::stake::state::{Delegation, Stake, StakeStateV2},
     solana_pubkey::Pubkey,
     solana_sysvar::stake_history::StakeHistory,
-    solana_vote_program::vote_state::VoteState,
+    solana_vote_program::vote_state::VoteStateV3,
     std::cmp::Ordering,
 };
 
@@ -67,7 +67,7 @@ impl From<SkippedReason> for InflationPointCalculationEvent {
 #[doc(hidden)]
 pub fn calculate_points(
     stake_state: &StakeStateV2,
-    vote_state: &VoteState,
+    vote_state: &VoteStateV3,
     stake_history: &StakeHistory,
     new_rate_activation_epoch: Option<Epoch>,
 ) -> Result<u128, InstructionError> {
@@ -86,7 +86,7 @@ pub fn calculate_points(
 
 fn calculate_stake_points(
     stake: &Stake,
-    vote_state: &VoteState,
+    vote_state: &VoteStateV3,
     stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
@@ -106,7 +106,7 @@ fn calculate_stake_points(
 ///   for credits_observed were the points paid
 pub(crate) fn calculate_stake_points_and_credits(
     stake: &Stake,
-    new_vote_state: &VoteState,
+    new_vote_state: &VoteStateV3,
     stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     new_rate_activation_epoch: Option<Epoch>,
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_stake_state_calculate_points_with_typical_values() {
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteStateV3::default();
 
         // bootstrap means fully-vested stake at epoch 0 with
         //  10_000_000 SOL is a big but not unreasaonable stake

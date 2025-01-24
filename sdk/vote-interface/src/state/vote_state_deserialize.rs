@@ -2,7 +2,7 @@ use {
     super::{MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
     crate::{
         authorized_voters::AuthorizedVoters,
-        state::{BlockTimestamp, LandedVote, Lockout, VoteState, MAX_ITEMS},
+        state::{BlockTimestamp, LandedVote, Lockout, VoteStateV3, MAX_ITEMS},
     },
     solana_clock::Epoch,
     solana_instruction::error::InstructionError,
@@ -16,7 +16,7 @@ use {
 
 pub(super) fn deserialize_vote_state_into(
     cursor: &mut Cursor<&[u8]>,
-    vote_state: *mut VoteState,
+    vote_state: *mut VoteStateV3,
     has_latency: bool,
 ) -> Result<(), InstructionError> {
     // General safety note: we must use add_or_mut! to access the `vote_state` fields as the value
@@ -95,7 +95,7 @@ fn read_authorized_voters<T: AsRef<[u8]>>(
 
 fn read_prior_voters_into<T: AsRef<[u8]>>(
     cursor: &mut Cursor<T>,
-    vote_state: *mut VoteState,
+    vote_state: *mut VoteStateV3,
 ) -> Result<(), InstructionError> {
     // Safety: if vote_state is non-null, prior_voters is guaranteed to be valid too
     unsafe {
@@ -136,7 +136,7 @@ fn read_epoch_credits<T: AsRef<[u8]>>(
 
 fn read_last_timestamp_into<T: AsRef<[u8]>>(
     cursor: &mut Cursor<T>,
-    vote_state: *mut VoteState,
+    vote_state: *mut VoteStateV3,
 ) -> Result<(), InstructionError> {
     let slot = read_u64(cursor)?;
     let timestamp = read_i64(cursor)?;

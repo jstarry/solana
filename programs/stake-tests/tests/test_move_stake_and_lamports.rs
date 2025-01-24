@@ -30,7 +30,7 @@ use {
     },
     solana_vote_program::{
         self, vote_instruction,
-        vote_state::{VoteInit, VoteState, VoteStateVersions},
+        vote_state::{VoteInit, VoteStateV3, VoteStateVersions},
     },
     test_case::test_matrix,
 };
@@ -93,7 +93,7 @@ async fn create_vote(
     vote_account: &Keypair,
 ) {
     let rent = context.banks_client.get_rent().await.unwrap();
-    let rent_voter = rent.minimum_balance(VoteState::size_of());
+    let rent_voter = rent.minimum_balance(VoteStateV3::size_of());
 
     let mut instructions = vec![system_instruction::create_account(
         &context.payer.pubkey(),

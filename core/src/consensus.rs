@@ -35,7 +35,7 @@ use {
         vote_instruction,
         vote_state::{
             process_slot_vote_unchecked, process_vote_unchecked, BlockTimestamp, LandedVote,
-            Lockout, TowerSync, Vote, VoteState, VoteState1_14_11, VoteStateUpdate,
+            Lockout, TowerSync, Vote, VoteStateV3, VoteState1_14_11, VoteStateUpdate,
             VoteStateVersions, VoteTransaction, MAX_LOCKOUT_HISTORY,
         },
     },
@@ -246,7 +246,7 @@ pub struct Tower {
     pub node_pubkey: Pubkey,
     pub(crate) threshold_depth: usize,
     threshold_size: f64,
-    pub(crate) vote_state: VoteState,
+    pub(crate) vote_state: VoteStateV3,
     last_vote: VoteTransaction,
     #[serde(skip)]
     // The blockhash used in the last vote transaction, may or may not equal the
@@ -274,7 +274,7 @@ impl Default for Tower {
             node_pubkey: Pubkey::default(),
             threshold_depth: VOTE_THRESHOLD_DEPTH,
             threshold_size: VOTE_THRESHOLD_SIZE,
-            vote_state: VoteState::default(),
+            vote_state: VoteStateV3::default(),
             last_vote: VoteTransaction::from(TowerSync::default()),
             last_timestamp: BlockTimestamp::default(),
             last_vote_tx_blockhash: BlockhashStatus::default(),
@@ -317,7 +317,7 @@ impl Tower {
 
         let mut rng = rand::thread_rng();
         let root_slot = rng.gen();
-        let vote_state = VoteState::new_rand_for_tests(node_pubkey, root_slot);
+        let vote_state = VoteStateV3::new_rand_for_tests(node_pubkey, root_slot);
         let last_vote = TowerSync::from(
             vote_state
                 .votes
@@ -1256,7 +1256,7 @@ impl Tower {
     // could have helped us pass the threshold check. Worst case, we'll just
     // recheck later without having increased lockouts.
     fn optimistically_bypass_vote_stake_threshold_check(
-        vote_state_before_applying_vote: &VoteState,
+        vote_state_before_applying_vote: &VoteStateV3,
         threshold_vote: &Lockout,
     ) -> bool {
         for old_vote in &vote_state_before_applying_vote.votes {
@@ -1272,7 +1272,7 @@ impl Tower {
     /// Checks a single vote threshold for `slot`
     fn check_vote_stake_threshold(
         threshold_vote: Option<&Lockout>,
-        vote_state_before_applying_vote: &VoteState,
+        vote_state_before_applying_vote: &VoteStateV3,
         threshold_depth: usize,
         threshold_size: f64,
         slot: Slot,
@@ -1815,16 +1815,16 @@ pub mod test {
             .iter()
             .map(|(lamports, votes)| {
                 let mut account = AccountSharedData::from(Account {
-                    data: vec![0; VoteState::size_of()],
+                    data: vec![0; VoteStateV3::size_of()],
                     lamports: *lamports,
                     owner: solana_vote_program::id(),
                     ..Account::default()
                 });
-                let mut vote_state = VoteState::default();
+                let mut vote_state = VoteStateV3::default();
                 for slot in *votes {
                     process_slot_vote_unchecked(&mut vote_state, *slot);
                 }
-                VoteState::serialize(
+                VoteStateV3::serialize(
                     &VoteStateVersions::new_current(vote_state),
                     account.data_as_mut_slice(),
                 )

@@ -7,7 +7,7 @@ use {
     solana_account::{AccountSharedData, ReadableAccount},
     solana_instruction::error::InstructionError,
     solana_pubkey::Pubkey,
-    solana_vote_interface::state::VoteState,
+    solana_vote_interface::state::VoteStateV3,
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
@@ -36,7 +36,7 @@ pub enum Error {
 #[derive(Debug)]
 struct VoteAccountInner {
     account: AccountSharedData,
-    vote_state: VoteState,
+    vote_state: VoteStateV3,
 }
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
@@ -83,7 +83,7 @@ impl VoteAccount {
         self.0.account.owner()
     }
 
-    pub fn vote_state(&self) -> &VoteState {
+    pub fn vote_state(&self) -> &VoteStateV3 {
         &self.0.vote_state
     }
 
@@ -115,7 +115,7 @@ impl VoteAccount {
             leader_schedule_epoch: rng.gen(),
             unix_timestamp: rng.gen(),
         };
-        let vote_state = VoteState::new(&vote_init, &clock);
+        let vote_state = VoteStateV3::new(&vote_init, &clock);
         let account = AccountSharedData::new_data(
             rng.gen(), // lamports
             &VoteStateVersions::new_current(vote_state.clone()),
@@ -343,10 +343,10 @@ impl TryFrom<AccountSharedData> for VoteAccount {
             // and alignment as VoteState.
             // - Here it is safe to create a reference to MaybeUninit<VoteState> since the value is
             // aligned and MaybeUninit<T> is valid for all possible bit values.
-            let vote_state = &mut *(vote_state as *mut MaybeUninit<VoteState>);
+            let vote_state = &mut *(vote_state as *mut MaybeUninit<VoteStateV3>);
 
             // Try to deserialize in place
-            if let Err(e) = VoteState::deserialize_into_uninit(account.data(), vote_state) {
+            if let Err(e) = VoteStateV3::deserialize_into_uninit(account.data(), vote_state) {
                 // Safety:
                 // - Deserialization failed so at this point vote_state is uninitialized and must
                 // not be dropped. We're ok since `vote_state` is a subfield of `inner`  which is
@@ -491,7 +491,7 @@ mod tests {
     fn new_rand_vote_account<R: Rng>(
         rng: &mut R,
         node_pubkey: Option<Pubkey>,
-    ) -> (AccountSharedData, VoteState) {
+    ) -> (AccountSharedData, VoteStateV3) {
         let vote_init = VoteInit {
             node_pubkey: node_pubkey.unwrap_or_else(Pubkey::new_unique),
             authorized_voter: Pubkey::new_unique(),
@@ -505,7 +505,7 @@ mod tests {
             leader_schedule_epoch: rng.gen(),
             unix_timestamp: rng.gen(),
         };
-        let vote_state = VoteState::new(&vote_init, &clock);
+        let vote_state = VoteStateV3::new(&vote_init, &clock);
         let account = AccountSharedData::new_data(
             rng.gen(), // lamports
             &VoteStateVersions::new_current(vote_state.clone()),

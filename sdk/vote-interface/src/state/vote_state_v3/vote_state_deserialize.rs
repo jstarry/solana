@@ -1,8 +1,11 @@
 use {
-    super::{MAX_EPOCH_CREDITS_HISTORY, MAX_LOCKOUT_HISTORY},
+    super::VoteStateV3,
     crate::{
         authorized_voters::AuthorizedVoters,
-        state::{BlockTimestamp, LandedVote, Lockout, VoteStateV3, MAX_ITEMS},
+        state::{
+            BlockTimestamp, LandedVote, Lockout, MAX_EPOCH_CREDITS_HISTORY, MAX_ITEMS,
+            MAX_LOCKOUT_HISTORY,
+        },
     },
     solana_clock::Epoch,
     solana_instruction::error::InstructionError,

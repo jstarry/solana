@@ -35,7 +35,7 @@ use {
         vote_instruction,
         vote_state::{
             process_slot_vote_unchecked, process_vote_unchecked, BlockTimestamp, LandedVote,
-            Lockout, TowerSync, Vote, VoteStateV3, VoteState1_14_11, VoteStateUpdate,
+            Lockout, TowerSync, Vote, VoteState1_14_11, VoteStateUpdate, VoteStateV3,
             VoteStateVersions, VoteTransaction, MAX_LOCKOUT_HISTORY,
         },
     },
@@ -239,7 +239,7 @@ pub(crate) enum BlockhashStatus {
 #[cfg_attr(
     feature = "frozen-abi",
     derive(AbiExample),
-    frozen_abi(digest = "FcHteDgmzjrtyFD9D6EQ2hY9FRz42gs2S7eJ1DyHWP7s")
+    frozen_abi(digest = "HYnvqh2CMoTEwnuzoiMhCXAeNfL4onCdgSkGyXNd2B7C")
 )]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Tower {

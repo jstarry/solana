@@ -10,4 +10,5 @@ declare dcou_tainted_packages=(
   agave-store-histogram
   agave-accounts-hash-cache-tool
   solana-dos
+  solana-local-cluster
 )

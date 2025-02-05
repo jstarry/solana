@@ -1,3 +1,5 @@
+#[cfg(feature = "dev-context-only-utils")]
+use qualifier_attr::qualifiers;
 use {
     itertools::Itertools,
     rand::distributions::{Distribution, WeightedIndex},
@@ -38,7 +40,8 @@ impl LeaderSchedule {
         Self::new_from_schedule(slot_leaders)
     }
 
-    pub fn new_from_schedule(slot_leaders: Vec<Pubkey>) -> Self {
+    #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
+    fn new_from_schedule(slot_leaders: Vec<Pubkey>) -> Self {
         let index = slot_leaders
             .iter()
             .enumerate()

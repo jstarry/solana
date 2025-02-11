@@ -1987,8 +1987,12 @@ mod tests {
         // slot was also their own.
         assert!(poh_recorder.reached_leader_tick(&leader_a_pubkey, leader_a_start_tick));
 
-        // True, because we have faked leader A ticking through all the grace ticks.
-        poh_recorder.tick_height += grace_ticks;
+        // Tick through grace ticks.
+        for _ in 0..grace_ticks {
+            poh_recorder.tick();
+        }
+
+        // True, because we have ticked through all the grace ticks.
         assert!(poh_recorder.reached_leader_tick(&leader_a_pubkey, leader_a_start_tick));
 
         // Reset PoH on Leader A's first slot 0, ticking towards Leader B's leader slots.

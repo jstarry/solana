@@ -6117,19 +6117,18 @@ impl Bank {
             .feature_set
             .activated_slot(&solana_feature_set::enable_vote_address_leader_schedule::id())
             .map(|activation_slot| {
+                // If the feature was activated at genesis, then the new
+                // leader schedule should be used immediately
+                if activation_slot == 0 {
+                    return true;
+                }
+
+                // Otherwise, the new leader schedule should be used
+                // starting in the next epoch after activation since the
+                // leader schedule for the current epoch would have already
+                // been calculated in the previous epoch
                 let activation_epoch = self.epoch_schedule().get_epoch(activation_slot);
-                let effective_epoch = if activation_epoch == 0 {
-                    // If the feature was activated at genesis, then the new
-                    // leader schedule should be used immediately
-                    activation_epoch
-                } else {
-                    // Otherwise, the new leader schedule should be used
-                    // starting in the next epoch after activation since the
-                    // leader schedule for the current epoch would have already
-                    // been calculated in the previous epoch
-                    activation_epoch.wrapping_add(NEW_LEADER_SCHEDULE_EPOCH_DELAY)
-                };
-                epoch >= effective_epoch
+                epoch >= activation_epoch.wrapping_add(NEW_LEADER_SCHEDULE_EPOCH_DELAY)
             })
             .unwrap_or_default();
 

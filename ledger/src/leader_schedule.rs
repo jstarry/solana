@@ -137,17 +137,6 @@ impl LeaderSchedule {
         Self::new_from_schedule(slot_leaders)
     }
 
-    pub fn new_from_schedule(slot_leaders: Vec<Pubkey>) -> Self {
-        Self(
-            LeaderScheduleVariants::ValidatorIdentityKeyedLeaderSchedule(
-                ValidatorIdentityKeyedLeaderSchedule {
-                    index: Self::index_from_slot_leaders(&slot_leaders),
-                    slot_leaders,
-                },
-            ),
-        )
-    }
-
     // Note: passing in zero stakers will cause a panic.
     fn stake_weighted_slot_leaders(
         mut keyed_stakes: Vec<(&Pubkey, u64)>,
@@ -170,6 +159,17 @@ impl LeaderSchedule {
                 current_slot_leader
             })
             .collect()
+    }
+
+    pub fn new_from_schedule(slot_leaders: Vec<Pubkey>) -> Self {
+        Self(
+            LeaderScheduleVariants::ValidatorIdentityKeyedLeaderSchedule(
+                ValidatorIdentityKeyedLeaderSchedule {
+                    index: Self::index_from_slot_leaders(&slot_leaders),
+                    slot_leaders,
+                },
+            ),
+        )
     }
 
     fn index_from_slot_leaders(slot_leaders: &[Pubkey]) -> HashMap<Pubkey, Arc<Vec<usize>>> {

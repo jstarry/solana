@@ -1,5 +1,4 @@
 use {
-    itertools::Itertools,
     rand::distributions::{Distribution, WeightedIndex},
     rand_chacha::{rand_core::SeedableRng, ChaChaRng},
     solana_pubkey::Pubkey,
@@ -7,6 +6,9 @@ use {
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{collections::HashMap, convert::identity, ops::Index, sync::Arc},
 };
+
+mod identity_keyed;
+mod vote_keyed;
 
 // Used for testing
 #[derive(Clone, Debug)]
@@ -21,32 +23,10 @@ pub struct LeaderSchedule(LeaderScheduleVariants);
 #[cfg(feature = "dev-context-only-utils")]
 impl Default for LeaderSchedule {
     fn default() -> Self {
-        Self(
-            LeaderScheduleVariants::ValidatorIdentityKeyedLeaderSchedule(
-                ValidatorIdentityKeyedLeaderSchedule {
-                    slot_leaders: vec![],
-                    index: HashMap::new(),
-                },
-            ),
-        )
+        Self(LeaderScheduleVariants::IdentityKeyed(
+            identity_keyed::LeaderSchedule::default(),
+        ))
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct VoteAccountKeyedLeaderSchedule {
-    slot_leader_vote_account_addresses: Vec<Pubkey>,
-    // cached leader schedule keyed by validator identities created by mapping
-    // vote account addresses to the validator identity designated at the time
-    // of leader schedule generation. This is used to avoid the need to look up
-    // the validator identity address for each slot.
-    validator_identity_keyed_leader_schedule: ValidatorIdentityKeyedLeaderSchedule,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct ValidatorIdentityKeyedLeaderSchedule {
-    slot_leaders: Vec<Pubkey>,
-    // Inverted index from pubkeys to indices where they are the leader.
-    index: HashMap<Pubkey, Arc<Vec<usize>>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -54,87 +34,37 @@ enum LeaderScheduleVariants {
     // Latest leader schedule algorithm which designates a specific vote account
     // to each slot so that the runtime can load vote state (e.g. commission and
     // fee collector accounts) for a given slot
-    VoteAccountKeyedLeaderSchedule(VoteAccountKeyedLeaderSchedule),
+    VoteKeyed(vote_keyed::LeaderSchedule),
     // Old leader schedule algorithm which designates a specific validator
     // identity to each slot. Since multiple vote accounts can be associated
     // with a single validator identity, it's not possible to use this to load
     // vote state for a given slot.
-    ValidatorIdentityKeyedLeaderSchedule(ValidatorIdentityKeyedLeaderSchedule),
+    IdentityKeyed(identity_keyed::LeaderSchedule),
 }
 
 impl LeaderSchedule {
     // Note: passing in zero vote accounts will cause a panic.
-    pub fn new_keyed_by_vote_account(
+    pub fn new_vote_keyed(
         vote_accounts_map: &VoteAccountsHashMap,
         epoch: Epoch,
         len: u64,
         repeat: u64,
     ) -> Self {
-        let keyed_stakes: Vec<_> = vote_accounts_map
-            .iter()
-            .map(|(vote_pubkey, (stake, _account))| (vote_pubkey, *stake))
-            .collect();
-        let slot_leader_vote_account_addresses =
-            Self::stake_weighted_slot_leaders(keyed_stakes, epoch, len, repeat);
-
-        let validator_identity_keyed_leader_schedule = {
-            struct SlotLeaderInfo<'a> {
-                vote_account_address: &'a Pubkey,
-                validator_identity_address: &'a Pubkey,
-            }
-
-            let default_pubkey = Pubkey::default();
-            let mut current_slot_leader_info = SlotLeaderInfo {
-                vote_account_address: &default_pubkey,
-                validator_identity_address: &default_pubkey,
-            };
-
-            let slot_leaders: Vec<Pubkey> = slot_leader_vote_account_addresses
-                .iter()
-                .map(|vote_account_address| {
-                    if vote_account_address != current_slot_leader_info.vote_account_address {
-                        let validator_identity_address = vote_accounts_map
-                            .get(vote_account_address)
-                            .unwrap()
-                            .1
-                            .node_pubkey();
-                        current_slot_leader_info = SlotLeaderInfo {
-                            vote_account_address,
-                            validator_identity_address,
-                        };
-                    }
-                    *current_slot_leader_info.validator_identity_address
-                })
-                .collect();
-
-            let index = Self::index_from_slot_leaders(&slot_leaders);
-            ValidatorIdentityKeyedLeaderSchedule {
-                slot_leaders,
-                index,
-            }
-        };
-
-        Self(LeaderScheduleVariants::VoteAccountKeyedLeaderSchedule(
-            VoteAccountKeyedLeaderSchedule {
-                slot_leader_vote_account_addresses,
-                validator_identity_keyed_leader_schedule,
-            },
+        Self(LeaderScheduleVariants::VoteKeyed(
+            vote_keyed::LeaderSchedule::new(vote_accounts_map, epoch, len, repeat),
         ))
     }
 
     // Note: passing in zero stakers will cause a panic.
-    pub fn new_keyed_by_validator_identity(
+    pub fn new_identity_keyed(
         epoch_staked_nodes: &HashMap<Pubkey, u64>,
         epoch: Epoch,
         len: u64,
         repeat: u64,
     ) -> Self {
-        let keyed_stakes: Vec<_> = epoch_staked_nodes
-            .iter()
-            .map(|(pubkey, stake)| (pubkey, *stake))
-            .collect();
-        let slot_leaders = Self::stake_weighted_slot_leaders(keyed_stakes, epoch, len, repeat);
-        Self::new_from_schedule(slot_leaders)
+        Self(LeaderScheduleVariants::IdentityKeyed(
+            identity_keyed::LeaderSchedule::new(epoch_staked_nodes, epoch, len, repeat),
+        ))
     }
 
     // Note: passing in zero stakers will cause a panic.
@@ -161,33 +91,14 @@ impl LeaderSchedule {
             .collect()
     }
 
-    pub fn new_from_schedule(slot_leaders: Vec<Pubkey>) -> Self {
-        Self(
-            LeaderScheduleVariants::ValidatorIdentityKeyedLeaderSchedule(
-                ValidatorIdentityKeyedLeaderSchedule {
-                    index: Self::index_from_slot_leaders(&slot_leaders),
-                    slot_leaders,
-                },
-            ),
-        )
+    pub fn new_identity_keyed_with_schedule(slot_leaders: Vec<Pubkey>) -> Self {
+        Self(LeaderScheduleVariants::IdentityKeyed(
+            identity_keyed::LeaderSchedule::new_from_schedule(slot_leaders),
+        ))
     }
 
-    fn index_from_slot_leaders(slot_leaders: &[Pubkey]) -> HashMap<Pubkey, Arc<Vec<usize>>> {
-        slot_leaders
-            .iter()
-            .enumerate()
-            .map(|(i, pk)| (*pk, i))
-            .into_group_map()
-            .into_iter()
-            .map(|(k, v)| (k, Arc::new(v)))
-            .collect()
-    }
-
-    pub fn is_keyed_by_vote_account(&self) -> bool {
-        matches!(
-            self.0,
-            LeaderScheduleVariants::VoteAccountKeyedLeaderSchedule(_)
-        )
+    pub fn is_vote_keyed(&self) -> bool {
+        matches!(self.0, LeaderScheduleVariants::VoteKeyed(_))
     }
 
     /// Get the vote account address for the given epoch slot index. This is
@@ -198,23 +109,19 @@ impl LeaderSchedule {
         epoch_slot_index: usize,
     ) -> Option<&Pubkey> {
         match &self.0 {
-            LeaderScheduleVariants::VoteAccountKeyedLeaderSchedule(schedule) => schedule
+            LeaderScheduleVariants::VoteKeyed(schedule) => schedule
                 .slot_leader_vote_account_addresses
                 .get(epoch_slot_index),
-            LeaderScheduleVariants::ValidatorIdentityKeyedLeaderSchedule(_) => None,
+            LeaderScheduleVariants::IdentityKeyed(_) => None,
         }
     }
 
     pub fn get_slot_leaders(&self) -> &[Pubkey] {
         match self.0 {
-            LeaderScheduleVariants::VoteAccountKeyedLeaderSchedule(ref schedule) => {
-                &schedule
-                    .validator_identity_keyed_leader_schedule
-                    .slot_leaders
+            LeaderScheduleVariants::VoteKeyed(ref schedule) => {
+                &schedule.identity_keyed_leader_schedule.slot_leaders
             }
-            LeaderScheduleVariants::ValidatorIdentityKeyedLeaderSchedule(ref schedule) => {
-                &schedule.slot_leaders
-            }
+            LeaderScheduleVariants::IdentityKeyed(ref schedule) => &schedule.slot_leaders,
         }
     }
 
@@ -224,12 +131,10 @@ impl LeaderSchedule {
 
     fn index(&self) -> &HashMap<Pubkey, Arc<Vec<usize>>> {
         match &self.0 {
-            LeaderScheduleVariants::VoteAccountKeyedLeaderSchedule(schedule) => {
-                &schedule.validator_identity_keyed_leader_schedule.index
+            LeaderScheduleVariants::VoteKeyed(schedule) => {
+                &schedule.identity_keyed_leader_schedule.index
             }
-            LeaderScheduleVariants::ValidatorIdentityKeyedLeaderSchedule(schedule) => {
-                &schedule.index
-            }
+            LeaderScheduleVariants::IdentityKeyed(schedule) => &schedule.index,
         }
     }
 
@@ -287,13 +192,14 @@ fn sort_stakes(stakes: &mut Vec<(&Pubkey, u64)>) {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, rand::Rng, std::iter::repeat_with};
+    use {super::*, itertools::Itertools, rand::Rng, std::iter::repeat_with};
 
     #[test]
     fn test_leader_schedule_index() {
         let pubkey0 = solana_pubkey::new_rand();
         let pubkey1 = solana_pubkey::new_rand();
-        let leader_schedule = LeaderSchedule::new_from_schedule(vec![pubkey0, pubkey1]);
+        let leader_schedule =
+            LeaderSchedule::new_identity_keyed_with_schedule(vec![pubkey0, pubkey1]);
         assert_eq!(leader_schedule[0], pubkey0);
         assert_eq!(leader_schedule[1], pubkey1);
         assert_eq!(leader_schedule[2], pubkey0);
@@ -308,10 +214,8 @@ mod tests {
 
         let epoch: Epoch = rand::random();
         let len = num_keys * 10;
-        let leader_schedule =
-            LeaderSchedule::new_keyed_by_validator_identity(&stakes, epoch, len, 1);
-        let leader_schedule2 =
-            LeaderSchedule::new_keyed_by_validator_identity(&stakes, epoch, len, 1);
+        let leader_schedule = LeaderSchedule::new_identity_keyed(&stakes, epoch, len, 1);
+        let leader_schedule2 = LeaderSchedule::new_identity_keyed(&stakes, epoch, len, 1);
         assert_eq!(leader_schedule.num_slots() as u64, len);
         // Check that the same schedule is reproducibly generated
         assert_eq!(leader_schedule, leader_schedule2);
@@ -327,8 +231,7 @@ mod tests {
         let epoch = rand::random::<Epoch>();
         let len = num_keys * 10;
         let repeat = 8;
-        let leader_schedule =
-            LeaderSchedule::new_keyed_by_validator_identity(&stakes, epoch, len, repeat);
+        let leader_schedule = LeaderSchedule::new_identity_keyed(&stakes, epoch, len, repeat);
         assert_eq!(leader_schedule.num_slots() as u64, len);
         let mut leader_node = Pubkey::default();
         for (i, node) in leader_schedule.get_slot_leaders().iter().enumerate() {
@@ -349,12 +252,12 @@ mod tests {
         let epoch = 0;
         let len = 8;
         // What the schedule looks like without any repeats
-        let leaders1 = LeaderSchedule::new_keyed_by_validator_identity(&stakes, epoch, len, 1)
+        let leaders1 = LeaderSchedule::new_identity_keyed(&stakes, epoch, len, 1)
             .get_slot_leaders()
             .to_vec();
 
         // What the schedule looks like with repeats
-        let leaders2 = LeaderSchedule::new_keyed_by_validator_identity(&stakes, epoch, len, 2)
+        let leaders2 = LeaderSchedule::new_identity_keyed(&stakes, epoch, len, 2)
             .get_slot_leaders()
             .to_vec();
         assert_eq!(leaders1.len(), leaders2.len());
@@ -392,7 +295,7 @@ mod tests {
         let schedule: Vec<_> = repeat_with(|| pubkeys[rng.gen_range(0..3)])
             .take(19)
             .collect();
-        let schedule = LeaderSchedule::new_from_schedule(schedule);
+        let schedule = LeaderSchedule::new_identity_keyed_with_schedule(schedule);
         let leaders = (0..NUM_SLOTS)
             .map(|i| (schedule[i as u64], i))
             .into_group_map();

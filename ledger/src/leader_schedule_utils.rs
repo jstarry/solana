@@ -13,7 +13,7 @@ pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
     let use_new_leader_schedule = bank.should_use_vote_address_leader_schedule(epoch)?;
     if use_new_leader_schedule {
         bank.epoch_vote_accounts(epoch).map(|vote_accounts_map| {
-            LeaderSchedule::new_keyed_by_vote_account(
+            LeaderSchedule::new_vote_keyed(
                 vote_accounts_map,
                 epoch,
                 bank.get_slots_in_epoch(epoch),
@@ -22,7 +22,7 @@ pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
         })
     } else {
         bank.epoch_staked_nodes(epoch).map(|stakes| {
-            LeaderSchedule::new_keyed_by_validator_identity(
+            LeaderSchedule::new_identity_keyed(
                 &stakes,
                 epoch,
                 bank.get_slots_in_epoch(epoch),
@@ -100,7 +100,7 @@ mod tests {
         let leader_schedule = leader_schedule(0, &bank).unwrap();
 
         assert_eq!(
-            leader_schedule.is_keyed_by_vote_account(),
+            leader_schedule.is_vote_keyed(),
             use_vote_keyed_leader_schedule
         );
 

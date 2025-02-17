@@ -2876,8 +2876,8 @@ chai-as-promised@^8.0.0:
     check-error "^2.0.0"
 
 chai@^5.1.1:
-  version "5.1.2"
-  resolved "https://registry.yarnpkg.com/chai/-/chai-5.1.2.tgz#3afbc340b994ae3610ca519a6c70ace77ad4378d"
+  version "5.2.0"
+  resolved "https://registry.yarnpkg.com/chai/-/chai-5.2.0.tgz#1358ee106763624114addf84ab02697e411c9c05"
   dependencies:
     assertion-error "^2.0.1"
     check-error "^2.1.1"

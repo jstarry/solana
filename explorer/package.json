@@ -35,7 +35,7 @@
     "bn.js": "^5.2.1",
     "bootstrap": "~5.3.3",
     "bs58": "^6.0.0",
-    "chai": "^5.1.2",
+    "chai": "^5.2.0",
     "chart.js": "^4.4.7",
     "classnames": "2.5.1",
     "coingecko-api": "^1.0.10",

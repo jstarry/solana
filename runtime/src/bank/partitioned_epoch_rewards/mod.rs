@@ -26,7 +26,7 @@ use {
 /// Distributing rewards to stake accounts begins AFTER this many blocks.
 const REWARD_CALCULATION_NUM_BLOCKS: u64 = 1;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PartitionedStakeReward {
     /// Stake account address
     pub stake_pubkey: Pubkey,
@@ -40,7 +40,7 @@ pub(crate) struct PartitionedStakeReward {
 
 type PartitionedStakeRewards = Vec<PartitionedStakeReward>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StartBlockHeightAndRewards {
     /// the block height of the slot at which rewards distribution began
     pub(crate) distribution_starting_block_height: u64,
@@ -49,7 +49,7 @@ pub(crate) struct StartBlockHeightAndRewards {
 }
 
 /// Represent whether bank is in the reward phase or not.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) enum EpochRewardStatus {
     /// this bank is in the reward phase.
     /// Contents are the start point for epoch reward calculation,

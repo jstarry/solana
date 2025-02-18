@@ -106,6 +106,7 @@ pub(super) struct EpochRewardCalculateParamInfo<'a> {
     pub(super) stake_history: StakeHistory,
     pub(super) stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
     pub(super) cached_vote_accounts: &'a VoteAccounts,
+    pub(super) reward_epoch_vote_accounts: &'a VoteAccounts,
 }
 
 /// Hold all results from calculating the rewards for partitioned distribution.

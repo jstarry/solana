@@ -309,16 +309,21 @@ impl Bank {
         let stake_delegations = self.filter_stake_delegations(stakes);
 
         // Use `EpochStakes` for vote accounts
-        let leader_schedule_epoch = self.epoch_schedule().get_leader_schedule_epoch(self.slot());
-        let cached_vote_accounts = self.epoch_stakes(leader_schedule_epoch)
-            .expect("calculation should always run after Bank::update_epoch_stakes(leader_schedule_epoch)")
+        let current_epoch = self.epoch_schedule().get_epoch(self.slot());
+        let reward_epoch = current_epoch.saturating_sub(1);
+        let reward_epoch_vote_accounts = self
+            .epoch_stakes(reward_epoch)
+            .unwrap()
             .stakes()
             .vote_accounts();
+
+        let cached_vote_accounts = self.current_epoch_stakes().stakes().vote_accounts();
 
         EpochRewardCalculateParamInfo {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
+            reward_epoch_vote_accounts,
         }
     }
 
@@ -337,11 +342,12 @@ impl Bank {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
+            reward_epoch_vote_accounts,
         } = reward_calculate_params;
 
         let solana_vote_program: Pubkey = solana_vote_program::id();
 
-        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
+        let get_vote_account = |vote_pubkey: &Pubkey| -> Option<(VoteAccount, u8)> {
             if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
                 return Some(vote_account.clone());
             }
@@ -375,7 +381,7 @@ impl Bank {
                     let vote_pubkey = stake_account.delegation().voter_pubkey;
                     let (mut stake_account, stake_state) =
                         <(AccountSharedData, StakeStateV2)>::from(stake_account);
-                    let vote_account = get_vote_account(&vote_pubkey)?;
+                    let (vote_account, vote_commission) = get_vote_account(&vote_pubkey)?;
                     if vote_account.owner() != &solana_vote_program {
                         return None;
                     }
@@ -387,6 +393,7 @@ impl Bank {
                         rewarded_epoch,
                         stake_state,
                         &mut stake_account,
+                        vote_commission,
                         vote_state,
                         &point_value,
                         stake_history,

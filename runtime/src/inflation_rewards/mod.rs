@@ -31,6 +31,7 @@ pub fn redeem_rewards(
     rewarded_epoch: Epoch,
     stake_state: StakeStateV2,
     stake_account: &mut AccountSharedData,
+    vote_commission: u8,
     vote_state: &VoteState,
     point_value: &PointValue,
     stake_history: &StakeHistory,
@@ -58,6 +59,7 @@ pub fn redeem_rewards(
             rewarded_epoch,
             &mut stake,
             point_value,
+            vote_commission,
             vote_state,
             stake_history,
             inflation_point_calc_tracer,
@@ -79,6 +81,7 @@ fn redeem_stake_rewards(
     rewarded_epoch: Epoch,
     stake: &mut Stake,
     point_value: &PointValue,
+    vote_commission: u8,
     vote_state: &VoteState,
     stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
@@ -94,6 +97,7 @@ fn redeem_stake_rewards(
         rewarded_epoch,
         stake,
         point_value,
+        vote_commission,
         vote_state,
         stake_history,
         inflation_point_calc_tracer.as_ref(),
@@ -126,6 +130,7 @@ fn calculate_stake_rewards(
     rewarded_epoch: Epoch,
     stake: &Stake,
     point_value: &PointValue,
+    vote_commission: u8,
     vote_state: &VoteState,
     stake_history: &StakeHistory,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
@@ -196,8 +201,7 @@ fn calculate_stake_rewards(
         }
         return None;
     }
-    let (voter_rewards, staker_rewards, is_split) =
-        commission_split(vote_state.commission, rewards);
+    let (voter_rewards, staker_rewards, is_split) = commission_split(vote_commission, rewards);
     if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::SplitRewards(
             rewards,

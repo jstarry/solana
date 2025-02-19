@@ -36,10 +36,7 @@
 use {
     crate::{
         account_saver::collect_accounts_to_store,
-        bank::{
-            metrics::*,
-            partitioned_epoch_rewards::{EpochRewardStatus, VoteRewardsAccounts},
-        },
+        bank::{metrics::*, partitioned_epoch_rewards::EpochRewardStatus},
         bank_forks::BankForks,
         epoch_stakes::{split_epoch_stakes, EpochStakes, NodeVoteAccounts, VersionedEpochStakes},
         inflation_rewards::points::InflationPointCalculationEvent,
@@ -2413,59 +2410,6 @@ impl Bank {
         } else {
             stakes.stake_delegations().iter().collect()
         }
-    }
-
-    /// return reward info for each vote account
-    /// return account data for each vote account that needs to be stored
-    /// This return value is a little awkward at the moment so that downstream existing code in the non-partitioned rewards code path can be re-used without duplication or modification.
-    /// This function is copied from the existing code path's `store_vote_accounts`.
-    /// The primary differences:
-    /// - we want this fn to have no side effects (such as actually storing vote accounts) so that we
-    ///   can compare the expected results with the current code path
-    /// - we want to be able to batch store the vote accounts later for improved performance/cache updating
-    fn calc_vote_accounts_to_store(
-        vote_account_rewards: DashMap<Pubkey, VoteReward>,
-    ) -> VoteRewardsAccounts {
-        let len = vote_account_rewards.len();
-        let mut result = VoteRewardsAccounts {
-            rewards: Vec::with_capacity(len),
-            accounts_to_store: Vec::with_capacity(len),
-        };
-        vote_account_rewards.into_iter().for_each(
-            |(
-                vote_pubkey,
-                VoteReward {
-                    mut vote_account,
-                    commission,
-                    vote_rewards,
-                    vote_needs_store,
-                },
-            )| {
-                if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
-                    debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
-                    return;
-                }
-
-                result.rewards.push((
-                    vote_pubkey,
-                    RewardInfo {
-                        reward_type: RewardType::Voting,
-                        lamports: vote_rewards as i64,
-                        post_balance: vote_account.lamports(),
-                        commission: Some(commission),
-                    },
-                ));
-                result
-                    .accounts_to_store
-                    .push(vote_needs_store.then_some(vote_account));
-            },
-        );
-        result
-    }
-
-    fn update_reward_history(&self, mut vote_rewards: Vec<(Pubkey, RewardInfo)>) {
-        let mut rewards = self.rewards.write().unwrap();
-        rewards.append(&mut vote_rewards);
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {

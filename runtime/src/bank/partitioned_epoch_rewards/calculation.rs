@@ -26,7 +26,7 @@ use {
     },
     solana_measure::measure_us,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         clock::{Epoch, Slot},
         pubkey::Pubkey,
@@ -87,6 +87,11 @@ impl Bank {
             ("parent_slot", parent_slot, i64),
             ("parent_block_height", parent_block_height, i64),
         );
+    }
+
+    fn update_reward_history(&self, mut vote_rewards: Vec<(Pubkey, RewardInfo)>) {
+        let mut rewards = self.rewards.write().unwrap();
+        rewards.append(&mut vote_rewards);
     }
 
     // Calculate rewards from previous epoch and distribute vote rewards
@@ -461,6 +466,54 @@ impl Bank {
         )
     }
 
+    /// return reward info for each vote account
+    /// return account data for each vote account that needs to be stored
+    /// This return value is a little awkward at the moment so that downstream existing code in the non-partitioned rewards code path can be re-used without duplication or modification.
+    /// This function is copied from the existing code path's `store_vote_accounts`.
+    /// The primary differences:
+    /// - we want this fn to have no side effects (such as actually storing vote accounts) so that we
+    ///   can compare the expected results with the current code path
+    /// - we want to be able to batch store the vote accounts later for improved performance/cache updating
+    fn calc_vote_accounts_to_store(
+        vote_account_rewards: DashMap<Pubkey, VoteReward>,
+    ) -> VoteRewardsAccounts {
+        let len = vote_account_rewards.len();
+        let mut result = VoteRewardsAccounts {
+            rewards: Vec::with_capacity(len),
+            accounts_to_store: Vec::with_capacity(len),
+        };
+        vote_account_rewards.into_iter().for_each(
+            |(
+                vote_pubkey,
+                VoteReward {
+                    mut vote_account,
+                    commission,
+                    vote_rewards,
+                    vote_needs_store,
+                },
+            )| {
+                if let Err(err) = vote_account.checked_add_lamports(vote_rewards) {
+                    debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
+                    return;
+                }
+
+                result.rewards.push((
+                    vote_pubkey,
+                    RewardInfo {
+                        reward_type: RewardType::Voting,
+                        lamports: vote_rewards as i64,
+                        post_balance: vote_account.lamports(),
+                        commission: Some(commission),
+                    },
+                ));
+                result
+                    .accounts_to_store
+                    .push(vote_needs_store.then_some(vote_account));
+            },
+        );
+        result
+    }
+
     /// Calculates epoch reward points from stake/vote accounts.
     /// Returns reward lamports and points for the epoch or none if points == 0.
     fn calculate_reward_points_partitioned(
@@ -608,7 +661,7 @@ mod tests {
         },
         rayon::ThreadPoolBuilder,
         solana_sdk::{
-            account::{accounts_equal, ReadableAccount, WritableAccount},
+            account::{accounts_equal, ReadableAccount},
             native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
             reward_type::RewardType,
             stake::state::Delegation,
@@ -1072,5 +1125,128 @@ mod tests {
 
         bank.recalculate_partitioned_rewards(null_tracer(), &thread_pool);
         assert_eq!(bank.epoch_reward_status, EpochRewardStatus::Inactive);
+    }
+
+    #[test]
+    fn test_calc_vote_accounts_to_store_empty() {
+        let vote_account_rewards = DashMap::default();
+        let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+        assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+        assert!(result.rewards.is_empty());
+    }
+
+    #[test]
+    fn test_calc_vote_accounts_to_store_overflow() {
+        let vote_account_rewards = DashMap::default();
+        let pubkey = solana_pubkey::new_rand();
+        let mut vote_account = AccountSharedData::default();
+        vote_account.set_lamports(u64::MAX);
+        vote_account_rewards.insert(
+            pubkey,
+            VoteReward {
+                vote_account,
+                commission: 0,
+                vote_rewards: 1, // enough to overflow
+                vote_needs_store: false,
+            },
+        );
+        let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+        assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+        assert!(result.rewards.is_empty());
+    }
+
+    #[test]
+    fn test_calc_vote_accounts_to_store_three() {
+        let vote_account_rewards = DashMap::default();
+        let pubkey = solana_pubkey::new_rand();
+        let pubkey2 = solana_pubkey::new_rand();
+        let pubkey3 = solana_pubkey::new_rand();
+        let mut vote_account = AccountSharedData::default();
+        vote_account.set_lamports(u64::MAX);
+        vote_account_rewards.insert(
+            pubkey,
+            VoteReward {
+                vote_account: vote_account.clone(),
+                commission: 0,
+                vote_rewards: 0,
+                vote_needs_store: false, // don't store
+            },
+        );
+        vote_account_rewards.insert(
+            pubkey2,
+            VoteReward {
+                vote_account: vote_account.clone(),
+                commission: 0,
+                vote_rewards: 0,
+                vote_needs_store: true, // this one needs storing
+            },
+        );
+        vote_account_rewards.insert(
+            pubkey3,
+            VoteReward {
+                vote_account: vote_account.clone(),
+                commission: 0,
+                vote_rewards: 0,
+                vote_needs_store: false, // don't store
+            },
+        );
+        let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+        assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+        assert_eq!(result.rewards.len(), 3);
+        result.rewards.iter().enumerate().for_each(|(i, (k, _))| {
+            // pubkey2 is some(account), others should be none
+            if k == &pubkey2 {
+                assert!(accounts_equal(
+                    result.accounts_to_store[i].as_ref().unwrap(),
+                    &vote_account
+                ));
+            } else {
+                assert!(result.accounts_to_store[i].is_none());
+            }
+        });
+    }
+
+    #[test]
+    fn test_calc_vote_accounts_to_store_normal() {
+        let pubkey = solana_pubkey::new_rand();
+        for commission in 0..2 {
+            for vote_rewards in 0..2 {
+                for vote_needs_store in [false, true] {
+                    let vote_account_rewards = DashMap::default();
+                    let mut vote_account = AccountSharedData::default();
+                    vote_account.set_lamports(1);
+                    vote_account_rewards.insert(
+                        pubkey,
+                        VoteReward {
+                            vote_account: vote_account.clone(),
+                            commission,
+                            vote_rewards,
+                            vote_needs_store,
+                        },
+                    );
+                    let result = Bank::calc_vote_accounts_to_store(vote_account_rewards);
+                    assert_eq!(result.rewards.len(), result.accounts_to_store.len());
+                    assert_eq!(result.rewards.len(), 1);
+                    let rewards = &result.rewards[0];
+                    let account = &result.accounts_to_store[0];
+                    _ = vote_account.checked_add_lamports(vote_rewards);
+                    if vote_needs_store {
+                        assert!(accounts_equal(account.as_ref().unwrap(), &vote_account));
+                    } else {
+                        assert!(account.is_none());
+                    }
+                    assert_eq!(
+                        rewards.1,
+                        RewardInfo {
+                            reward_type: RewardType::Voting,
+                            lamports: vote_rewards as i64,
+                            post_balance: vote_account.lamports(),
+                            commission: Some(commission),
+                        }
+                    );
+                    assert_eq!(rewards.0, pubkey);
+                }
+            }
+        }
     }
 }

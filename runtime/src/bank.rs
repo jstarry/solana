@@ -2463,19 +2463,9 @@ impl Bank {
         result
     }
 
-    fn update_reward_history(
-        &self,
-        stake_rewards: StakeRewards,
-        mut vote_rewards: Vec<(Pubkey, RewardInfo)>,
-    ) {
-        let additional_reserve = stake_rewards.len() + vote_rewards.len();
+    fn update_reward_history(&self, mut vote_rewards: Vec<(Pubkey, RewardInfo)>) {
         let mut rewards = self.rewards.write().unwrap();
-        rewards.reserve(additional_reserve);
         rewards.append(&mut vote_rewards);
-        stake_rewards
-            .into_iter()
-            .filter(|x| x.get_stake_reward() > 0)
-            .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {

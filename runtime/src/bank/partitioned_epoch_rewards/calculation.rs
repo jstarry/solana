@@ -115,7 +115,7 @@ impl Bank {
         let vote_rewards = self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
 
         // update reward history of JUST vote_rewards, stake_rewards is vec![] here
-        self.update_reward_history(vec![], vote_rewards);
+        self.update_reward_history(vote_rewards);
 
         let StakeRewardCalculationPartitioned {
             stake_rewards_by_partition,

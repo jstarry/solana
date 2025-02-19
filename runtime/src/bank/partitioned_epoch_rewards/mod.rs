@@ -32,10 +32,10 @@ pub(crate) struct PartitionedStakeReward {
     pub stake_pubkey: Pubkey,
     /// `Stake` state to be stored in account
     pub stake: Stake,
-    /// RewardInfo for recording in the Bank on distribution. Most of these
-    /// fields are available on calculation, but RewardInfo::post_balance must
-    /// be updated based on current account state before recording.
-    pub stake_reward_info: RewardInfo,
+    /// Stake reward for recording in the Bank on distribution
+    pub stake_reward: u64,
+    /// Vote commission for recording reward info
+    pub commission: u8,
 }
 
 type PartitionedStakeRewards = Vec<PartitionedStakeReward>;
@@ -266,7 +266,11 @@ mod tests {
                 Some(Self {
                     stake_pubkey: stake_reward.stake_pubkey,
                     stake,
-                    stake_reward_info: stake_reward.stake_reward_info,
+                    stake_reward: stake_reward.stake_reward_info.lamports as u64,
+                    commission: stake_reward
+                        .stake_reward_info
+                        .commission
+                        .unwrap_or_default(),
                 })
             } else {
                 None

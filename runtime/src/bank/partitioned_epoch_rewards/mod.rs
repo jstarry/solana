@@ -142,8 +142,6 @@ pub(super) struct CalculateRewardsAndDistributeVoteRewardsResult {
     pub(super) stake_rewards_by_partition: Vec<PartitionedStakeRewards>,
 }
 
-pub(crate) type StakeRewards = Vec<StakeReward>;
-
 #[derive(Debug, PartialEq)]
 pub struct KeyedRewardsAndNumPartitions {
     pub keyed_rewards: Vec<(Pubkey, RewardInfo)>,
@@ -243,13 +241,12 @@ mod tests {
         solana_accounts_db::accounts_db::{AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         solana_sdk::{
             account::Account,
-            account_utils::StateMut,
             epoch_schedule::EpochSchedule,
             native_token::LAMPORTS_PER_SOL,
             reward_type::RewardType,
             signature::Signer,
             signer::keypair::Keypair,
-            stake::{instruction::StakeError, state::StakeStateV2},
+            stake::instruction::StakeError,
             system_transaction,
             transaction::Transaction,
             vote::state::{VoteStateVersions, MAX_LOCKOUT_HISTORY},
@@ -258,34 +255,34 @@ mod tests {
         solana_vote_program::vote_state::{self, TowerSync},
     };
 
-    impl PartitionedStakeReward {
-        fn maybe_from(stake_reward: &StakeReward) -> Option<Self> {
-            if let Ok(StakeStateV2::Stake(_meta, stake, _flags)) =
-                stake_reward.stake_account.state()
-            {
-                Some(Self {
-                    stake_pubkey: stake_reward.stake_pubkey,
-                    stake,
-                    stake_reward_info: stake_reward.stake_reward_info,
-                })
-            } else {
-                None
-            }
-        }
+    // impl PartitionedStakeReward {
+    //     fn maybe_from(stake_reward: &StakeReward) -> Option<Self> {
+    //         if let Ok(StakeStateV2::Stake(_meta, stake, _flags)) =
+    //             stake_reward.stake_account.state()
+    //         {
+    //             Some(Self {
+    //                 stake_pubkey: stake_reward.stake_pubkey,
+    //                 stake,
+    //                 stake_reward_info: stake_reward.stake_reward_info,
+    //             })
+    //         } else {
+    //             None
+    //         }
+    //     }
 
-        pub fn new_random() -> Self {
-            Self::maybe_from(&StakeReward::new_random()).unwrap()
-        }
-    }
+    //     pub fn new_random() -> Self {
+    //         Self::maybe_from(&StakeReward::new_random()).unwrap()
+    //     }
+    // }
 
-    pub fn convert_rewards(
-        stake_rewards: impl IntoIterator<Item = StakeReward>,
-    ) -> PartitionedStakeRewards {
-        stake_rewards
-            .into_iter()
-            .map(|stake_reward| PartitionedStakeReward::maybe_from(&stake_reward).unwrap())
-            .collect()
-    }
+    // pub fn convert_rewards(
+    //     stake_rewards: impl IntoIterator<Item = StakeReward>,
+    // ) -> PartitionedStakeRewards {
+    //     stake_rewards
+    //         .into_iter()
+    //         .map(|stake_reward| PartitionedStakeReward::maybe_from(&stake_reward).unwrap())
+    //         .collect()
+    // }
 
     #[derive(Debug, PartialEq, Eq, Copy, Clone)]
     enum RewardInterval {

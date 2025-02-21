@@ -9,9 +9,7 @@ use {
         inflation_rewards::points::PointValue, stake_account::StakeAccount,
         stake_history::StakeHistory,
     },
-    solana_accounts_db::{
-        partitioned_rewards::PartitionedEpochRewardsConfig, stake_rewards::StakeReward,
-    },
+    solana_accounts_db::partitioned_rewards::PartitionedEpochRewardsConfig,
     solana_sdk::{
         account::AccountSharedData,
         pubkey::Pubkey,
@@ -64,7 +62,7 @@ pub(crate) enum EpochRewardStatus {
 #[derive(Debug, Default)]
 pub(super) struct VoteRewardsAccounts {
     /// reward info for each vote account pubkey.
-    /// This type is used by `update_reward_history()`
+    /// This field is used by `update_reward_history()`
     pub(super) rewards: Vec<(Pubkey, RewardInfo)>,
     /// corresponds to pubkey in `rewards`
     /// Some if account is to be stored.
@@ -141,8 +139,6 @@ pub(super) struct CalculateRewardsAndDistributeVoteRewardsResult {
     /// stake rewards that still need to be distributed, grouped by partition
     pub(super) stake_rewards_by_partition: Vec<PartitionedStakeRewards>,
 }
-
-pub(crate) type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, PartialEq)]
 pub struct KeyedRewardsAndNumPartitions {
@@ -240,12 +236,14 @@ mod tests {
             runtime_config::RuntimeConfig,
         },
         assert_matches::assert_matches,
+        rand::Rng,
         solana_accounts_db::accounts_db::{AccountsDbConfig, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         solana_sdk::{
             account::Account,
             account_utils::StateMut,
             epoch_schedule::EpochSchedule,
             native_token::LAMPORTS_PER_SOL,
+            rent::Rent,
             reward_type::RewardType,
             signature::Signer,
             signer::keypair::Keypair,
@@ -254,9 +252,57 @@ mod tests {
             transaction::Transaction,
             vote::state::{VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
+        solana_stake_program::stake_state,
         solana_vote::vote_transaction,
         solana_vote_program::vote_state::{self, TowerSync},
     };
+
+    #[derive(Debug, Clone)]
+    pub struct StakeReward {
+        pub stake_pubkey: Pubkey,
+        pub stake_reward_info: RewardInfo,
+        pub stake_account: AccountSharedData,
+    }
+
+    impl StakeReward {
+        pub fn new_random() -> Self {
+            let mut rng = rand::thread_rng();
+
+            let rent = Rent::free();
+
+            let validator_pubkey = solana_pubkey::new_rand();
+            let validator_stake_lamports = 20;
+            let validator_staking_keypair = Keypair::new();
+            let validator_voting_keypair = Keypair::new();
+            let validator_vote_account = vote_state::create_account(
+                &validator_voting_keypair.pubkey(),
+                &validator_pubkey,
+                10,
+                validator_stake_lamports,
+            );
+
+            let reward_lamports: i64 = rng.gen_range(1..200);
+            let validator_stake_account = stake_state::create_account(
+                &validator_staking_keypair.pubkey(),
+                &validator_voting_keypair.pubkey(),
+                &validator_vote_account,
+                &rent,
+                validator_stake_lamports + reward_lamports as u64,
+            );
+
+            Self {
+                stake_pubkey: Pubkey::new_unique(),
+                stake_reward_info: RewardInfo {
+                    reward_type: RewardType::Staking,
+                    lamports: reward_lamports,
+                    post_balance: 0,     /* unused atm */
+                    commission: Some(0), /* unused but tests require some value */
+                },
+
+                stake_account: validator_stake_account,
+            }
+        }
+    }
 
     impl PartitionedStakeReward {
         fn maybe_from(stake_reward: &StakeReward) -> Option<Self> {

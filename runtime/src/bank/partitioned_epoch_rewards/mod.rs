@@ -267,10 +267,7 @@ mod tests {
                     stake_pubkey: stake_reward.stake_pubkey,
                     stake,
                     stake_reward: stake_reward.stake_reward_info.lamports as u64,
-                    commission: stake_reward
-                        .stake_reward_info
-                        .commission
-                        .unwrap_or_default(),
+                    commission: stake_reward.stake_reward_info.commission.unwrap(),
                 })
             } else {
                 None

@@ -7870,8 +7870,8 @@ rpc-websockets@^7.5.0:
     utf-8-validate "^5.0.2"
 
 rpc-websockets@^9.0.0:
-  version "9.0.4"
-  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-9.0.4.tgz#9d8ee82533b5d1e13d9ded729e3e38d0d8fa083f"
+  version "9.0.5"
+  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-9.0.5.tgz#7257489a54023ab371430acb08f65f0e795f499e"
   dependencies:
     "@swc/helpers" "^0.5.11"
     "@types/uuid" "^8.3.4"

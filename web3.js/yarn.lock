@@ -7834,8 +7834,8 @@ rpc-websockets@^7.5.0:
     utf-8-validate "^5.0.2"
 
 rpc-websockets@^9.0.0:
-  version "9.0.5"
-  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-9.0.5.tgz#7257489a54023ab371430acb08f65f0e795f499e"
+  version "9.1.0"
+  resolved "https://registry.yarnpkg.com/rpc-websockets/-/rpc-websockets-9.1.0.tgz#c8ba9dae5cb25f83bbfc10f419a0c91ee2d514a7"
   dependencies:
     "@swc/helpers" "^0.5.11"
     "@types/uuid" "^8.3.4"
@@ -9321,17 +9321,13 @@ write-file-atomic@^5.0.1:
     imurmurhash "^0.1.4"
     signal-exit "^4.0.1"
 
-ws@*, ws@^8.5.0, ws@^8.8.0:
-  version "8.18.0"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.0.tgz#0d7505a6eafe2b0e712d232b42279f53bc289bbc"
+ws@*, ws@^8.18.1, ws@^8.5.0, ws@^8.8.0:
+  version "8.18.1"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.1.tgz#ea131d3784e1dfdff91adb0a4a116b127515e3cb"
 
 ws@^7.4.5, ws@^7.5.10:
   version "7.5.10"
   resolved "https://registry.yarnpkg.com/ws/-/ws-7.5.10.tgz#58b5c20dc281633f6c19113f39b349bd8bd558d9"
-
-ws@^8.18.1:
-  version "8.18.1"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.1.tgz#ea131d3784e1dfdff91adb0a4a116b127515e3cb"
 
 xtend@^4.0.0, xtend@~4.0.1:
   version "4.0.2"

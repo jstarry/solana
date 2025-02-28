@@ -46,7 +46,7 @@ use {
             VoteAuthorize, VoteInit, VoteState, VoteStateVersions, VOTE_CREDITS_MAXIMUM_PER_SLOT,
         },
     },
-    std::rc::Rc,
+    std::{rc::Rc, str::FromStr},
 };
 
 pub trait VoteSubCommands {
@@ -324,6 +324,10 @@ impl VoteSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
                 .arg(compute_unit_price_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("show-delinquent-vote-accounts")
+                .about("Show delinquent vote accounts"),
         )
         .subcommand(
             SubCommand::with_name("vote-account")
@@ -1282,6 +1286,36 @@ pub(crate) fn get_vote_account(
     })?;
 
     Ok((vote_account, vote_state))
+}
+
+pub fn process_show_delinquent_vote_accounts(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+) -> ProcessResult {
+    let mut delinquent_vote_accounts = rpc_client.get_vote_accounts()?.delinquent;
+    delinquent_vote_accounts.sort_by(|a, b| a.last_vote.cmp(&b.last_vote));
+    println!(
+        "Found {} delinquent vote accounts",
+        delinquent_vote_accounts.len()
+    );
+    for vote_account in delinquent_vote_accounts {
+        // print vote key, last vote and stake
+        let vote_data =
+            rpc_client.get_account_data(&Pubkey::from_str(&vote_account.vote_pubkey).unwrap())?;
+        if !VoteStateVersions::is_correct_size_and_initialized(&vote_data) {
+            println!(
+                "Vote account: {} is not initialized",
+                vote_account.vote_pubkey
+            );
+        } else {
+            println!(
+                "Vote account: {}, Stake: {} Last Vote: {}",
+                vote_account.vote_pubkey, vote_account.activated_stake, vote_account.last_vote,
+            );
+        }
+    }
+
+    Ok("Done".to_string())
 }
 
 pub fn process_show_vote_account(

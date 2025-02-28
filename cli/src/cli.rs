@@ -347,6 +347,7 @@ pub enum CliCommand {
         with_rewards: Option<usize>,
         starting_epoch: Option<u64>,
     },
+    ShowDelinquentVoteAccounts,
     WithdrawFromVoteAccount {
         vote_account_pubkey: Pubkey,
         destination_account_pubkey: Pubkey,
@@ -798,6 +799,9 @@ pub fn parse_command(
             CHECKED,
         ),
         ("vote-account", Some(matches)) => parse_vote_get_account_command(matches, wallet_manager),
+        ("show-delinquent-vote-accounts", Some(_matches)) => {
+            Ok(CliCommandInfo::without_signers(CliCommand::ShowDelinquentVoteAccounts))
+        }
         ("withdraw-from-vote-account", Some(matches)) => {
             parse_withdraw_from_vote_account(matches, default_signer, wallet_manager)
         }
@@ -1493,6 +1497,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *fee_payer,
             *compute_unit_price,
         ),
+        CliCommand::ShowDelinquentVoteAccounts => {
+            process_show_delinquent_vote_accounts(&rpc_client, config)
+        }
         CliCommand::ShowVoteAccount {
             pubkey: vote_account_pubkey,
             use_lamports_unit,

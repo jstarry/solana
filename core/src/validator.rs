@@ -72,6 +72,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
+    solana_logger::register_validator,
     solana_measure::measure::Measure,
     solana_metrics::{
         datapoint_info, metrics::metrics_config_sanity_check, poh_timing_point::PohTimingSender,
@@ -612,6 +613,7 @@ impl Validator {
         tpu_config: ValidatorTpuConfig,
         admin_rpc_service_post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
     ) -> Result<Self> {
+        let _guard = register_validator(&identity_keypair.pubkey().to_string());
         let ValidatorTpuConfig {
             use_quic,
             vote_use_quic,

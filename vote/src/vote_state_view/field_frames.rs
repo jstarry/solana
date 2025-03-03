@@ -2,7 +2,6 @@ use {
     super::{list_view::ListView, Result, VoteStateViewError},
     solana_clock::{Epoch, Slot},
     solana_pubkey::Pubkey,
-    static_assertions::const_assert,
     std::io::BufRead,
 };
 
@@ -48,7 +47,7 @@ impl ListFrame for VotesFrame {
 
     #[cfg(test)]
     const ASSERT_ITEM_ALIGNMENT: () = {
-        const_assert!(core::mem::align_of::<LockoutItem>() == 1);
+        static_assertions::const_assert!(core::mem::align_of::<LockoutItem>() == 1);
     };
 
     fn len(&self) -> usize {
@@ -112,7 +111,7 @@ impl ListFrame for LockoutListFrame {
 
     #[cfg(test)]
     const ASSERT_ITEM_ALIGNMENT: () = {
-        const_assert!(core::mem::align_of::<LockoutItem>() == 1);
+        static_assertions::const_assert!(core::mem::align_of::<LockoutItem>() == 1);
     };
 
     fn len(&self) -> usize {
@@ -149,7 +148,7 @@ impl ListFrame for LandedVotesListFrame {
 
     #[cfg(test)]
     const ASSERT_ITEM_ALIGNMENT: () = {
-        const_assert!(core::mem::align_of::<LockoutItem>() == 1);
+        static_assertions::const_assert!(core::mem::align_of::<LockoutItem>() == 1);
     };
 
     fn len(&self) -> usize {
@@ -193,7 +192,7 @@ impl ListFrame for AuthorizedVotersListFrame {
 
     #[cfg(test)]
     const ASSERT_ITEM_ALIGNMENT: () = {
-        const_assert!(core::mem::align_of::<AuthorizedVoterItem>() == 1);
+        static_assertions::const_assert!(core::mem::align_of::<AuthorizedVoterItem>() == 1);
     };
 
     fn len(&self) -> usize {
@@ -243,7 +242,7 @@ impl ListFrame for EpochCreditsListFrame {
 
     #[cfg(test)]
     const ASSERT_ITEM_ALIGNMENT: () = {
-        const_assert!(core::mem::align_of::<EpochCreditsItem>() == 1);
+        static_assertions::const_assert!(core::mem::align_of::<EpochCreditsItem>() == 1);
     };
 
     fn len(&self) -> usize {
@@ -333,7 +332,7 @@ impl ListFrame for PriorVotersFrame {
 
     #[cfg(test)]
     const ASSERT_ITEM_ALIGNMENT: () = {
-        const_assert!(core::mem::align_of::<PriorVotersItem>() == 1);
+        static_assertions::const_assert!(core::mem::align_of::<PriorVotersItem>() == 1);
     };
 
     fn len(&self) -> usize {

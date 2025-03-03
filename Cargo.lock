@@ -10860,6 +10860,7 @@ dependencies = [
  "solana-svm-transaction",
  "solana-transaction",
  "solana-vote-interface",
+ "static_assertions",
  "thiserror 2.0.11",
 ]
 

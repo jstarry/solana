@@ -1915,8 +1915,8 @@
     base-x "^3.0.6"
 
 "@types/chai-as-promised@^8.0.0":
-  version "8.0.1"
-  resolved "https://registry.yarnpkg.com/@types/chai-as-promised/-/chai-as-promised-8.0.1.tgz#afd958500955a79053ef6531d677b4edd5c25925"
+  version "8.0.2"
+  resolved "https://registry.yarnpkg.com/@types/chai-as-promised/-/chai-as-promised-8.0.2.tgz#5ac957d346fec5b686b62606baa5704787669704"
   dependencies:
     "@types/chai" "*"
 

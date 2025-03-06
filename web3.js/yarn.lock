@@ -1921,8 +1921,8 @@
     "@types/chai" "*"
 
 "@types/chai@*", "@types/chai@^5.0.0":
-  version "5.0.1"
-  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-5.0.1.tgz#2c3705555cf11f5f59c836a84c44afcfe4e5689d"
+  version "5.2.0"
+  resolved "https://registry.yarnpkg.com/@types/chai/-/chai-5.2.0.tgz#fe62a18d33001800d3590792ceb6126142f814a4"
   dependencies:
     "@types/deep-eql" "*"
 

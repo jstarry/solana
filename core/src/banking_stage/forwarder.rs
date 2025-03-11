@@ -309,8 +309,8 @@ mod tests {
         solana_poh::{poh_recorder::create_test_recorder, poh_service::PohService},
         solana_runtime::bank::Bank,
         solana_sdk::{
-            hash::Hash, poh_config::PohConfig, signature::Keypair, signer::Signer,
-            system_transaction, transaction::VersionedTransaction,
+            hash::Hash, signature::Keypair, signer::Signer, system_transaction,
+            transaction::VersionedTransaction,
         },
         solana_streamer::{
             nonblocking::testing_utilities::{
@@ -352,15 +352,9 @@ mod tests {
             Blockstore::open(ledger_path.as_ref())
                 .expect("Expected to be able to open database ledger"),
         );
-        let poh_config = PohConfig {
-            // limit tick count to avoid clearing working_bank at
-            // PohRecord then PohRecorderError(MaxHeightReached) at BankingStage
-            target_tick_count: Some(bank.max_tick_height() - 1),
-            ..PohConfig::default()
-        };
 
         let (exit, poh_recorder, poh_service, _entry_receiver) =
-            create_test_recorder(bank, blockstore, Some(poh_config), None);
+            create_test_recorder(bank, blockstore, None, None);
 
         let (local_node, cluster_info) = new_test_cluster_info(Some(validator_keypair));
         let cluster_info = Arc::new(cluster_info);

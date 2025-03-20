@@ -20,7 +20,7 @@ use {
         serialization::serialize_parameters, stable_log,
     },
     solana_runtime::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequestKind},
+        accounts_background_service::SnapshotRequestKind,
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
@@ -1172,9 +1172,8 @@ impl ProgramTestContext {
         };
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
-        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
         let snapshot_controller = SnapshotController::new(
-            abs_request_sender,
+            snapshot_request_sender,
             None, /* snapshot_config */
             bank_forks.root(),
         );

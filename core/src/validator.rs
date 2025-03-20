@@ -914,7 +914,7 @@ impl Validator {
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
         let snapshot_controller = Arc::new(SnapshotController::new(
             snapshot_request_sender.clone(),
-            Some(config.snapshot_config.clone()),
+            config.snapshot_config.clone(),
             bank_forks.read().unwrap().root(),
         ));
         let snapshot_request_handler = SnapshotRequestHandler {

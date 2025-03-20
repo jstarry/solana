@@ -652,6 +652,7 @@ mod tests {
             genesis_utils::{
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
+            snapshot_config::SnapshotConfig,
         },
         assert_matches::assert_matches,
         solana_accounts_db::epoch_accounts_hash::EpochAccountsHash,
@@ -767,8 +768,8 @@ mod tests {
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
         let snapshot_controller = SnapshotController::new(
             snapshot_request_sender,
-            None, /* snapshot_config */
-            0,    /* root_slot */
+            SnapshotConfig::new_load_only(),
+            0, /* root_slot */
         );
         let bg_exit = Arc::new(AtomicBool::new(false));
         let bg_thread = {

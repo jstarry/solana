@@ -405,7 +405,7 @@ pub fn load_and_process_ledger(
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
     let snapshot_controller = SnapshotController::new(
         snapshot_request_sender.clone(),
-        snapshot_config,
+        SnapshotConfig::new_load_only(),
         bank_forks.read().unwrap().root(),
     );
     let snapshot_request_handler = SnapshotRequestHandler {

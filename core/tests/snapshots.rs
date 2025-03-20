@@ -200,7 +200,7 @@ fn run_bank_forks_snapshot_n<F>(
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let snapshot_controller = SnapshotController::new(
         snapshot_request_sender.clone(),
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
         bank_forks.read().unwrap().root(),
     );
     let snapshot_request_handler = SnapshotRequestHandler {
@@ -320,7 +320,7 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
         drop(bank_forks_r);
         let snapshot_controller = SnapshotController::new(
             snapshot_sender,
-            Some(snapshot_test_config.snapshot_config.clone()),
+            snapshot_test_config.snapshot_config.clone(),
             bank_forks.read().unwrap().root(),
         );
         for _ in 0..num_set_roots {
@@ -471,7 +471,7 @@ fn test_bank_forks_incremental_snapshot(
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let snapshot_controller = SnapshotController::new(
         snapshot_request_sender.clone(),
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
         bank_forks.read().unwrap().root(),
     );
     let snapshot_request_handler = SnapshotRequestHandler {
@@ -718,7 +718,7 @@ fn test_snapshots_with_background_services(
 
     let snapshot_controller = SnapshotController::new(
         snapshot_request_sender.clone(),
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
         bank_forks.read().unwrap().root(),
     );
     let snapshot_request_handler = SnapshotRequestHandler {

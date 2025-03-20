@@ -198,7 +198,7 @@ impl BackgroundServices {
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
         let snapshot_controller = SnapshotController::new(
             snapshot_request_sender.clone(),
-            Some(snapshot_config.clone()),
+            snapshot_config.clone(),
             bank_forks.read().unwrap().root(),
         );
         let snapshot_request_handler = SnapshotRequestHandler {

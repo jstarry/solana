@@ -26,6 +26,7 @@ use {
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
+        snapshot_config::SnapshotConfig,
         snapshot_controller::SnapshotController,
     },
     solana_sdk::{
@@ -1174,7 +1175,7 @@ impl ProgramTestContext {
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
         let snapshot_controller = SnapshotController::new(
             snapshot_request_sender,
-            None, /* snapshot_config */
+            SnapshotConfig::new_load_only(),
             bank_forks.root(),
         );
 

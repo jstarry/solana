@@ -909,7 +909,8 @@ mod tests {
             .write()
             .unwrap()
             .set_root(
-                2, None, // snapshot_controller
+                2,    // root
+                None, // snapshot_controller
                 None, // highest confirmed root
             )
             .unwrap();

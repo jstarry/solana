@@ -8592,6 +8592,7 @@ name = "solana-wen-restart"
 version = "2.3.0"
 dependencies = [
  "anyhow",
+ "crossbeam-channel",
  "log",
  "prost",
  "prost-build",

@@ -12,6 +12,7 @@ publish = true
 
 [dependencies]
 anyhow = { workspace = true }
+crossbeam-channel = { workspace = true }
 log = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }

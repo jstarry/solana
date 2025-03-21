@@ -75,7 +75,6 @@ impl Default for SnapshotConfig {
 
 impl SnapshotConfig {
     /// A new snapshot config used for only loading at startup
-    #[must_use]
     pub fn new_load_only() -> Self {
         Self {
             usage: SnapshotUsage::LoadOnly,
@@ -84,15 +83,21 @@ impl SnapshotConfig {
     }
 
     /// Should snapshots be generated?
-    #[must_use]
     pub fn should_generate_snapshots(&self) -> bool {
-        self.usage == SnapshotUsage::LoadAndGenerate
+        self.usage == SnapshotUsage::LoadAndGenerate || self.usage == SnapshotUsage::GenerateOnly
+    }
+
+    /// Should snapshots be loaded?
+    pub fn should_load_snapshots(&self) -> bool {
+        self.usage == SnapshotUsage::LoadAndGenerate || self.usage == SnapshotUsage::LoadOnly
     }
 }
 
 /// Specify the ways that snapshots are allowed to be used
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SnapshotUsage {
+    /// Snapshots are never loaded, instead start from genesis.
+    GenerateOnly,
     /// Snapshots are only used at startup, to load the accounts and bank
     LoadOnly,
     /// Snapshots are used everywhere; both at startup (i.e. load) and steady-state (i.e.

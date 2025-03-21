@@ -854,7 +854,7 @@ pub fn test_process_blockstore(
         genesis_config,
         blockstore,
         Vec::new(),
-        Some(&snapshot_config),
+        &snapshot_config,
         opts,
         None,
         None,

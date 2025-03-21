@@ -1175,7 +1175,7 @@ impl ProgramTestContext {
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
         let snapshot_controller = SnapshotController::new(
             snapshot_request_sender,
-            SnapshotConfig::new_load_only(),
+            SnapshotConfig::new_disabled(),
             bank_forks.root(),
         );
 

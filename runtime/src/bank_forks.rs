@@ -768,7 +768,7 @@ mod tests {
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
         let snapshot_controller = SnapshotController::new(
             snapshot_request_sender,
-            SnapshotConfig::new_load_only(),
+            SnapshotConfig::new_disabled(),
             0, /* root_slot */
         );
         let bg_exit = Arc::new(AtomicBool::new(false));

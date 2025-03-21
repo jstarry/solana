@@ -849,12 +849,12 @@ pub fn test_process_blockstore(
     opts: &ProcessOptions,
     exit: Arc<AtomicBool>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
-    let snapshot_config = SnapshotConfig::new_load_only();
+    let snapshot_config = SnapshotConfig::new_disabled();
     let (bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
         genesis_config,
         blockstore,
         Vec::new(),
-        Some(&snapshot_config),
+        &snapshot_config,
         opts,
         None,
         None,

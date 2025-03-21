@@ -198,14 +198,13 @@ fn run_bank_forks_snapshot_n<F>(
 
     let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-    let snapshot_controller = SnapshotController::new(
+    let snapshot_controller = Arc::new(SnapshotController::new(
         snapshot_request_sender.clone(),
         snapshot_test_config.snapshot_config.clone(),
         bank_forks.read().unwrap().root(),
-    );
+    ));
     let snapshot_request_handler = SnapshotRequestHandler {
-        snapshot_config: snapshot_test_config.snapshot_config.clone(),
-        snapshot_request_sender,
+        snapshot_controller: snapshot_controller.clone(),
         snapshot_request_receiver,
         accounts_package_sender,
     };
@@ -469,14 +468,13 @@ fn test_bank_forks_incremental_snapshot(
 
     let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-    let snapshot_controller = SnapshotController::new(
+    let snapshot_controller = Arc::new(SnapshotController::new(
         snapshot_request_sender.clone(),
         snapshot_test_config.snapshot_config.clone(),
         bank_forks.read().unwrap().root(),
-    );
+    ));
     let snapshot_request_handler = SnapshotRequestHandler {
-        snapshot_config: snapshot_test_config.snapshot_config.clone(),
-        snapshot_request_sender,
+        snapshot_controller: snapshot_controller.clone(),
         snapshot_request_receiver,
         accounts_package_sender,
     };
@@ -716,14 +714,13 @@ fn test_snapshots_with_background_services(
         bank.set_callback(Some(Box::new(callback.clone())));
     }
 
-    let snapshot_controller = SnapshotController::new(
+    let snapshot_controller = Arc::new(SnapshotController::new(
         snapshot_request_sender.clone(),
         snapshot_test_config.snapshot_config.clone(),
         bank_forks.read().unwrap().root(),
-    );
+    ));
     let snapshot_request_handler = SnapshotRequestHandler {
-        snapshot_config: snapshot_test_config.snapshot_config.clone(),
-        snapshot_request_sender,
+        snapshot_controller: snapshot_controller.clone(),
         snapshot_request_receiver,
         accounts_package_sender: accounts_package_sender.clone(),
     };
@@ -741,7 +738,7 @@ fn test_snapshots_with_background_services(
         None,
         exit.clone(),
         cluster_info.clone(),
-        snapshot_test_config.snapshot_config.clone(),
+        snapshot_controller.clone(),
         false,
     );
 
@@ -750,7 +747,7 @@ fn test_snapshots_with_background_services(
         accounts_package_receiver,
         pending_snapshot_packages,
         exit.clone(),
-        snapshot_test_config.snapshot_config.clone(),
+        snapshot_controller.clone(),
     );
 
     let accounts_background_service = AccountsBackgroundService::new(

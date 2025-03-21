@@ -43,6 +43,10 @@ impl SnapshotController {
         &self.snapshot_config
     }
 
+    pub fn request_sender(&self) -> &SnapshotRequestSender {
+        &self.abs_request_sender
+    }
+
     fn latest_abs_request_slot(&self) -> Slot {
         self.latest_abs_request_slot.load(Ordering::Relaxed)
     }

@@ -778,7 +778,23 @@ impl LeaderTpuService {
             ))
         })??;
 
-        let cluster_nodes = rpc_client.get_cluster_nodes().await?;
+        let cluster_nodes = timeout(tpu_leader_service_creation_timeout, async {
+            loop {
+                let cluster_nodes = rpc_client.get_cluster_nodes().await?;
+                if cluster_nodes.is_empty() {
+                    sleep(retry_interval).await;
+                } else {
+                    return Ok::<_, ClientError>(cluster_nodes);
+                }
+            }
+        })
+        .await
+        .map_err(|_| {
+            TpuSenderError::Custom(format!(
+                "Failed find any cluster node info, timeout: {:?}.",
+                tpu_leader_service_creation_timeout
+            ))
+        })??;
         let leader_tpu_cache = Arc::new(RwLock::new(LeaderTpuCache::new(
             start_slot,
             slots_in_epoch,

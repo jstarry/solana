@@ -7038,6 +7038,7 @@ impl AccountsDb {
                  {accounts_hash:?}"
             );
         }
+        self.purge_old_accounts_hashes(slot);
         accounts_hash
     }
 
@@ -7141,10 +7142,7 @@ impl AccountsDb {
     }
 
     /// Purge accounts hashes that are older than `latest_full_snapshot_slot`
-    ///
-    /// Should only be called by AccountsHashVerifier, since it consumes the accounts hashes and
-    /// knows which ones are still needed.
-    pub fn purge_old_accounts_hashes(&self, latest_full_snapshot_slot: Slot) {
+    fn purge_old_accounts_hashes(&self, latest_full_snapshot_slot: Slot) {
         self.accounts_hashes
             .lock()
             .unwrap()

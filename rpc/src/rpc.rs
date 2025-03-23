@@ -386,11 +386,13 @@ impl JsonRpcRequestProcessor {
             // a slot.
             //
             // For more information, see https://github.com/solana-labs/solana/issues/11078
+            let root_bank = r_bank_forks.root_bank();
             warn!(
-                "Bank with {:?} not found at slot: {:?}",
-                commitment.commitment, slot
+                "Bank with {:?} not found at slot: {slot}, falling back to root bank at slot: {}",
+                commitment.commitment,
+                root_bank.slot()
             );
-            r_bank_forks.root_bank()
+            root_bank
         })
     }
 

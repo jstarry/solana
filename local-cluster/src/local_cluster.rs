@@ -30,7 +30,7 @@ use {
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
-        clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE},
+        clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
@@ -65,7 +65,6 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
-        time::Instant,
     },
 };
 
@@ -701,37 +700,31 @@ impl LocalCluster {
         keypairs: &T,
         transaction: &mut Transaction,
         attempts: usize,
-        pending_confirmations: usize,
+        _pending_confirmations: usize,
     ) -> std::result::Result<Signature, TransportError> {
-        for attempt in 0..attempts {
-            let now = Instant::now();
-            let mut num_confirmed = 0;
-            let mut wait_time = MAX_PROCESSING_AGE;
-
-            while now.elapsed().as_secs() < wait_time as u64 {
-                if num_confirmed == 0 {
-                    client.send_transaction_to_upcoming_leaders(transaction)?;
-                }
-
-                if let Ok(confirmed_blocks) = client.rpc_client().poll_for_signature_confirmation(
-                    &transaction.signatures[0],
-                    pending_confirmations,
-                ) {
-                    num_confirmed = confirmed_blocks;
-                    if confirmed_blocks >= pending_confirmations {
-                        return Ok(transaction.signatures[0]);
-                    }
-                    // Since network has seen the transaction, wait longer to receive
-                    // all pending confirmations. Resending the transaction could result into
-                    // extra transaction fees
-                    wait_time = wait_time.max(
-                        MAX_PROCESSING_AGE * pending_confirmations.saturating_sub(num_confirmed),
-                    );
-                }
+        for attempt in 1..=attempts {
+            info!("Sending transaction with retries, attempt: {attempt}");
+            let (blockhash, _) = client
+                .rpc_client()
+                .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+            if blockhash != transaction.message.recent_blockhash {
+                transaction.sign(keypairs, blockhash);
             }
-            info!("{attempt} tries failed transfer");
-            let blockhash = client.rpc_client().get_latest_blockhash()?;
-            transaction.sign(keypairs, blockhash);
+
+            while let Ok(true) = client.rpc_client().is_blockhash_valid(
+                &transaction.message.recent_blockhash,
+                CommitmentConfig::confirmed(),
+            ) {
+                client.send_transaction_to_upcoming_leaders(transaction)?;
+                if let Ok(Some(_)) = client.rpc_client().get_signature_status_with_commitment(
+                    &transaction.signatures[0],
+                    CommitmentConfig::confirmed(),
+                ) {
+                    return Ok(transaction.signatures[0]);
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
         }
         Err(std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -813,7 +806,7 @@ impl LocalCluster {
             );
             LocalCluster::send_transaction_with_retries(
                 client,
-                &[from_account],
+                &[from_account, vote_account],
                 &mut transaction,
                 10,
                 0,

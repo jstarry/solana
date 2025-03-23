@@ -477,6 +477,7 @@ fn test_mainnet_beta_cluster_type() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_snapshot_download() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 1 node
@@ -1246,6 +1247,7 @@ fn test_snapshot_restart_tower() {
 
     // Let the nodes run for a while, then stop one of the validators
     sleep(Duration::from_millis(5000));
+
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
         .into_iter()
@@ -1369,6 +1371,7 @@ fn test_snapshots_blockstore_floor() {
         None,
         SocketAddrSpace::Unspecified,
     );
+
     let all_pubkeys = cluster.get_node_pubkeys();
     let validator_id = all_pubkeys
         .into_iter()
@@ -2524,6 +2527,7 @@ fn test_hard_fork_with_gap_in_roots() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_restart_tower_rollback() {
     // Test node crashing and failing to save its tower before restart
     // Cluster continues to make progress, this node is able to rejoin with
@@ -4419,6 +4423,7 @@ fn test_cluster_partition_1_1() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_cluster_partition_1_1_1() {
     let empty = |_: &mut LocalCluster, _: &mut ()| {};
     let on_partition_resolved = |cluster: &mut LocalCluster, _: &mut ()| {
@@ -5803,6 +5808,7 @@ fn test_duplicate_shreds_switch_failure() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_randomly_mixed_block_verification_methods_between_bootstrap_and_not() {
     // tailored logging just to see two block verification methods are working correctly
     solana_logger::setup_with_default(

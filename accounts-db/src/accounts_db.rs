@@ -7819,9 +7819,13 @@ impl AccountsDb {
         dead_slots.retain(|slot| {
             if let Some(slot_store) = self.storage.get_slot_storage_entry(*slot) {
                 if slot_store.count() != 0 {
+                    log::info!(
+                        "marked slot {slot} as dead but there are still accounts so don't reclaim"
+                    );
                     return false;
                 }
             }
+            log::info!("marked slot {slot} as dead, no accounts");
             true
         });
 

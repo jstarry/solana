@@ -334,6 +334,7 @@ impl Drop for AppendVec {
         if self.remove_file_on_drop.load(Ordering::Acquire) {
             // If we're reopening in readonly mode, we don't delete the file. See
             // AppendVec::reopen_as_readonly.
+            info!("APPEND VEC DROP: removing file: {}", self.path.display());
             if let Err(_err) = remove_file(&self.path) {
                 // promote this to panic soon.
                 // disabled due to many false positive warnings while running tests.

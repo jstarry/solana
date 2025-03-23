@@ -336,26 +336,59 @@ impl Tpu {
 
     pub fn join(self) -> thread::Result<()> {
         let results = vec![
-            self.fetch_stage.join(),
-            self.sigverify_stage.join(),
-            self.vote_sigverify_stage.join(),
-            self.cluster_info_vote_listener.join(),
-            self.banking_stage.join(),
-            self.forwarding_stage.join(),
-            self.staked_nodes_updater_service.join(),
-            self.tpu_quic_t.join(),
-            self.tpu_forwards_quic_t.join(),
-            self.tpu_vote_quic_t.join(),
+            {
+                info!("join fetch_stage");
+                self.fetch_stage.join()
+            },
+            {
+                info!("join sigverify_stage");
+                self.sigverify_stage.join()
+            },
+            {
+                info!("join vote_sigverify_stage");
+                self.vote_sigverify_stage.join()
+            },
+            {
+                info!("join cluster_info_vote_listener");
+                self.cluster_info_vote_listener.join()
+            },
+            {
+                info!("join banking_stage");
+                self.banking_stage.join()
+            },
+            {
+                info!("join forwarding_stage");
+                self.forwarding_stage.join()
+            },
+            {
+                info!("join staked_nodes_updater_service");
+                self.staked_nodes_updater_service.join()
+            },
+            {
+                info!("join tpu_quic_t");
+                self.tpu_quic_t.join()
+            },
+            {
+                info!("join tpu_forwards_quic_t");
+                self.tpu_forwards_quic_t.join()
+            },
+            {
+                info!("join tpu_vote_quic_t");
+                self.tpu_vote_quic_t.join()
+            },
         ];
+        info!("join broadcast_result");
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
         }
         if let Some(tpu_entry_notifier) = self.tpu_entry_notifier {
+            info!("join tpu_entry_notifier");
             tpu_entry_notifier.join()?;
         }
         let _ = broadcast_result?;
         if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {
+            info!("join tracer_thread_hdl");
             if let Err(tracer_result) = tracer_thread_hdl.join()? {
                 error!(
                     "banking tracer thread returned error after successful thread join: {:?}",

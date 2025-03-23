@@ -10,7 +10,11 @@ use {
         rpc_health::*,
     },
     crossbeam_channel::unbounded,
-    jsonrpc_core::{futures::prelude::*, MetaIoHandler},
+    jsonrpc_core::{
+        futures::{future::Either, prelude::*},
+        middleware::{NoopCallFuture, NoopFuture},
+        MetaIoHandler, Middleware,
+    },
     jsonrpc_http_server::{
         hyper, AccessControlAllowOrigin, CloseHandle, DomainsValidation, RequestMiddleware,
         RequestMiddlewareAction, ServerBuilder,
@@ -700,7 +704,27 @@ impl JsonRpcService {
             .spawn(move || {
                 renice_this_thread(rpc_niceness_adj).unwrap();
 
-                let mut io = MetaIoHandler::default();
+                pub struct MyMiddleware;
+                impl Middleware<JsonRpcRequestProcessor> for MyMiddleware {
+                    type Future = NoopFuture;
+                    type CallFuture = NoopCallFuture;
+
+                    fn on_request<F, X>(
+                        &self,
+                        request: jsonrpc_core::Request,
+                        meta: JsonRpcRequestProcessor,
+                        next: F,
+                    ) -> future::Either<Self::Future, X>
+                    where
+                        F: Fn(jsonrpc_core::Request, JsonRpcRequestProcessor) -> X + Send + Sync,
+                        X: Future<Output = Option<jsonrpc_core::Response>> + Send + 'static,
+                    {
+                        log::info!("rpc request: {:?}", request);
+                        Either::Right(next(request, meta))
+                    }
+                }
+
+                let mut io = MetaIoHandler::with_middleware(MyMiddleware);
 
                 io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
                 if full_api {

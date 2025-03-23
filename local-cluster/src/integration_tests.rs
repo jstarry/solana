@@ -521,6 +521,9 @@ pub fn generate_account_paths(num_account_paths: usize) -> (Vec<TempDir>, Vec<Pa
     let account_storage_paths: Vec<_> = account_storage_dirs
         .iter()
         .map(|a| create_accounts_run_and_snapshot_dirs(a.path()).unwrap().0)
+        .inspect(|p| {
+            info!("generated account_storage_path: {:?}", p);
+        })
         .collect();
     (account_storage_dirs, account_storage_paths)
 }

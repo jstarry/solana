@@ -1570,6 +1570,11 @@ impl Validator {
             return Err(ValidatorError::WenRestartFinished.into());
         }
 
+        info!(
+            "Starting TPU with tpu quic sockets: {:?}",
+            node.sockets.tpu_quic
+        );
+
         let (tpu, mut key_notifies) = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -1729,18 +1734,22 @@ impl Validator {
         drop(self.bank_forks);
         drop(self.cluster_info);
 
+        info!("join poh");
         self.poh_service.join().expect("poh_service");
         drop(self.poh_recorder);
 
         if let Some(json_rpc_service) = self.json_rpc_service {
+            info!("join json rpc");
             json_rpc_service.join().expect("rpc_service");
         }
 
         if let Some(pubsub_service) = self.pubsub_service {
+            info!("join pubsub");
             pubsub_service.join().expect("pubsub_service");
         }
 
         if let Some(rpc_completed_slots_service) = self.rpc_completed_slots_service {
+            info!("join rpc_completed_slots_service");
             rpc_completed_slots_service
                 .join()
                 .expect("rpc_completed_slots_service");
@@ -1749,90 +1758,112 @@ impl Validator {
         if let Some(optimistically_confirmed_bank_tracker) =
             self.optimistically_confirmed_bank_tracker
         {
+            info!("join optimistically_confirmed_bank_tracker");
             optimistically_confirmed_bank_tracker
                 .join()
                 .expect("optimistically_confirmed_bank_tracker");
         }
 
         if let Some(transaction_status_service) = self.transaction_status_service {
+            info!("join transaction_status_service");
             transaction_status_service
                 .join()
                 .expect("transaction_status_service");
         }
 
         if let Some(block_meta_service) = self.block_meta_service {
+            info!("join block_meta_service");
             block_meta_service.join().expect("block_meta_service");
         }
 
         if let Some(system_monitor_service) = self.system_monitor_service {
+            info!("join system_monitor_service");
             system_monitor_service
                 .join()
                 .expect("system_monitor_service");
         }
 
         if let Some(sample_performance_service) = self.sample_performance_service {
+            info!("join sample_performance_service");
             sample_performance_service
                 .join()
                 .expect("sample_performance_service");
         }
 
         if let Some(entry_notifier_service) = self.entry_notifier_service {
+            info!("join entry_notifier_service");
             entry_notifier_service
                 .join()
                 .expect("entry_notifier_service");
         }
 
         if let Some(s) = self.snapshot_packager_service {
+            info!("join snapshot_packager_service");
             s.join().expect("snapshot_packager_service");
         }
 
+        info!("join gossip_service");
         self.gossip_service.join().expect("gossip_service");
+        info!("close repair quic endpoints");
         self.repair_quic_endpoints
             .iter()
             .flatten()
             .for_each(repair::quic_endpoint::close_quic_endpoint);
+        info!("join serve_repair_service");
         self.serve_repair_service
             .join()
             .expect("serve_repair_service");
         if let Some(repair_quic_endpoints_join_handle) = self.repair_quic_endpoints_join_handle {
+            info!("join repair_quic_endpoints");
             self.repair_quic_endpoints_runtime
                 .map(|runtime| runtime.block_on(repair_quic_endpoints_join_handle))
                 .transpose()
                 .unwrap();
         }
+        info!("join stats_reporter_service");
         self.stats_reporter_service
             .join()
             .expect("stats_reporter_service");
+        info!("join blockstore_metric_report_service");
         self.blockstore_metric_report_service
             .join()
             .expect("ledger_metric_report_service");
+        info!("join accounts_background_service");
         self.accounts_background_service
             .join()
             .expect("accounts_background_service");
+        info!("join accounts_hash_verifier");
         self.accounts_hash_verifier
             .join()
             .expect("accounts_hash_verifier");
         if let Some(turbine_quic_endpoint) = &self.turbine_quic_endpoint {
+            info!("close turbine quic endpoint");
             solana_turbine::quic_endpoint::close_quic_endpoint(turbine_quic_endpoint);
         }
+        info!("join tpu");
         self.tpu.join().expect("tpu");
+        info!("join tvu");
         self.tvu.join().expect("tvu");
         if let Some(turbine_quic_endpoint_join_handle) = self.turbine_quic_endpoint_join_handle {
+            info!("join turbine quic endpoints");
             self.turbine_quic_endpoint_runtime
                 .map(|runtime| runtime.block_on(turbine_quic_endpoint_join_handle))
                 .transpose()
                 .unwrap();
         }
         if let Some(completed_data_sets_service) = self.completed_data_sets_service {
+            info!("join completed_data_sets_service");
             completed_data_sets_service
                 .join()
                 .expect("completed_data_sets_service");
         }
         if let Some(ip_echo_server) = self.ip_echo_server {
+            info!("shutdown ip echo server");
             ip_echo_server.shutdown_background();
         }
 
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
+            info!("join geyser_plugin_service");
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
     }

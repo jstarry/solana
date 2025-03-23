@@ -161,6 +161,7 @@ impl AccountStorage {
                 .value(),
         );
 
+        log::info!("shrinking slot {slot}");
         // insert 'new_store' into 'shrink_in_progress_map'
         assert!(
             self.shrink_in_progress_map
@@ -255,6 +256,7 @@ impl Drop for ShrinkInProgress<'_> {
             Some(self.old_store.id())
         );
 
+        log::info!("done shrinking slot {}", self.slot);
         // The new store can be removed from 'shrink_in_progress_map'
         assert!(self
             .storage

@@ -341,13 +341,31 @@ impl AccountsHashVerifier {
         };
 
         let slot = accounts_package.slot;
-        let ((accounts_hash, lamports), measure_hash_us) =
-            measure_us!(accounts_package.accounts.accounts_db.update_accounts_hash(
-                &calculate_accounts_hash_config,
-                &sorted_storages,
-                slot,
-                timings,
-            ));
+        let ((accounts_hash, lamports), measure_hash_us) = measure_us!(match accounts_package
+            .package_kind
+        {
+            AccountsPackageKind::AccountsHashVerifier | AccountsPackageKind::EpochAccountsHash => {
+                accounts_package
+                    .accounts
+                    .accounts_db
+                    .calculate_accounts_hash(
+                        &calculate_accounts_hash_config,
+                        &sorted_storages,
+                        timings,
+                    )
+            }
+            AccountsPackageKind::Snapshot(_) => {
+                accounts_package
+                    .accounts
+                    .accounts_db
+                    .update_accounts_hash_and_purge_old_hashes(
+                        &calculate_accounts_hash_config,
+                        &sorted_storages,
+                        slot,
+                        timings,
+                    )
+            }
+        });
 
         if accounts_package.expected_capitalization != lamports {
             // before we assert, run the hash calc again. This helps track down whether it could have been a failure in a race condition possibly with shrink.

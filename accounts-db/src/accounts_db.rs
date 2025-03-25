@@ -7023,7 +7023,7 @@ impl AccountsDb {
     }
 
     /// Calculate the full accounts hash for `storages` and save the results at `slot`
-    pub fn update_accounts_hash(
+    pub fn update_accounts_hash_and_purge_old_hashes(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,

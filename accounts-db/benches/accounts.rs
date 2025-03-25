@@ -51,7 +51,7 @@ fn bench_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let ancestors = Ancestors::from(vec![0]);
     let (_, total_lamports) = accounts
         .accounts_db
-        .update_accounts_hash_for_tests(0, &ancestors, false, false);
+        .calculate_accounts_hash_for_tests(0, &ancestors, false, false);
     accounts.add_root(slot);
     accounts.accounts_db.flush_accounts_cache(true, Some(slot));
     bencher.iter(|| {
@@ -75,9 +75,9 @@ fn bench_accounts_hash_bank_hash(bencher: &mut Bencher) {
 }
 
 #[bench]
-fn bench_update_accounts_hash(bencher: &mut Bencher) {
+fn bench_calculate_accounts_hash(bencher: &mut Bencher) {
     solana_logger::setup();
-    let accounts_db = new_accounts_db(vec![PathBuf::from("update_accounts_hash")]);
+    let accounts_db = new_accounts_db(vec![PathBuf::from("calculate_accounts_hash")]);
     let accounts = Accounts::new(Arc::new(accounts_db));
     let mut pubkeys: Vec<Pubkey> = vec![];
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
@@ -85,7 +85,7 @@ fn bench_update_accounts_hash(bencher: &mut Bencher) {
     bencher.iter(|| {
         accounts
             .accounts_db
-            .update_accounts_hash_for_tests(0, &ancestors, false, false);
+            .calculate_accounts_hash_for_tests(0, &ancestors, false, false);
     });
 }
 

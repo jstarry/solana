@@ -314,7 +314,7 @@ impl Accounts {
         base: Option<(Slot, /*capitalization*/ u64)>,
         config: VerifyAccountsHashAndLamportsConfig,
     ) -> bool {
-        if let Err(err) = self.accounts_db.verify_accounts_hash_and_lamports(
+        if let Err(err) = self.accounts_db.verify_snapshot_accounts_hash_and_lamports(
             snapshot_storages_and_slots,
             slot,
             total_lamports,

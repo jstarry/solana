@@ -11,6 +11,7 @@ use {
             test_utils::{create_test_accounts, update_accounts_bench},
             AccountsDb, CalcAccountsHashDataSource, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
         },
+        accounts_hash::CalcAccountsHashConfig,
         ancestors::Ancestors,
     },
     solana_epoch_schedule::EpochSchedule,
@@ -121,19 +122,24 @@ fn main() {
             let mut time = Measure::start("hash");
             let results = accounts
                 .accounts_db
-                .update_accounts_hash_for_tests(0, &ancestors, false, false);
+                .calculate_accounts_hash_for_tests(0, &ancestors, false, false);
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts.accounts_db.update_accounts_hash_with_verify_from(
-                CalcAccountsHashDataSource::Storages,
-                false,
-                solana_clock::Slot::default(),
-                &ancestors,
-                None,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                true,
-            );
+            let results_store = accounts
+                .accounts_db
+                .calculate_accounts_hash_with_verify_from(
+                    CalcAccountsHashDataSource::Storages,
+                    false,
+                    solana_clock::Slot::default(),
+                    CalcAccountsHashConfig {
+                        use_bg_thread_pool: false,
+                        ancestors: Some(&ancestors),
+                        epoch_schedule: &EpochSchedule::default(),
+                        rent_collector: &RentCollector::default(),
+                        store_detailed_debug_info_on_failure: false,
+                    },
+                    None,
+                );
             time_store.stop();
             if results != results_store {
                 error!("results different: \n{:?}\n{:?}", results, results_store);
@@ -152,7 +158,7 @@ fn main() {
     }
 
     for x in elapsed {
-        info!("update_accounts_hash(us),{}", x);
+        info!("calculate_accounts_hash(us),{}", x);
     }
     for x in elapsed_store {
         info!("calculate_accounts_hash_from_storages(us),{}", x);

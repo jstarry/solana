@@ -43,9 +43,8 @@ use {
         accounts_hash::{
             AccountHash, AccountLtHash, AccountsDeltaHash, AccountsHash, AccountsHashKind,
             AccountsHasher, AccountsLtHash, CalcAccountsHashConfig, CalculateHashIntermediate,
-            HashStats, IncrementalAccountsHash, SerdeAccountsDeltaHash, SerdeAccountsHash,
-            SerdeIncrementalAccountsHash, ZeroLamportAccounts, ZERO_LAMPORT_ACCOUNT_HASH,
-            ZERO_LAMPORT_ACCOUNT_LT_HASH,
+            HashStats, IncrementalAccountsHash, SerdeAccountsDeltaHash, ZeroLamportAccounts,
+            ZERO_LAMPORT_ACCOUNT_HASH, ZERO_LAMPORT_ACCOUNT_LT_HASH,
         },
         accounts_index::{
             in_mem_accounts_index::StartupStats, AccountSecondaryIndexes, AccountsIndex,
@@ -1536,8 +1535,8 @@ pub struct AccountsDb {
     pub thread_pool_hash: ThreadPool,
 
     accounts_delta_hashes: Mutex<HashMap<Slot, AccountsDeltaHash>>,
-    accounts_hashes: Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>>,
-    incremental_accounts_hashes:
+    full_snapshot_accounts_hashes: Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>>,
+    incremental_snapshot_accounts_hashes:
         Mutex<HashMap<Slot, (IncrementalAccountsHash, /*capitalization*/ u64)>>,
 
     pub stats: AccountsStats,
@@ -2071,8 +2070,8 @@ impl AccountsDb {
             write_version: AtomicU64::new(0),
             file_size: DEFAULT_FILE_SIZE,
             accounts_delta_hashes: Mutex::new(HashMap::new()),
-            accounts_hashes: Mutex::new(HashMap::new()),
-            incremental_accounts_hashes: Mutex::new(HashMap::new()),
+            full_snapshot_accounts_hashes: Mutex::new(HashMap::new()),
+            incremental_snapshot_accounts_hashes: Mutex::new(HashMap::new()),
             external_purge_slots_stats: PurgeStats::default(),
             clean_accounts_stats: CleanAccountsStats::default(),
             shrink_stats: ShrinkStats::default(),
@@ -6813,6 +6812,29 @@ impl AccountsDb {
     }
 
     /// This is only valid to call from tests.
+    pub fn calculate_accounts_hash_for_tests(
+        &self,
+        slot: Slot,
+        ancestors: &Ancestors,
+        debug_verify: bool,
+        is_startup: bool,
+    ) -> (AccountsHash, u64) {
+        self.calculate_accounts_hash_with_verify_from(
+            CalcAccountsHashDataSource::IndexForTests,
+            debug_verify,
+            slot,
+            CalcAccountsHashConfig {
+                use_bg_thread_pool: !is_startup,
+                ancestors: Some(ancestors),
+                epoch_schedule: &EpochSchedule::default(),
+                rent_collector: &RentCollector::default(),
+                store_detailed_debug_info_on_failure: false,
+            },
+            None,
+        )
+    }
+
+    /// This is only valid to call from tests.
     /// run the accounts hash calculation and store the results
     pub fn update_accounts_hash_for_tests(
         &self,
@@ -6821,7 +6843,7 @@ impl AccountsDb {
         debug_verify: bool,
         is_startup: bool,
     ) -> (AccountsHash, u64) {
-        self.update_accounts_hash_with_verify_from(
+        self.update_full_snapshot_accounts_hash_with_verify_from(
             CalcAccountsHashDataSource::IndexForTests,
             debug_verify,
             slot,
@@ -6954,7 +6976,7 @@ impl AccountsDb {
         }
     }
 
-    fn calculate_accounts_hash_with_verify_from(
+    pub fn calculate_accounts_hash_with_verify_from(
         &self,
         data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
@@ -6992,9 +7014,9 @@ impl AccountsDb {
         (accounts_hash, total_lamports)
     }
 
-    /// run the accounts hash calculation and store the results
+    /// run the full accounts hash calculation and store the results
     #[allow(clippy::too_many_arguments)]
-    pub fn update_accounts_hash_with_verify_from(
+    pub fn update_full_snapshot_accounts_hash_with_verify_from(
         &self,
         data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
@@ -7018,12 +7040,12 @@ impl AccountsDb {
             },
             expected_capitalization,
         );
-        self.set_accounts_hash(slot, (accounts_hash, total_lamports));
+        self.set_full_snapshot_accounts_hash(slot, (accounts_hash, total_lamports));
         (accounts_hash, total_lamports)
     }
 
-    /// Calculate the full accounts hash for `storages` and save the results at `slot`
-    pub fn update_accounts_hash(
+    /// Calculate the full snapshot accounts hash for `storages` and save the results at `slot`
+    pub fn update_full_snapshot_accounts_hash(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
@@ -7031,7 +7053,7 @@ impl AccountsDb {
         stats: HashStats,
     ) -> (AccountsHash, /*capitalization*/ u64) {
         let accounts_hash = self.calculate_accounts_hash(config, storages, stats);
-        let old_accounts_hash = self.set_accounts_hash(slot, accounts_hash);
+        let old_accounts_hash = self.set_full_snapshot_accounts_hash(slot, accounts_hash);
         if let Some(old_accounts_hash) = old_accounts_hash {
             warn!(
                 "Accounts hash was already set for slot {slot}! old: {old_accounts_hash:?}, new: \
@@ -7042,91 +7064,81 @@ impl AccountsDb {
     }
 
     /// Calculate the incremental accounts hash for `storages` and save the results at `slot`
-    pub fn update_incremental_accounts_hash(
+    pub fn update_incremental_snapshot_accounts_hash(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
         slot: Slot,
         stats: HashStats,
     ) -> (IncrementalAccountsHash, /*capitalization*/ u64) {
-        let incremental_accounts_hash =
-            self.calculate_incremental_accounts_hash(config, storages, stats);
-        let old_incremental_accounts_hash =
-            self.set_incremental_accounts_hash(slot, incremental_accounts_hash);
-        if let Some(old_incremental_accounts_hash) = old_incremental_accounts_hash {
+        let incremental_snapshot_accounts_hash =
+            self.calculate_incremental_snapshot_accounts_hash(config, storages, stats);
+        let old_incremental_snapshot_accounts_hash =
+            self.set_incremental_snapshot_accounts_hash(slot, incremental_snapshot_accounts_hash);
+        if let Some(old_incremental_snapshot_accounts_hash) = old_incremental_snapshot_accounts_hash
+        {
             warn!(
-                "Incremental accounts hash was already set for slot {slot}! old: \
-                 {old_incremental_accounts_hash:?}, new: {incremental_accounts_hash:?}"
+                "Incremental snapshot accounts hash was already set for slot {slot}! old: \
+                 {old_incremental_snapshot_accounts_hash:?}, new: {incremental_snapshot_accounts_hash:?}"
             );
         }
-        incremental_accounts_hash
+        incremental_snapshot_accounts_hash
     }
 
-    /// Set the accounts hash for `slot`
+    /// Set the full snapshot accounts hash for `slot`
     ///
     /// returns the previous accounts hash for `slot`
     #[cfg_attr(feature = "dev-context-only-utils", qualifiers(pub))]
-    fn set_accounts_hash(
+    fn set_full_snapshot_accounts_hash(
         &self,
         slot: Slot,
         accounts_hash: (AccountsHash, /*capitalization*/ u64),
     ) -> Option<(AccountsHash, /*capitalization*/ u64)> {
-        self.accounts_hashes
+        self.full_snapshot_accounts_hashes
             .lock()
             .unwrap()
             .insert(slot, accounts_hash)
     }
 
-    /// After deserializing a snapshot, set the accounts hash for the new AccountsDb
-    pub fn set_accounts_hash_from_snapshot(
-        &mut self,
+    /// Get the accounts hash for the full snapshot at `slot`
+    pub fn get_full_snapshot_accounts_hash(
+        &self,
         slot: Slot,
-        accounts_hash: SerdeAccountsHash,
-        capitalization: u64,
     ) -> Option<(AccountsHash, /*capitalization*/ u64)> {
-        self.set_accounts_hash(slot, (accounts_hash.into(), capitalization))
+        self.full_snapshot_accounts_hashes
+            .lock()
+            .unwrap()
+            .get(&slot)
+            .cloned()
     }
 
-    /// Get the accounts hash for `slot`
-    pub fn get_accounts_hash(&self, slot: Slot) -> Option<(AccountsHash, /*capitalization*/ u64)> {
-        self.accounts_hashes.lock().unwrap().get(&slot).cloned()
-    }
-
-    /// Get all accounts hashes
-    pub fn get_accounts_hashes(&self) -> HashMap<Slot, (AccountsHash, /*capitalization*/ u64)> {
-        self.accounts_hashes.lock().unwrap().clone()
+    /// Get all accounts hashes for full snapshots
+    pub fn get_full_snapshot_accounts_hashes(
+        &self,
+    ) -> HashMap<Slot, (AccountsHash, /*capitalization*/ u64)> {
+        self.full_snapshot_accounts_hashes.lock().unwrap().clone()
     }
 
     /// Set the incremental accounts hash for `slot`
     ///
     /// returns the previous incremental accounts hash for `slot`
-    pub fn set_incremental_accounts_hash(
+    pub fn set_incremental_snapshot_accounts_hash(
         &self,
         slot: Slot,
         incremental_accounts_hash: (IncrementalAccountsHash, /*capitalization*/ u64),
     ) -> Option<(IncrementalAccountsHash, /*capitalization*/ u64)> {
-        self.incremental_accounts_hashes
+        self.incremental_snapshot_accounts_hashes
             .lock()
             .unwrap()
             .insert(slot, incremental_accounts_hash)
     }
 
-    /// After deserializing a snapshot, set the incremental accounts hash for the new AccountsDb
-    pub fn set_incremental_accounts_hash_from_snapshot(
-        &mut self,
-        slot: Slot,
-        incremental_accounts_hash: SerdeIncrementalAccountsHash,
-        capitalization: u64,
-    ) -> Option<(IncrementalAccountsHash, /*capitalization*/ u64)> {
-        self.set_incremental_accounts_hash(slot, (incremental_accounts_hash.into(), capitalization))
-    }
-
     /// Get the incremental accounts hash for `slot`
-    pub fn get_incremental_accounts_hash(
+    pub fn get_incremental_snapshot_accounts_hash(
         &self,
         slot: Slot,
     ) -> Option<(IncrementalAccountsHash, /*capitalization*/ u64)> {
-        self.incremental_accounts_hashes
+        self.incremental_snapshot_accounts_hashes
             .lock()
             .unwrap()
             .get(&slot)
@@ -7137,19 +7149,22 @@ impl AccountsDb {
     pub fn get_incremental_accounts_hashes(
         &self,
     ) -> HashMap<Slot, (IncrementalAccountsHash, /*capitalization*/ u64)> {
-        self.incremental_accounts_hashes.lock().unwrap().clone()
+        self.incremental_snapshot_accounts_hashes
+            .lock()
+            .unwrap()
+            .clone()
     }
 
     /// Purge accounts hashes that are older than `latest_full_snapshot_slot`
     ///
     /// Should only be called by AccountsHashVerifier, since it consumes the accounts hashes and
     /// knows which ones are still needed.
-    pub fn purge_old_accounts_hashes(&self, latest_full_snapshot_slot: Slot) {
-        self.accounts_hashes
+    pub fn purge_old_snapshot_accounts_hashes(&self, latest_full_snapshot_slot: Slot) {
+        self.full_snapshot_accounts_hashes
             .lock()
             .unwrap()
             .retain(|&slot, _| slot >= latest_full_snapshot_slot);
-        self.incremental_accounts_hashes
+        self.incremental_snapshot_accounts_hashes
             .lock()
             .unwrap()
             .retain(|&slot, _| slot >= latest_full_snapshot_slot);
@@ -7213,7 +7228,7 @@ impl AccountsDb {
         (accounts_hash, capitalization)
     }
 
-    /// Calculate the incremental accounts hash
+    /// Calculate the incremental snapshot accounts hash
     ///
     /// This calculation is intended to be used by incremental snapshots, and thus differs from a
     /// "full" accounts hash in a few ways:
@@ -7221,7 +7236,7 @@ impl AccountsDb {
     ///   included in the incremental snapshot.  This ensures reconstructing the AccountsDb is
     ///   still correct when using this incremental accounts hash.
     /// - `storages` must be the same as the ones going into the incremental snapshot.
-    pub fn calculate_incremental_accounts_hash(
+    pub fn calculate_incremental_snapshot_accounts_hash(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
@@ -7339,13 +7354,13 @@ impl AccountsDb {
         result
     }
 
-    /// Verify accounts hash at startup (or tests)
+    /// Verify snapshot accounts hash at startup (or tests)
     ///
     /// Calculate accounts hash(es) and compare them to the values set at startup.
     /// If `base` is `None`, only calculates the full accounts hash for `[0, slot]`.
     /// If `base` is `Some`, calculate the full accounts hash for `[0, base slot]`
     /// and then calculate the incremental accounts hash for `(base slot, slot]`.
-    pub fn verify_accounts_hash_and_lamports(
+    pub fn verify_snapshot_accounts_hash_and_lamports(
         &self,
         snapshot_storages_and_slots: (&[Arc<AccountStorageEntry>], &[Slot]),
         slot: Slot,
@@ -7363,7 +7378,7 @@ impl AccountsDb {
         let hash_mismatch_is_error = !config.ignore_mismatch;
 
         if let Some((base_slot, base_capitalization)) = base {
-            self.verify_accounts_hash_and_lamports(
+            self.verify_snapshot_accounts_hash_and_lamports(
                 snapshot_storages_and_slots,
                 base_slot,
                 base_capitalization,
@@ -7378,13 +7393,14 @@ impl AccountsDb {
                 .filter(|storage_and_slot| *storage_and_slot.1 > base_slot)
                 .map(|(storage, slot)| (storage, *slot));
             let sorted_storages = SortedStorages::new_with_slots(storages_and_slots, None, None);
-            let calculated_incremental_accounts_hash = self.calculate_incremental_accounts_hash(
-                &calc_config,
-                &sorted_storages,
-                HashStats::default(),
-            );
+            let calculated_incremental_accounts_hash = self
+                .calculate_incremental_snapshot_accounts_hash(
+                    &calc_config,
+                    &sorted_storages,
+                    HashStats::default(),
+                );
             let found_incremental_accounts_hash = self
-                .get_incremental_accounts_hash(slot)
+                .get_incremental_snapshot_accounts_hash(slot)
                 .ok_or(AccountsHashVerificationError::MissingAccountsHash)?;
             if calculated_incremental_accounts_hash != found_incremental_accounts_hash {
                 warn!(
@@ -7416,13 +7432,13 @@ impl AccountsDb {
                     total_lamports,
                 ));
             }
-            let (found_accounts_hash, _) = self
-                .get_accounts_hash(slot)
+            let (found_full_snapshot_accounts_hash, _) = self
+                .get_full_snapshot_accounts_hash(slot)
                 .ok_or(AccountsHashVerificationError::MissingAccountsHash)?;
-            if calculated_accounts_hash != found_accounts_hash {
+            if calculated_accounts_hash != found_full_snapshot_accounts_hash {
                 warn!(
                     "Mismatched accounts hash for slot {slot}: {calculated_accounts_hash:?} \
-                     (calculated) != {found_accounts_hash:?} (expected)"
+                     (calculated) != {found_full_snapshot_accounts_hash:?} (expected)"
                 );
                 if hash_mismatch_is_error {
                     return Err(AccountsHashVerificationError::MismatchedAccountsHash);
@@ -9306,8 +9322,10 @@ impl AccountsDb {
         &self.accounts_delta_hashes
     }
 
-    pub fn accounts_hashes(&self) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {
-        &self.accounts_hashes
+    pub fn full_snapshot_accounts_hashes(
+        &self,
+    ) -> &Mutex<HashMap<Slot, (AccountsHash, /*capitalization*/ u64)>> {
+        &self.full_snapshot_accounts_hashes
     }
 
     pub fn assert_load_account(&self, slot: Slot, pubkey: Pubkey, expected_lamports: u64) {
@@ -9459,7 +9477,7 @@ impl AccountsDb {
             snapshot_storages.0.as_slice(),
             snapshot_storages.1.as_slice(),
         );
-        self.verify_accounts_hash_and_lamports(
+        self.verify_snapshot_accounts_hash_and_lamports(
             snapshot_storages_and_slots,
             slot,
             total_lamports,

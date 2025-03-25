@@ -223,7 +223,7 @@ pub fn bank_from_snapshot_archives(
                 .rc
                 .accounts
                 .accounts_db
-                .get_accounts_hash(base_slot)
+                .get_full_snapshot_accounts_hash(base_slot)
                 .expect("accounts hash must exist at full snapshot's slot")
                 .1;
             (base_slot, base_capitalization)
@@ -946,10 +946,13 @@ fn bank_to_full_snapshot_archive_with(
     let merkle_or_lattice_accounts_hash = if bank.is_snapshots_lt_hash_enabled() {
         MerkleOrLatticeAccountsHash::Lattice
     } else {
-        let calculated_accounts_hash =
-            bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
+        let calculated_accounts_hash = bank.update_full_snapshot_accounts_hash(
+            CalcAccountsHashDataSource::Storages,
+            false,
+            false,
+        );
         let accounts_hash = bank
-            .get_accounts_hash()
+            .get_full_snapshot_accounts_hash()
             .expect("accounts hash is required for snapshot");
         assert_eq!(accounts_hash, calculated_accounts_hash);
         MerkleOrLatticeAccountsHash::Merkle(accounts_hash.into())
@@ -1022,13 +1025,13 @@ pub fn bank_to_incremental_snapshot_archive(
                 .rc
                 .accounts
                 .accounts_db
-                .get_accounts_hash(full_snapshot_slot)
+                .get_full_snapshot_accounts_hash(full_snapshot_slot)
                 .expect("base accounts hash is required for incremental snapshot");
             let (incremental_accounts_hash, incremental_capitalization) = bank
                 .rc
                 .accounts
                 .accounts_db
-                .get_incremental_accounts_hash(bank.slot())
+                .get_incremental_snapshot_accounts_hash(bank.slot())
                 .expect("incremental accounts hash is required for incremental snapshot");
             assert_eq!(
                 incremental_accounts_hash,
@@ -2084,7 +2087,7 @@ mod tests {
             .rc
             .accounts
             .accounts_db
-            .get_accounts_hash(bank.slot())
+            .get_full_snapshot_accounts_hash(bank.slot())
             .unwrap();
 
         // make more banks, do more transactions, ensure there's more zero-lamport accounts
@@ -2114,7 +2117,7 @@ mod tests {
             .rc
             .accounts
             .accounts_db
-            .get_incremental_accounts_hash(bank.slot())
+            .get_incremental_snapshot_accounts_hash(bank.slot())
             .unwrap();
 
         // reconstruct a bank from the snapshots
@@ -2147,7 +2150,7 @@ mod tests {
             .rc
             .accounts
             .accounts_db
-            .get_accounts_hash(full_snapshot_archive.slot())
+            .get_full_snapshot_accounts_hash(full_snapshot_archive.slot())
             .unwrap();
         assert_eq!(deserialized_accounts_hash, full_accounts_hash);
 
@@ -2156,7 +2159,7 @@ mod tests {
             .rc
             .accounts
             .accounts_db
-            .get_incremental_accounts_hash(incremental_snapshot_archive.slot())
+            .get_incremental_snapshot_accounts_hash(incremental_snapshot_archive.slot())
             .unwrap();
         assert_eq!(
             deserialized_incrmental_accounts_hash,
@@ -2170,7 +2173,7 @@ mod tests {
             .rc
             .accounts
             .accounts_db
-            .calculate_incremental_accounts_hash(
+            .calculate_incremental_snapshot_accounts_hash(
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: false,
                     ancestors: None,

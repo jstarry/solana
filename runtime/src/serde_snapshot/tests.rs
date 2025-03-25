@@ -112,7 +112,7 @@ mod serde_snapshot_tests {
     {
         let bank_hash_stats = BankHashStats::default();
         let accounts_delta_hash = accounts_db.get_accounts_delta_hash(slot).unwrap();
-        let accounts_hash = accounts_db.get_accounts_hash(slot).unwrap().0;
+        let accounts_hash = accounts_db.get_full_snapshot_accounts_hash(slot).unwrap().0;
         let write_version = accounts_db.write_version.load(Ordering::Acquire);
         serialize_into(
             stream,
@@ -233,7 +233,7 @@ mod serde_snapshot_tests {
         let accounts_hash = AccountsHash(Hash::new_unique());
         accounts
             .accounts_db
-            .set_accounts_hash(slot, (accounts_hash, u64::default()));
+            .set_full_snapshot_accounts_hash(slot, (accounts_hash, u64::default()));
 
         let mut writer = Cursor::new(vec![]);
         accountsdb_to_stream(
@@ -293,7 +293,7 @@ mod serde_snapshot_tests {
         db.add_root_and_flush_write_cache(new_root);
 
         db.calculate_accounts_delta_hash(new_root);
-        db.update_accounts_hash_for_tests(new_root, &linear_ancestors(new_root), false, false);
+        db.calculate_accounts_hash_for_tests(new_root, &linear_ancestors(new_root), false, false);
 
         // Simulate reconstruction from snapshot
         let db = reconstruct_accounts_db_via_serialization(&db, new_root, storage_access);
@@ -375,7 +375,7 @@ mod serde_snapshot_tests {
             accounts.check_storage(2, 31, 31);
 
             let ancestors = linear_ancestors(latest_slot);
-            accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false);
+            accounts.calculate_accounts_hash_for_tests(latest_slot, &ancestors, false, false);
 
             accounts.clean_accounts_for_tests();
             // The first 20 accounts of slot 0 have been updated in slot 2, as well as
@@ -398,14 +398,27 @@ mod serde_snapshot_tests {
             // Get the hashes for the latest slot, which should be the only hashes in the
             // map on the deserialized AccountsDb
             assert_eq!(daccounts.accounts_delta_hashes().lock().unwrap().len(), 1);
-            assert_eq!(daccounts.accounts_hashes().lock().unwrap().len(), 1);
+            assert_eq!(
+                daccounts
+                    .full_snapshot_accounts_hashes()
+                    .lock()
+                    .unwrap()
+                    .len(),
+                1
+            );
             assert_eq!(
                 daccounts.get_accounts_delta_hash(latest_slot).unwrap(),
                 accounts.get_accounts_delta_hash(latest_slot).unwrap(),
             );
             assert_eq!(
-                daccounts.get_accounts_hash(latest_slot).unwrap().0,
-                accounts.get_accounts_hash(latest_slot).unwrap().0,
+                daccounts
+                    .get_full_snapshot_accounts_hash(latest_slot)
+                    .unwrap()
+                    .0,
+                accounts
+                    .get_full_snapshot_accounts_hash(latest_slot)
+                    .unwrap()
+                    .0,
             );
 
             daccounts.print_count_and_status("daccounts");
@@ -418,8 +431,8 @@ mod serde_snapshot_tests {
             daccounts.check_storage(2, 31, 31);
 
             assert_eq!(
-                daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
-                accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
+                daccounts.calculate_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
+                accounts.calculate_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
             );
         }
     }
@@ -462,7 +475,7 @@ mod serde_snapshot_tests {
         accounts.print_accounts_stats("accounts_post_purge");
 
         accounts.calculate_accounts_delta_hash(current_slot);
-        accounts.update_accounts_hash_for_tests(
+        accounts.calculate_accounts_hash_for_tests(
             current_slot,
             &linear_ancestors(current_slot),
             false,
@@ -520,7 +533,7 @@ mod serde_snapshot_tests {
 
         accounts.print_accounts_stats("pre_f");
         accounts.calculate_accounts_delta_hash(current_slot);
-        accounts.update_accounts_hash_for_tests(4, &Ancestors::default(), false, false);
+        accounts.calculate_accounts_hash_for_tests(4, &Ancestors::default(), false, false);
 
         let accounts = f(accounts, current_slot);
 
@@ -621,7 +634,7 @@ mod serde_snapshot_tests {
 
         accounts.print_count_and_status("before reconstruct");
         accounts.calculate_accounts_delta_hash(current_slot);
-        accounts.update_accounts_hash_for_tests(
+        accounts.calculate_accounts_hash_for_tests(
             current_slot,
             &linear_ancestors(current_slot),
             false,
@@ -739,7 +752,7 @@ mod serde_snapshot_tests {
         // So, prevent that from happening by introducing refcount
         ((current_slot - 1)..=current_slot).for_each(|slot| accounts.flush_root_write_cache(slot));
         accounts.clean_accounts_for_tests();
-        accounts.update_accounts_hash_for_tests(
+        accounts.calculate_accounts_hash_for_tests(
             current_slot,
             &linear_ancestors(current_slot),
             false,
@@ -835,7 +848,7 @@ mod serde_snapshot_tests {
                 &rent_collector,
             );
 
-            accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
+            accounts.calculate_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
                 .verify_accounts_hash_and_lamports_for_tests(current_slot, 22300, config.clone())
                 .unwrap();

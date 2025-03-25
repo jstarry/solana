@@ -1663,7 +1663,7 @@ impl Bank {
             .accounts_db
             .epoch_accounts_hash_manager
             .set_in_flight(parent.slot());
-        let accounts_hash = parent.update_accounts_hash(data_source, false, true);
+        let accounts_hash = parent.calculate_accounts_hash(data_source, false, true);
         let epoch_accounts_hash = accounts_hash.into();
         parent
             .rc
@@ -5718,16 +5718,19 @@ impl Bank {
         self.rc
             .accounts
             .accounts_db
-            .update_accounts_hash_with_verify_from(
+            .calculate_accounts_hash_with_verify_from(
                 // we have to use the index since the slot could be in the write cache still
                 CalcAccountsHashDataSource::IndexForTests,
                 debug_verify,
                 self.slot(),
-                &self.ancestors,
+                CalcAccountsHashConfig {
+                    use_bg_thread_pool: !is_startup,
+                    ancestors: Some(&self.ancestors),
+                    epoch_schedule: self.epoch_schedule(),
+                    rent_collector: &self.rent_collector,
+                    store_detailed_debug_info_on_failure: false,
+                },
                 None,
-                self.epoch_schedule(),
-                &self.rent_collector,
-                is_startup,
             )
             .1
     }
@@ -5764,11 +5767,11 @@ impl Bank {
     ///
     /// This fn is used when creating a snapshot with ledger-tool, or when
     /// packaging a snapshot into an archive (used to get the `SnapshotHash`).
-    pub fn get_accounts_hash(&self) -> Option<AccountsHash> {
+    pub fn get_full_snapshot_accounts_hash(&self) -> Option<AccountsHash> {
         self.rc
             .accounts
             .accounts_db
-            .get_accounts_hash(self.slot())
+            .get_full_snapshot_accounts_hash(self.slot())
             .map(|(accounts_hash, _)| accounts_hash)
     }
 
@@ -5780,7 +5783,7 @@ impl Bank {
         self.rc
             .accounts
             .accounts_db
-            .get_incremental_accounts_hash(self.slot())
+            .get_incremental_snapshot_accounts_hash(self.slot())
             .map(|(incremental_accounts_hash, _)| incremental_accounts_hash)
     }
 
@@ -5811,7 +5814,7 @@ impl Bank {
     /// `AccountsHash` and an `IncrementalAccountsHash` for this bank's slot.  There may only be
     /// one or the other.
     pub fn get_merkle_snapshot_hash(&self) -> SnapshotHash {
-        let accounts_hash = self.get_accounts_hash();
+        let accounts_hash = self.get_full_snapshot_accounts_hash();
         let incremental_accounts_hash = self.get_incremental_accounts_hash();
         let accounts_hash_kind = match (accounts_hash, incremental_accounts_hash) {
             (Some(_), Some(_)) => panic!("Both full and incremental accounts hashes are present for slot {}; it is ambiguous which one to use for the snapshot hash!", self.slot()),
@@ -5845,7 +5848,65 @@ impl Bank {
             .load_account_into_read_cache(&self.ancestors, key);
     }
 
-    pub fn update_accounts_hash(
+    pub fn calculate_accounts_hash(
+        &self,
+        data_source: CalcAccountsHashDataSource,
+        mut debug_verify: bool,
+        is_startup: bool,
+    ) -> AccountsHash {
+        let calculate_config = || CalcAccountsHashConfig {
+            use_bg_thread_pool: !is_startup,
+            ancestors: Some(&self.ancestors),
+            epoch_schedule: self.epoch_schedule(),
+            rent_collector: &self.rent_collector,
+            store_detailed_debug_info_on_failure: false,
+        };
+        let (accounts_hash, total_lamports) = self
+            .rc
+            .accounts
+            .accounts_db
+            .calculate_accounts_hash_with_verify_from(
+                data_source,
+                debug_verify,
+                self.slot(),
+                calculate_config(),
+                Some(self.capitalization()),
+            );
+        if total_lamports != self.capitalization() {
+            datapoint_info!(
+                "capitalization_mismatch",
+                ("slot", self.slot(), i64),
+                ("calculated_lamports", total_lamports, i64),
+                ("capitalization", self.capitalization(), i64),
+            );
+
+            if !debug_verify {
+                // cap mismatch detected. It has been logged to metrics above.
+                // Run both versions of the calculation to attempt to get more info.
+                debug_verify = true;
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .calculate_accounts_hash_with_verify_from(
+                        data_source,
+                        debug_verify,
+                        self.slot(),
+                        calculate_config(),
+                        Some(self.capitalization()),
+                    );
+            }
+
+            panic!(
+                "capitalization_mismatch. slot: {}, calculated_lamports: {}, capitalization: {}",
+                self.slot(),
+                total_lamports,
+                self.capitalization()
+            );
+        }
+        accounts_hash
+    }
+
+    pub fn update_full_snapshot_accounts_hash(
         &self,
         data_source: CalcAccountsHashDataSource,
         mut debug_verify: bool,
@@ -5855,7 +5916,7 @@ impl Bank {
             .rc
             .accounts
             .accounts_db
-            .update_accounts_hash_with_verify_from(
+            .update_full_snapshot_accounts_hash_with_verify_from(
                 data_source,
                 debug_verify,
                 self.slot(),
@@ -5880,7 +5941,7 @@ impl Bank {
                 self.rc
                     .accounts
                     .accounts_db
-                    .update_accounts_hash_with_verify_from(
+                    .update_full_snapshot_accounts_hash_with_verify_from(
                         data_source,
                         debug_verify,
                         self.slot(),
@@ -5916,7 +5977,7 @@ impl Bank {
         self.rc
             .accounts
             .accounts_db
-            .update_incremental_accounts_hash(
+            .update_incremental_snapshot_accounts_hash(
                 &config,
                 &sorted_storages,
                 self.slot(),
@@ -7117,8 +7178,8 @@ impl Bank {
         self.transaction_processor.get_sysvar_cache_for_tests()
     }
 
-    pub fn update_accounts_hash_for_tests(&self) -> AccountsHash {
-        self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
+    pub fn calculate_accounts_hash_for_tests(&self) -> AccountsHash {
+        self.calculate_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
     }
 
     pub fn new_program_cache_for_tx_batch_for_slot(&self, slot: Slot) -> ProgramCacheForTxBatch {

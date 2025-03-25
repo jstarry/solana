@@ -704,7 +704,7 @@ impl Serialize for SerializableBankAndStorage<'_> {
         let accounts_db = &self.bank.rc.accounts.accounts_db;
         let bank_hash_stats = self.bank.get_bank_hash_stats();
         let accounts_delta_hash = accounts_db.get_accounts_delta_hash(slot).unwrap();
-        let accounts_hash = accounts_db.get_accounts_hash(slot).unwrap().0;
+        let accounts_hash = accounts_db.get_full_snapshot_accounts_hash(slot).unwrap().0;
         let write_version = accounts_db.write_version.load(Ordering::Acquire);
         let lamports_per_signature = bank_fields.fee_rate_governor.lamports_per_signature;
         let versioned_epoch_stakes = std::mem::take(&mut bank_fields.versioned_epoch_stakes);
@@ -748,7 +748,7 @@ impl Serialize for SerializableBankAndStorageNoExtra<'_> {
         let accounts_db = &self.bank.rc.accounts.accounts_db;
         let bank_hash_stats = self.bank.get_bank_hash_stats();
         let accounts_delta_hash = accounts_db.get_accounts_delta_hash(slot).unwrap();
-        let accounts_hash = accounts_db.get_accounts_hash(slot).unwrap().0;
+        let accounts_hash = accounts_db.get_full_snapshot_accounts_hash(slot).unwrap().0;
         let write_version = accounts_db.write_version.load(Ordering::Acquire);
         (
             SerializableVersionedBank::from(bank_fields),
@@ -1077,21 +1077,27 @@ where
             // If we've booted from local state that was originally intended to be an incremental
             // snapshot, then we will use the incremental snapshot persistence field to set the
             // initial accounts hashes in accounts db.
-            let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+            let old_accounts_hash = accounts_db.set_full_snapshot_accounts_hash(
                 incremental_snapshot_persistence.full_slot,
-                incremental_snapshot_persistence.full_hash.clone(),
-                incremental_snapshot_persistence.full_capitalization,
+                (
+                    incremental_snapshot_persistence.full_hash.clone().into(),
+                    incremental_snapshot_persistence.full_capitalization,
+                ),
             );
             assert!(
                 old_accounts_hash.is_none(),
                 "There should not already be an AccountsHash at slot {slot}: {old_accounts_hash:?}",
             );
-            let old_incremental_accounts_hash = accounts_db
-                .set_incremental_accounts_hash_from_snapshot(
-                    *slot,
-                    incremental_snapshot_persistence.incremental_hash.clone(),
+            let old_incremental_accounts_hash = accounts_db.set_incremental_snapshot_accounts_hash(
+                *slot,
+                (
+                    incremental_snapshot_persistence
+                        .incremental_hash
+                        .clone()
+                        .into(),
                     incremental_snapshot_persistence.incremental_capitalization,
-                );
+                ),
+            );
             assert!(
                 old_incremental_accounts_hash.is_none(),
                 "There should not already be an IncrementalAccountsHash at slot {slot}: {old_incremental_accounts_hash:?}",
@@ -1099,10 +1105,12 @@ where
         } else {
             // Otherwise, we've booted from a snapshot archive, or from local state that was *not*
             // intended to be an incremental snapshot.
-            let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+            let old_accounts_hash = accounts_db.set_full_snapshot_accounts_hash(
                 *slot,
-                bank_hash_info.accounts_hash.clone(),
-                capitalizations.0,
+                (
+                    bank_hash_info.accounts_hash.clone().into(),
+                    capitalizations.0,
+                ),
             );
             assert!(
                 old_accounts_hash.is_none(),
@@ -1141,10 +1149,15 @@ where
                     incremental_snapshot_persistence.full_capitalization, capitalizations.0,
                 );
                 let old_incremental_accounts_hash = accounts_db
-                    .set_incremental_accounts_hash_from_snapshot(
+                    .set_incremental_snapshot_accounts_hash(
                         *slot,
-                        incremental_snapshot_persistence.incremental_hash.clone(),
-                        incremental_snapshot_persistence.incremental_capitalization,
+                        (
+                            incremental_snapshot_persistence
+                                .incremental_hash
+                                .clone()
+                                .into(),
+                            incremental_snapshot_persistence.incremental_capitalization,
+                        ),
                     );
                 assert!(
                     old_incremental_accounts_hash.is_none(),
@@ -1153,12 +1166,14 @@ where
             } else {
                 // ..and without a BankIncrementalSnapshotPersistence then the Incremental Accounts
                 // Hash feature is disabled; the accounts hash in `BankHashInfo` is valid.
-                let old_accounts_hash = accounts_db.set_accounts_hash_from_snapshot(
+                let old_accounts_hash = accounts_db.set_full_snapshot_accounts_hash(
                     *slot,
-                    bank_hash_info.accounts_hash.clone(),
-                    capitalizations
-                        .1
-                        .expect("capitalization from incremental snapshot"),
+                    (
+                        bank_hash_info.accounts_hash.clone().into(),
+                        capitalizations
+                            .1
+                            .expect("capitalization from incremental snapshot"),
+                    ),
                 );
                 assert!(
                     old_accounts_hash.is_none(),

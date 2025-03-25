@@ -281,17 +281,17 @@ impl AccountsHashVerifier {
                     };
                     let accounts_db = &accounts_package.accounts.accounts_db;
                     let Some((base_accounts_hash, base_capitalization)) =
-                        accounts_db.get_accounts_hash(base_slot)
+                        accounts_db.get_full_snapshot_accounts_hash(base_slot)
                     else {
                         panic!(
                             "incremental snapshot requires accounts hash and capitalization from \
                              the full snapshot it is based on\n\
                              package: {accounts_package:?}\n\
-                             accounts hashes: {:?}\n\
-                             incremental accounts hashes: {:?}\n\
+                             full snapshot accounts hashes: {:?}\n\
+                             incremental snapshot accounts hashes: {:?}\n\
                              full snapshot archives: {:?}\n\
                              bank snapshots: {:?}",
-                            accounts_db.get_accounts_hashes(),
+                            accounts_db.get_full_snapshot_accounts_hashes(),
                             accounts_db.get_incremental_accounts_hashes(),
                             snapshot_utils::get_full_snapshot_archives(
                                 &snapshot_config.full_snapshot_archives_dir,
@@ -343,8 +343,10 @@ impl AccountsHashVerifier {
         };
 
         let slot = accounts_package.slot;
-        let ((accounts_hash, lamports), measure_hash_us) =
-            measure_us!(accounts_package.accounts.accounts_db.update_accounts_hash(
+        let ((accounts_hash, lamports), measure_hash_us) = measure_us!(accounts_package
+            .accounts
+            .accounts_db
+            .update_full_snapshot_accounts_hash(
                 &calculate_accounts_hash_config,
                 &sorted_storages,
                 slot,
@@ -413,7 +415,7 @@ impl AccountsHashVerifier {
         let (incremental_accounts_hash, measure_hash_us) = measure_us!(accounts_package
             .accounts
             .accounts_db
-            .update_incremental_accounts_hash(
+            .update_incremental_snapshot_accounts_hash(
                 &calculate_accounts_hash_config,
                 &sorted_storages,
                 accounts_package.slot,
@@ -481,7 +483,7 @@ impl AccountsHashVerifier {
             accounts_package
                 .accounts
                 .accounts_db
-                .purge_old_accounts_hashes(accounts_package.slot);
+                .purge_old_snapshot_accounts_hashes(accounts_package.slot);
         }
     }
 

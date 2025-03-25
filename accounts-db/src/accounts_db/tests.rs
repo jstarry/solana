@@ -2118,12 +2118,12 @@ fn test_accounts_db_purge1() {
 
     let ancestors = linear_ancestors(current_slot);
     info!("ancestors: {:?}", ancestors);
-    let hash = accounts.update_accounts_hash_for_tests(current_slot, &ancestors, true, true);
+    let hash = accounts.calculate_accounts_hash_for_tests(current_slot, &ancestors, true, true);
 
     accounts.clean_accounts_for_tests();
 
     assert_eq!(
-        accounts.update_accounts_hash_for_tests(current_slot, &ancestors, true, true),
+        accounts.calculate_accounts_hash_for_tests(current_slot, &ancestors, true, true),
         hash
     );
 
@@ -2419,14 +2419,17 @@ fn test_verify_accounts_hash() {
         Ok(_)
     );
 
-    db.accounts_hashes.lock().unwrap().remove(&some_slot);
+    db.full_snapshot_accounts_hashes
+        .lock()
+        .unwrap()
+        .remove(&some_slot);
 
     assert_matches!(
         db.verify_accounts_hash_and_lamports_for_tests(some_slot, 1, config.clone()),
         Err(AccountsHashVerificationError::MissingAccountsHash)
     );
 
-    db.set_accounts_hash(
+    db.set_full_snapshot_accounts_hash(
         some_slot,
         (
             AccountsHash(Hash::new_from_array([0xca; HASH_BYTES])),
@@ -8080,7 +8083,7 @@ define_accounts_db_test!(test_calculate_incremental_accounts_hash, |accounts_db|
         );
         let (storages, _) = accounts_db.get_storages(full_accounts_hash_slot + 1..=slot);
         let storages = SortedStorages::new(&storages);
-        accounts_db.calculate_incremental_accounts_hash(
+        accounts_db.calculate_incremental_snapshot_accounts_hash(
             &CalcAccountsHashConfig::default(),
             &storages,
             HashStats::default(),

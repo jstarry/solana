@@ -140,7 +140,7 @@ mod tests {
         bank2.squash();
         bank2.force_flush_accounts_cache();
         let expected_accounts_hash = AccountsHash(Hash::new_unique());
-        accounts_db.set_accounts_hash(bank2_slot, (expected_accounts_hash, 30));
+        accounts_db.set_full_snapshot_accounts_hash(bank2_slot, (expected_accounts_hash, 30));
 
         let expected_incremental_snapshot_persistence =
             has_incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
@@ -258,7 +258,7 @@ mod tests {
         if let Some(incremental_snapshot_persistence) =
             expected_incremental_snapshot_persistence.as_ref()
         {
-            assert_eq!(dbank.get_accounts_hash(), None);
+            assert_eq!(dbank.get_full_snapshot_accounts_hash(), None);
             assert_eq!(
                 dbank.get_incremental_accounts_hash(),
                 Some(
@@ -269,7 +269,10 @@ mod tests {
                 ),
             );
         } else {
-            assert_eq!(dbank.get_accounts_hash(), Some(expected_accounts_hash));
+            assert_eq!(
+                dbank.get_full_snapshot_accounts_hash(),
+                Some(expected_accounts_hash)
+            );
             assert_eq!(dbank.get_incremental_accounts_hash(), None);
         }
         assert_eq!(
@@ -308,10 +311,13 @@ mod tests {
             .accounts
             .accounts_db
             .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-        bank.rc.accounts.accounts_db.set_accounts_hash(
-            bank.slot(),
-            (AccountsHash(Hash::new_unique()), u64::default()),
-        );
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_full_snapshot_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
 
         // Set extra fields
         bank.fee_rate_governor.lamports_per_signature = 7000;
@@ -453,10 +459,13 @@ mod tests {
             .accounts
             .accounts_db
             .set_accounts_delta_hash(bank.slot(), AccountsDeltaHash(Hash::new_unique()));
-        bank.rc.accounts.accounts_db.set_accounts_hash(
-            bank.slot(),
-            (AccountsHash(Hash::new_unique()), u64::default()),
-        );
+        bank.rc
+            .accounts
+            .accounts_db
+            .set_full_snapshot_accounts_hash(
+                bank.slot(),
+                (AccountsHash(Hash::new_unique()), u64::default()),
+            );
 
         // Set extra fields
         bank.fee_rate_governor.lamports_per_signature = 7000;

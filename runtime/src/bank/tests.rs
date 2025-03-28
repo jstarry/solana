@@ -1652,15 +1652,6 @@ impl Bank {
 fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
     solana_logger::setup();
     let (mut genesis_config, _mint_keypair) = create_genesis_config(1_000_000);
-<<<<<<< HEAD
-    for feature_id in FeatureSet::default().inactive() {
-        if feature_id != &agave_feature_set::skip_rent_rewrites::id()
-            && (!should_collect_rent
-                || feature_id != &agave_feature_set::disable_rent_fees_collection::id())
-        {
-            activate_feature(&mut genesis_config, *feature_id);
-        }
-=======
     activate_all_features(&mut genesis_config);
     genesis_config
         .accounts
@@ -1675,7 +1666,6 @@ fn test_rent_eager_collect_rent_in_partition(should_collect_rent: bool) {
             .accounts
             .remove(&feature_set::disable_rent_fees_collection::id())
             .unwrap();
->>>>>>> 8093fe64d3 (feat: disable partitioned rent collection (SIMD-0175) (#4572))
     }
 
     let zero_lamport_pubkey = solana_pubkey::new_rand();
@@ -11889,7 +11879,7 @@ fn test_partitioned_rent_collection(should_run_partitioned_rent_collection: bool
     if should_run_partitioned_rent_collection {
         genesis_config
             .accounts
-            .remove(&solana_feature_set::disable_partitioned_rent_collection::id());
+            .remove(&agave_feature_set::disable_partitioned_rent_collection::id());
     }
 
     let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -11931,14 +11921,10 @@ fn test_accounts_data_size_and_rent_collection(should_collect_rent: bool) {
     if should_collect_rent {
         genesis_config
             .accounts
-<<<<<<< HEAD
             .remove(&agave_feature_set::disable_rent_fees_collection::id());
-=======
-            .remove(&solana_feature_set::disable_rent_fees_collection::id());
         genesis_config
             .accounts
-            .remove(&solana_feature_set::disable_partitioned_rent_collection::id());
->>>>>>> 8093fe64d3 (feat: disable partitioned rent collection (SIMD-0175) (#4572))
+            .remove(&agave_feature_set::disable_partitioned_rent_collection::id());
     }
 
     let bank = Arc::new(Bank::new_for_tests(&genesis_config));
@@ -12623,7 +12609,7 @@ where
     if should_run_partitioned_rent_collection {
         genesis_config
             .accounts
-            .remove(&solana_feature_set::disable_partitioned_rent_collection::id());
+            .remove(&agave_feature_set::disable_partitioned_rent_collection::id());
     }
     let (bank, bank_forks) = Bank::new_with_bank_forks_for_tests(&genesis_config);
     let bank_client = BankClient::new_shared(bank.clone());

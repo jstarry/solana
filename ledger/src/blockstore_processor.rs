@@ -3516,7 +3516,7 @@ pub mod tests {
         if should_run_partitioned_rent_collection {
             genesis_config
                 .accounts
-                .remove(&solana_feature_set::disable_partitioned_rent_collection::id());
+                .remove(&agave_feature_set::disable_partitioned_rent_collection::id());
         }
 
         fn get_instruction_errors() -> Vec<InstructionError> {

@@ -114,3 +114,34 @@ pub enum SnapshotUsage {
     /// generate).  This enables taking snapshots.
     LoadAndGenerate,
 }
+
+pub struct SnapshotArchiveConfig {
+    /// Path to the directory where full snapshot archives are stored
+    pub full_snapshot_archives_dir: PathBuf,
+
+    /// Path to the directory where incremental snapshot archives are stored
+    pub incremental_snapshot_archives_dir: PathBuf,
+
+    /// Path to the directory where bank snapshots are stored
+    pub bank_snapshots_dir: PathBuf,
+
+    /// The archive format to use for snapshots
+    pub archive_format: ArchiveFormat,
+
+    /// Snapshot version to generate
+    pub snapshot_version: SnapshotVersion,
+}
+
+impl From<&SnapshotConfig> for SnapshotArchiveConfig {
+    fn from(snapshot_config: &SnapshotConfig) -> Self {
+        Self {
+            full_snapshot_archives_dir: snapshot_config.full_snapshot_archives_dir.clone(),
+            incremental_snapshot_archives_dir: snapshot_config
+                .incremental_snapshot_archives_dir
+                .clone(),
+            bank_snapshots_dir: snapshot_config.bank_snapshots_dir.clone(),
+            archive_format: snapshot_config.archive_format,
+            snapshot_version: snapshot_config.snapshot_version,
+        }
+    }
+}

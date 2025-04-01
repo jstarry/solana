@@ -967,13 +967,12 @@ fn bank_to_full_snapshot_archive_with(
     let snapshot_package =
         SnapshotPackage::new(accounts_package, merkle_or_lattice_accounts_hash, None);
 
-    let snapshot_config = SnapshotConfig {
+    let snapshot_config = SnapshotArchiveConfig {
         full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
         incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.as_ref().to_path_buf(),
         bank_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
         archive_format,
         snapshot_version,
-        ..Default::default()
     };
     let snapshot_archive_info =
         snapshot_utils::serialize_and_archive_snapshot_package(snapshot_package, &snapshot_config)?;

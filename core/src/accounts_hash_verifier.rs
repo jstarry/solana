@@ -14,7 +14,7 @@ use {
     solana_measure::measure_us,
     solana_runtime::{
         serde_snapshot::BankIncrementalSnapshotPersistence,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{self, SnapshotConfig},
         snapshot_controller::SnapshotController,
         snapshot_package::{
             self, AccountsHashAlgorithm, AccountsPackage, AccountsPackageKind, SnapshotKind,
@@ -72,11 +72,10 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
-                    let snapshot_config = snapshot_controller.snapshot_config();
                     let (result, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
                         &pending_snapshot_packages,
-                        snapshot_config,
+                        &snapshot_controller,
                     ));
                     if let Err(err) = result {
                         error!(
@@ -216,14 +215,14 @@ impl AccountsHashVerifier {
     fn process_accounts_package(
         accounts_package: AccountsPackage,
         pending_snapshot_packages: &Mutex<PendingSnapshotPackages>,
-        snapshot_config: &SnapshotConfig,
+        snapshot_controller: &SnapshotController,
     ) -> IoResult<()> {
         let (merkle_or_lattice_accounts_hash, bank_incremental_snapshot_persistence) =
-            Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_config)?;
+            Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_controller)?;
 
         Self::save_epoch_accounts_hash(&accounts_package, &merkle_or_lattice_accounts_hash);
 
-        Self::purge_old_accounts_hashes(&accounts_package, snapshot_config);
+        Self::purge_old_accounts_hashes(&accounts_package, snapshot_controller);
 
         Self::submit_for_packaging(
             accounts_package,
@@ -238,7 +237,7 @@ impl AccountsHashVerifier {
     /// returns calculated accounts hash
     fn calculate_and_verify_accounts_hash(
         accounts_package: &AccountsPackage,
-        snapshot_config: &SnapshotConfig,
+        snapshot_controller: &SnapshotController,
     ) -> IoResult<(
         MerkleOrLatticeAccountsHash,
         Option<BankIncrementalSnapshotPersistence>,
@@ -284,6 +283,7 @@ impl AccountsHashVerifier {
                     let Some((base_accounts_hash, base_capitalization)) =
                         accounts_db.get_accounts_hash(base_slot)
                     else {
+                        let snapshot_config = snapshot_controller.snapshot_config();
                         panic!(
                             "incremental snapshot requires accounts hash and capitalization from \
                              the full snapshot it is based on\n\
@@ -457,25 +457,28 @@ impl AccountsHashVerifier {
 
     fn purge_old_accounts_hashes(
         accounts_package: &AccountsPackage,
-        snapshot_config: &SnapshotConfig,
+        snapshot_controller: &SnapshotController,
     ) {
-        let should_purge = match (
-            snapshot_config.should_generate_snapshots(),
-            accounts_package.package_kind,
-        ) {
-            (false, _) => {
-                // If we are *not* generating snapshots, then it is safe to purge every time.
-                true
+        let should_purge = {
+            let snapshot_config = snapshot_controller.snapshot_config();
+            match (
+                snapshot_config.should_generate_snapshots(),
+                accounts_package.package_kind,
+            ) {
+                (false, _) => {
+                    // If we are *not* generating snapshots, then it is safe to purge every time.
+                    true
+                }
+                (true, AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)) => {
+                    // If we *are* generating snapshots, then only purge old accounts hashes after
+                    // handling full snapshot packages.  This is because handling incremental snapshot
+                    // packages requires the accounts hash from the latest full snapshot, and if we
+                    // purged after every package, we'd remove the accounts hash needed by the next
+                    // incremental snapshot.
+                    true
+                }
+                (true, _) => false,
             }
-            (true, AccountsPackageKind::Snapshot(SnapshotKind::FullSnapshot)) => {
-                // If we *are* generating snapshots, then only purge old accounts hashes after
-                // handling full snapshot packages.  This is because handling incremental snapshot
-                // packages requires the accounts hash from the latest full snapshot, and if we
-                // purged after every package, we'd remove the accounts hash needed by the next
-                // incremental snapshot.
-                true
-            }
-            (true, _) => false,
         };
 
         if should_purge {

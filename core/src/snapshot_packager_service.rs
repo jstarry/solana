@@ -40,8 +40,14 @@ impl SnapshotPackagerService {
             .name("solSnapshotPkgr".to_string())
             .spawn(move || {
                 info!("SnapshotPackagerService has started");
-                let snapshot_config = snapshot_controller.snapshot_config();
-                renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
+                renice_this_thread(
+                    snapshot_controller
+                        .snapshot_config()
+                        .read()
+                        .unwrap()
+                        .packager_thread_niceness_adj,
+                )
+                .unwrap();
                 let mut snapshot_gossip_manager = enable_gossip_push
                     .then(|| SnapshotGossipManager::new(cluster_info, starting_snapshot_hashes));
 

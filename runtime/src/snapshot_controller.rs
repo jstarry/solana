@@ -13,20 +13,15 @@ use {
     std::{
         sync::{
             atomic::{AtomicU64, Ordering},
-            Arc,
+            Arc, RwLock,
         },
         time::Instant,
     },
 };
 
-struct SnapshotGenerationIntervals {
-    full_snapshot_interval: Slot,
-    incremental_snapshot_interval: Slot,
-}
-
 pub struct SnapshotController {
     abs_request_sender: SnapshotRequestSender,
-    snapshot_config: SnapshotConfig,
+    snapshot_config: Arc<RwLock<SnapshotConfig>>,
     latest_abs_request_slot: AtomicU64,
 }
 
@@ -38,12 +33,12 @@ impl SnapshotController {
     ) -> Self {
         Self {
             abs_request_sender,
-            snapshot_config,
+            snapshot_config: Arc::new(RwLock::new(snapshot_config)),
             latest_abs_request_slot: AtomicU64::new(root_slot),
         }
     }
 
-    pub fn snapshot_config(&self) -> &SnapshotConfig {
+    pub fn snapshot_config(&self) -> &RwLock<SnapshotConfig> {
         &self.snapshot_config
     }
 
@@ -74,11 +69,13 @@ impl SnapshotController {
         // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
         // unlikely for a validator with default snapshot intervals (and accounts hash verifier
         // intervals), it *is* possible, and there are tests to exercise this possibility.
-        if let Some(SnapshotGenerationIntervals {
-            full_snapshot_interval,
-            incremental_snapshot_interval,
-        }) = self.snapshot_generation_intervals()
-        {
+        let snapshot_config = self.snapshot_config.read().unwrap();
+        if snapshot_config.should_generate_snapshots() {
+            let full_snapshot_interval = snapshot_config.full_snapshot_archive_interval_slots;
+            let incremental_snapshot_interval =
+                snapshot_config.incremental_snapshot_archive_interval_slots;
+            drop(snapshot_config);
+
             if let Some((bank, request_kind)) = banks.iter().find_map(|bank| {
                 if bank.slot() <= self.latest_abs_request_slot() {
                     None
@@ -122,21 +119,6 @@ impl SnapshotController {
         }
 
         Ok((is_root_bank_squashed, squash_timing, total_snapshot_ms))
-    }
-
-    /// Returns the intervals, in slots, for sending snapshot requests
-    ///
-    /// Returns None if snapshot generation is disabled and snapshot requests
-    /// should not be sent
-    fn snapshot_generation_intervals(&self) -> Option<SnapshotGenerationIntervals> {
-        self.snapshot_config
-            .should_generate_snapshots()
-            .then_some(SnapshotGenerationIntervals {
-                full_snapshot_interval: self.snapshot_config.full_snapshot_archive_interval_slots,
-                incremental_snapshot_interval: self
-                    .snapshot_config
-                    .incremental_snapshot_archive_interval_slots,
-            })
     }
 
     /// Sends an EpochAccountsHash request if one of the `banks` crosses the EAH boundary.

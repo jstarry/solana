@@ -9,7 +9,7 @@ use {
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
-        snapshot_config::SnapshotConfig,
+        snapshot_config::SnapshotArchiveConfig,
         snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
@@ -967,16 +967,17 @@ fn bank_to_full_snapshot_archive_with(
     let snapshot_package =
         SnapshotPackage::new(accounts_package, merkle_or_lattice_accounts_hash, None);
 
-    let snapshot_config = SnapshotConfig {
+    let snapshot_archive_config = SnapshotArchiveConfig {
         full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
         incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.as_ref().to_path_buf(),
         bank_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
         archive_format,
         snapshot_version,
-        ..Default::default()
     };
-    let snapshot_archive_info =
-        snapshot_utils::serialize_and_archive_snapshot_package(snapshot_package, &snapshot_config)?;
+    let snapshot_archive_info = snapshot_utils::serialize_and_archive_snapshot_package(
+        snapshot_package,
+        &snapshot_archive_config,
+    )?;
 
     Ok(FullSnapshotArchiveInfo::new(snapshot_archive_info))
 }
@@ -1066,16 +1067,17 @@ pub fn bank_to_incremental_snapshot_archive(
     // this bank snapshot *cannot* be used by fastboot.
     // Putting the snapshot in a tempdir effectively enforces that.
     let temp_bank_snapshots_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
-    let snapshot_config = SnapshotConfig {
+    let snapshot_archive_config = SnapshotArchiveConfig {
         full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
         incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.as_ref().to_path_buf(),
         bank_snapshots_dir: temp_bank_snapshots_dir.path().to_path_buf(),
         archive_format,
         snapshot_version,
-        ..Default::default()
     };
-    let snapshot_archive_info =
-        snapshot_utils::serialize_and_archive_snapshot_package(snapshot_package, &snapshot_config)?;
+    let snapshot_archive_info = snapshot_utils::serialize_and_archive_snapshot_package(
+        snapshot_package,
+        &snapshot_archive_config,
+    )?;
 
     Ok(IncrementalSnapshotArchiveInfo::new(
         full_snapshot_slot,

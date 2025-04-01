@@ -1461,7 +1461,6 @@ mod tests {
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
             snapshot_bank_utils::bank_to_full_snapshot_archive,
-            snapshot_config::{SnapshotConfig, SnapshotUsage},
             snapshot_hash::SnapshotHash,
             snapshot_utils::build_incremental_snapshot_archive_path,
         },
@@ -3235,8 +3234,7 @@ mod tests {
             incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
                 .as_ref()
                 .to_path_buf(),
-            usage: SnapshotUsage::LoadAndGenerate,
-            ..Default::default()
+            ..SnapshotConfig::default()
         };
         let old_root_bank = test_state.bank_forks.read().unwrap().root_bank();
         let old_root_slot = old_root_bank.slot();
@@ -3377,15 +3375,15 @@ mod tests {
             .unwrap(),
             WenRestartError::BlockNotFound(empty_slot),
         );
-        // Now turn off snapshot generation, we should generate a full snapshot.
+        // Now turn off snapshot generation, we should still generate a full snapshot.
         let snapshot_config = SnapshotConfig {
+            generation_intervals: RwLock::new(None),
             bank_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
             full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
             incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
                 .as_ref()
                 .to_path_buf(),
-            usage: SnapshotUsage::LoadOnly,
-            ..Default::default()
+            ..SnapshotConfig::default()
         };
         let snapshot_controller =
             SnapshotController::new(abs_request_sender.clone(), snapshot_config, new_root_slot);

@@ -55,7 +55,9 @@ use {
     solana_runtime::{
         runtime_config::RuntimeConfig,
         snapshot_bank_utils::DISABLED_SNAPSHOT_ARCHIVE_INTERVAL,
-        snapshot_config::{SnapshotConfig, SnapshotUsage},
+        snapshot_config::{
+            SnapshotArchiveStoragePaths, SnapshotConfig, SnapshotGenerationIntervals,
+        },
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
     },
     solana_sdk::{
@@ -963,16 +965,16 @@ pub fn execute(
         };
 
     validator_config.snapshot_config = SnapshotConfig {
-        usage: if full_snapshot_archive_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
-            SnapshotUsage::LoadOnly
-        } else {
-            SnapshotUsage::LoadAndGenerate
+        load_at_startup: true,
+        generation_intervals: RwLock::new(Some(SnapshotGenerationIntervals {
+            full_snapshot_interval: full_snapshot_archive_interval_slots,
+            incremental_snapshot_interval: incremental_snapshot_archive_interval_slots,
+        })),
+        archive_storage_paths: SnapshotArchiveStoragePaths {
+            full_snapshot_archives_dir: full_snapshot_archives_dir.clone(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.clone(),
         },
-        full_snapshot_archive_interval_slots,
-        incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
-        full_snapshot_archives_dir: full_snapshot_archives_dir.clone(),
-        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.clone(),
         archive_format,
         snapshot_version,
         maximum_full_snapshot_archives_to_retain,

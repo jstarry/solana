@@ -31,8 +31,8 @@ use {
         bank::Bank, bank_forks::BankForks, commitment::BlockCommitmentCache,
         non_circulating_supply::calculate_non_circulating_supply,
         prioritization_fee_cache::PrioritizationFeeCache,
-        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
-        snapshot_utils,
+        snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_config::SnapshotArchiveStoragePaths, snapshot_utils,
     },
     solana_sdk::{
         exit::Exit, genesis_config::DEFAULT_GENESIS_DOWNLOAD_PATH, hash::Hash,
@@ -75,7 +75,7 @@ struct RpcRequestMiddleware {
     ledger_path: PathBuf,
     full_snapshot_archive_path_regex: Regex,
     incremental_snapshot_archive_path_regex: Regex,
-    snapshot_config: Option<SnapshotConfig>,
+    snapshot_paths: Option<SnapshotArchiveStoragePaths>,
     bank_forks: Arc<RwLock<BankForks>>,
     health: Arc<RpcHealth>,
 }
@@ -83,7 +83,7 @@ struct RpcRequestMiddleware {
 impl RpcRequestMiddleware {
     pub fn new(
         ledger_path: PathBuf,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_paths: Option<SnapshotArchiveStoragePaths>,
         bank_forks: Arc<RwLock<BankForks>>,
         health: Arc<RpcHealth>,
     ) -> Self {
@@ -97,7 +97,7 @@ impl RpcRequestMiddleware {
                 snapshot_utils::INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX,
             )
             .unwrap(),
-            snapshot_config,
+            snapshot_paths,
             bank_forks,
             health,
         }
@@ -134,7 +134,7 @@ impl RpcRequestMiddleware {
             return true;
         }
 
-        if self.snapshot_config.is_none() {
+        if self.snapshot_paths.is_none() {
             return false;
         }
 
@@ -172,13 +172,13 @@ impl RpcRequestMiddleware {
             .is_match(Path::new("").join(&stem).to_str().unwrap())
         {
             &self
-                .snapshot_config
+                .snapshot_paths
                 .as_ref()
                 .unwrap()
                 .full_snapshot_archives_dir
         } else {
             &self
-                .snapshot_config
+                .snapshot_paths
                 .as_ref()
                 .unwrap()
                 .incremental_snapshot_archives_dir
@@ -251,7 +251,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
     fn on_request(&self, request: hyper::Request<hyper::Body>) -> RequestMiddlewareAction {
         trace!("request uri: {}", request.uri());
 
-        if let Some(ref snapshot_config) = self.snapshot_config {
+        if let Some(ref snapshot_config) = self.snapshot_paths {
             if request.uri().path() == FULL_SNAPSHOT_REQUEST_PATH
                 || request.uri().path() == INCREMENTAL_SNAPSHOT_REQUEST_PATH
             {
@@ -379,7 +379,7 @@ fn process_rest(bank_forks: &Arc<RwLock<BankForks>>, path: &str) -> RequestMiddl
 pub struct JsonRpcServiceConfig<'a> {
     pub rpc_addr: SocketAddr,
     pub rpc_config: JsonRpcConfig,
-    pub snapshot_config: Option<SnapshotConfig>,
+    pub snapshot_paths: Option<SnapshotArchiveStoragePaths>,
     pub bank_forks: Arc<RwLock<BankForks>>,
     pub block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     pub blockstore: Arc<Blockstore>,
@@ -443,7 +443,7 @@ impl JsonRpcService {
                 let json_rpc_service = Self::new_with_client(
                     config.rpc_addr,
                     config.rpc_config,
-                    config.snapshot_config,
+                    config.snapshot_paths,
                     config.bank_forks,
                     config.block_commitment_cache,
                     config.blockstore,
@@ -487,7 +487,7 @@ impl JsonRpcService {
                 let json_rpc_service = Self::new_with_client(
                     config.rpc_addr,
                     config.rpc_config.clone(),
-                    config.snapshot_config,
+                    config.snapshot_paths,
                     config.bank_forks.clone(),
                     config.block_commitment_cache.clone(),
                     config.blockstore.clone(),
@@ -517,7 +517,7 @@ impl JsonRpcService {
     pub fn new(
         rpc_addr: SocketAddr,
         config: JsonRpcConfig,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_paths: Option<SnapshotArchiveStoragePaths>,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
@@ -566,7 +566,7 @@ impl JsonRpcService {
         let json_rpc_service = Self::new_with_client(
             rpc_addr,
             config,
-            snapshot_config,
+            snapshot_paths,
             bank_forks,
             block_commitment_cache,
             blockstore,
@@ -601,7 +601,7 @@ impl JsonRpcService {
     >(
         rpc_addr: SocketAddr,
         config: JsonRpcConfig,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_paths: Option<SnapshotArchiveStoragePaths>,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
@@ -698,7 +698,7 @@ impl JsonRpcService {
             .unwrap_or(MAX_REQUEST_BODY_SIZE);
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
-            snapshot_config.clone(),
+            snapshot_paths.clone(),
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
@@ -748,7 +748,7 @@ impl JsonRpcService {
 
                 let request_middleware = RpcRequestMiddleware::new(
                     ledger_path,
-                    snapshot_config,
+                    snapshot_paths,
                     bank_forks.clone(),
                     health.clone(),
                 );

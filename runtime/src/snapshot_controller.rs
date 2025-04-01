@@ -5,7 +5,7 @@ use {
         },
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
         bank_forks::SetRootError,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{SnapshotConfig, SnapshotGenerationIntervals},
     },
     log::*,
     solana_measure::measure::Measure,
@@ -18,11 +18,6 @@ use {
         time::Instant,
     },
 };
-
-struct SnapshotGenerationIntervals {
-    full_snapshot_interval: Slot,
-    incremental_snapshot_interval: Slot,
-}
 
 pub struct SnapshotController {
     abs_request_sender: SnapshotRequestSender,
@@ -129,14 +124,7 @@ impl SnapshotController {
     /// Returns None if snapshot generation is disabled and snapshot requests
     /// should not be sent
     fn snapshot_generation_intervals(&self) -> Option<SnapshotGenerationIntervals> {
-        self.snapshot_config
-            .should_generate_snapshots()
-            .then_some(SnapshotGenerationIntervals {
-                full_snapshot_interval: self.snapshot_config.full_snapshot_archive_interval_slots,
-                incremental_snapshot_interval: self
-                    .snapshot_config
-                    .incremental_snapshot_archive_interval_slots,
-            })
+        *self.snapshot_config.generation_intervals.read().unwrap()
     }
 
     /// Sends an EpochAccountsHash request if one of the `banks` crosses the EAH boundary.

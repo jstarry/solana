@@ -34,7 +34,7 @@ use {
         },
         bank_forks::BankForks,
         prioritization_fee_cache::PrioritizationFeeCache,
-        snapshot_config::{SnapshotConfig, SnapshotUsage},
+        snapshot_config::{SnapshotConfig, SnapshotGenerationIntervals},
         snapshot_controller::SnapshotController,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{self, clean_orphaned_account_snapshot_dirs},
@@ -165,14 +165,9 @@ pub fn load_and_process_ledger(
                 .unwrap_or_default();
             starting_slot = std::cmp::max(full_snapshot_slot, incremental_snapshot_slot);
         }
-        let usage = if arg_matches.is_present("no_snapshot") {
-            SnapshotUsage::Disabled
-        } else {
-            SnapshotUsage::LoadOnly
-        };
-
         SnapshotConfig {
-            usage,
+            generation_intervals: RwLock::new(None),
+            load_at_startup: !arg_matches.is_present("no_snapshot"),
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             bank_snapshots_dir: bank_snapshots_dir.clone(),

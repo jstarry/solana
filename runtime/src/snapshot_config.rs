@@ -1,29 +1,56 @@
 use {
     crate::{
-        snapshot_bank_utils,
+        snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_utils::{self, ArchiveFormat, SnapshotVersion, ZstdConfig},
     },
     solana_sdk::clock::Slot,
-    std::{num::NonZeroUsize, path::PathBuf},
+    std::{num::NonZeroUsize, path::PathBuf, sync::RwLock},
 };
 
-/// Snapshot configuration and runtime information
-#[derive(Clone, Debug)]
-pub struct SnapshotConfig {
-    /// Specifies the ways thats snapshots are allowed to be used
-    pub usage: SnapshotUsage,
-
+#[derive(Clone, Copy, Debug)]
+pub struct SnapshotGenerationIntervals {
     /// Generate a new full snapshot archive every this many slots
-    pub full_snapshot_archive_interval_slots: Slot,
+    pub full_snapshot_interval: Slot,
 
     /// Generate a new incremental snapshot archive every this many slots
-    pub incremental_snapshot_archive_interval_slots: Slot,
+    pub incremental_snapshot_interval: Slot,
+}
 
+impl SnapshotGenerationIntervals {
+    pub fn enabled(&self) -> bool {
+        self.full_snapshot_interval != DISABLED_SNAPSHOT_ARCHIVE_INTERVAL
+    }
+}
+
+impl Default for SnapshotGenerationIntervals {
+    fn default() -> Self {
+        Self {
+            full_snapshot_interval:
+                snapshot_bank_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            incremental_snapshot_interval:
+                snapshot_bank_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SnapshotArchiveStoragePaths {
     /// Path to the directory where full snapshot archives are stored
     pub full_snapshot_archives_dir: PathBuf,
 
     /// Path to the directory where incremental snapshot archives are stored
     pub incremental_snapshot_archives_dir: PathBuf,
+}
+
+/// Snapshot configuration and runtime information
+#[derive(Clone, Debug)]
+pub struct SnapshotConfig {
+    pub generation_intervals: RwLock<Option<SnapshotGenerationIntervals>>,
+
+    pub load_at_startup: bool,
+
+    /// Paths to the directories where snapshot archives are stored
+    pub archive_storage_paths: SnapshotArchiveStoragePaths,
 
     /// Path to the directory where bank snapshots are stored
     pub bank_snapshots_dir: PathBuf,
@@ -51,13 +78,12 @@ pub struct SnapshotConfig {
 impl Default for SnapshotConfig {
     fn default() -> Self {
         Self {
-            usage: SnapshotUsage::LoadAndGenerate,
-            full_snapshot_archive_interval_slots:
-                snapshot_bank_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            incremental_snapshot_archive_interval_slots:
-                snapshot_bank_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            full_snapshot_archives_dir: PathBuf::default(),
-            incremental_snapshot_archives_dir: PathBuf::default(),
+            load_at_startup: true,
+            generation_intervals: RwLock::new(Some(SnapshotGenerationIntervals::default())),
+            archive_storage_paths: SnapshotArchiveStoragePaths {
+                full_snapshot_archives_dir: PathBuf::default(),
+                incremental_snapshot_archives_dir: PathBuf::default(),
+            },
             bank_snapshots_dir: PathBuf::default(),
             archive_format: ArchiveFormat::TarZstd {
                 config: ZstdConfig::default(),
@@ -77,7 +103,7 @@ impl SnapshotConfig {
     /// A new snapshot config used for only loading at startup
     pub fn new_load_only() -> Self {
         Self {
-            usage: SnapshotUsage::LoadOnly,
+            generation_intervals: RwLock::new(None),
             ..Self::default()
         }
     }
@@ -86,31 +112,19 @@ impl SnapshotConfig {
     /// startup
     pub fn new_disabled() -> Self {
         Self {
-            usage: SnapshotUsage::Disabled,
+            generation_intervals: RwLock::new(None),
+            load_at_startup: false,
             ..Self::default()
         }
     }
 
     /// Should snapshots be generated?
     pub fn should_generate_snapshots(&self) -> bool {
-        self.usage == SnapshotUsage::LoadAndGenerate
+        self.generation_intervals.read().unwrap().is_some()
     }
 
     /// Should snapshots be loaded?
     pub fn should_load_snapshots(&self) -> bool {
-        self.usage == SnapshotUsage::LoadAndGenerate || self.usage == SnapshotUsage::LoadOnly
+        self.load_at_startup
     }
-}
-
-/// Specify the ways that snapshots are allowed to be used
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum SnapshotUsage {
-    /// Snapshots are never generated or loaded at startup,
-    /// instead start from genesis.
-    Disabled,
-    /// Snapshots are only used at startup, to load the accounts and bank
-    LoadOnly,
-    /// Snapshots are used everywhere; both at startup (i.e. load) and steady-state (i.e.
-    /// generate).  This enables taking snapshots.
-    LoadAndGenerate,
 }

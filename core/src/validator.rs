@@ -1162,7 +1162,7 @@ impl Validator {
             let rpc_svc_config = JsonRpcServiceConfig {
                 rpc_addr,
                 rpc_config: config.rpc_config.clone(),
-                snapshot_config: Some(snapshot_controller.snapshot_config().clone()),
+                snapshot_paths: snapshot_controller.snapshot_config().archive_paths(),
                 bank_forks: bank_forks.clone(),
                 block_commitment_cache: block_commitment_cache.clone(),
                 blockstore: blockstore.clone(),
@@ -2755,15 +2755,13 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
 }
 
 pub fn is_snapshot_config_valid(snapshot_config: &SnapshotConfig) -> bool {
-    // if the snapshot config is configured to *not* take snapshots, then it is valid
-    if !snapshot_config.should_generate_snapshots() {
+    let Some(generation_intervals) = snapshot_config.generation_intervals.read().unwrap().clone()
+    else {
+        // if the snapshot config is configured to *not* take snapshots, then it is valid
         return true;
-    }
-
-    let full_snapshot_interval_slots = snapshot_config.full_snapshot_archive_interval_slots;
-    let incremental_snapshot_interval_slots =
-        snapshot_config.incremental_snapshot_archive_interval_slots;
-
+    };
+    let full_snapshot_interval_slots = generation_intervals.full_snapshot_interval;
+    let incremental_snapshot_interval_slots = generation_intervals.incremental_snapshot_interval;
     if incremental_snapshot_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
         true
     } else if incremental_snapshot_interval_slots == 0 {

@@ -62,7 +62,7 @@ use {
         commitment::{BlockCommitmentArray, BlockCommitmentCache},
         non_circulating_supply::{calculate_non_circulating_supply, NonCirculatingSupply},
         prioritization_fee_cache::PrioritizationFeeCache,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::SnapshotArchiveStoragePaths,
         snapshot_utils,
     },
     solana_runtime_transaction::runtime_transaction::RuntimeTransaction,
@@ -236,7 +236,7 @@ pub struct JsonRpcRequestProcessor {
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     blockstore: Arc<Blockstore>,
     config: JsonRpcConfig,
-    snapshot_config: Option<SnapshotConfig>,
+    snapshot_paths: Option<SnapshotArchiveStoragePaths>,
     #[allow(dead_code)]
     validator_exit: Arc<RwLock<Exit>>,
     health: Arc<RpcHealth>,
@@ -399,7 +399,7 @@ impl JsonRpcRequestProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: JsonRpcConfig,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_paths: Option<SnapshotArchiveStoragePaths>,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
@@ -421,7 +421,7 @@ impl JsonRpcRequestProcessor {
         (
             Self {
                 config,
-                snapshot_config,
+                snapshot_paths,
                 bank_forks,
                 block_commitment_cache,
                 blockstore,
@@ -499,7 +499,7 @@ impl JsonRpcRequestProcessor {
             Arc::new(RwLock::new(OptimisticallyConfirmedBank { bank }));
         Self {
             config,
-            snapshot_config: None,
+            snapshot_paths: None,
             bank_forks,
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
@@ -2845,26 +2845,17 @@ pub mod rpc_minimal {
         fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo> {
             debug!("get_highest_snapshot_slot rpc request received");
 
-            if meta.snapshot_config.is_none() {
+            let Some(snapshot_paths) = meta.snapshot_paths.as_ref() else {
                 return Err(RpcCustomError::NoSnapshot.into());
-            }
+            };
 
-            let (full_snapshot_archives_dir, incremental_snapshot_archives_dir) = meta
-                .snapshot_config
-                .map(|snapshot_config| {
-                    (
-                        snapshot_config.full_snapshot_archives_dir,
-                        snapshot_config.incremental_snapshot_archives_dir,
-                    )
-                })
-                .unwrap();
-
-            let full_snapshot_slot =
-                snapshot_utils::get_highest_full_snapshot_archive_slot(full_snapshot_archives_dir)
-                    .ok_or(RpcCustomError::NoSnapshot)?;
+            let full_snapshot_slot = snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &snapshot_paths.full_snapshot_archives_dir,
+            )
+            .ok_or(RpcCustomError::NoSnapshot)?;
             let incremental_snapshot_slot =
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    incremental_snapshot_archives_dir,
+                    &snapshot_paths.incremental_snapshot_archives_dir,
                     full_snapshot_slot,
                 );
 

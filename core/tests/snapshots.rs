@@ -25,7 +25,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{SnapshotArchiveConfig, SnapshotConfig},
         snapshot_controller::SnapshotController,
         snapshot_utils::{
             self,
@@ -537,7 +537,7 @@ fn test_bank_forks_incremental_snapshot(
             make_incremental_snapshot_archive(
                 &bank,
                 latest_full_snapshot_slot.unwrap(),
-                snapshot_controller.snapshot_config(),
+                snapshot_controller.snapshot_config().into(),
             )
             .unwrap();
 
@@ -578,7 +578,7 @@ fn make_full_snapshot_archive(
 fn make_incremental_snapshot_archive(
     bank: &Bank,
     incremental_snapshot_base_slot: Slot,
-    snapshot_config: &SnapshotConfig,
+    snapshot_config: SnapshotArchiveConfig,
 ) -> snapshot_utils::Result<()> {
     info!(
         "Making incremental snapshot archive from bank at slot: {}, and base slot: {}",
@@ -586,13 +586,9 @@ fn make_incremental_snapshot_archive(
         incremental_snapshot_base_slot,
     );
     snapshot_bank_utils::bank_to_incremental_snapshot_archive(
-        &snapshot_config.bank_snapshots_dir,
         bank,
         incremental_snapshot_base_slot,
-        Some(snapshot_config.snapshot_version),
-        &snapshot_config.full_snapshot_archives_dir,
-        &snapshot_config.incremental_snapshot_archives_dir,
-        snapshot_config.archive_format,
+        snapshot_config,
     )?;
     Ok(())
 }

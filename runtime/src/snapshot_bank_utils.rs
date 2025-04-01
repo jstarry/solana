@@ -9,7 +9,7 @@ use {
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
-        snapshot_config::SnapshotConfig,
+        snapshot_config::SnapshotArchiveConfig,
         snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageKind, SnapshotKind, SnapshotPackage},
         snapshot_utils::{
@@ -988,16 +988,10 @@ fn bank_to_full_snapshot_archive_with(
 ///     - `bank` is complete
 ///     - `bank`'s slot is greater than `full_snapshot_slot`
 pub fn bank_to_incremental_snapshot_archive(
-    bank_snapshots_dir: impl AsRef<Path>,
     bank: &Bank,
     full_snapshot_slot: Slot,
-    snapshot_version: Option<SnapshotVersion>,
-    full_snapshot_archives_dir: impl AsRef<Path>,
-    incremental_snapshot_archives_dir: impl AsRef<Path>,
-    archive_format: ArchiveFormat,
+    mut snapshot_config: SnapshotArchiveConfig,
 ) -> snapshot_utils::Result<IncrementalSnapshotArchiveInfo> {
-    let snapshot_version = snapshot_version.unwrap_or_default();
-
     assert!(bank.is_complete());
     assert!(bank.slot() > full_snapshot_slot);
     // set accounts-db's latest full snapshot slot here to ensure zero lamport
@@ -1064,15 +1058,8 @@ pub fn bank_to_incremental_snapshot_archive(
     // Note: Since the snapshot_storages above are *only* the incremental storages,
     // this bank snapshot *cannot* be used by fastboot.
     // Putting the snapshot in a tempdir effectively enforces that.
-    let temp_bank_snapshots_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
-    let snapshot_config = SnapshotConfig {
-        full_snapshot_archives_dir: full_snapshot_archives_dir.as_ref().to_path_buf(),
-        incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.as_ref().to_path_buf(),
-        bank_snapshots_dir: temp_bank_snapshots_dir.path().to_path_buf(),
-        archive_format,
-        snapshot_version,
-        ..Default::default()
-    };
+    let temp_bank_snapshots_dir = tempfile::tempdir_in(snapshot_config.bank_snapshots_dir)?;
+    snapshot_config.bank_snapshots_dir = temp_bank_snapshots_dir.path().to_path_buf();
     let snapshot_archive_info =
         snapshot_utils::serialize_and_archive_snapshot_package(snapshot_package, &snapshot_config)?;
 
@@ -1437,16 +1424,18 @@ mod tests {
             bank4.register_unique_tick();
         }
 
-        let incremental_snapshot_archive_info = bank_to_incremental_snapshot_archive(
-            bank_snapshots_dir.path(),
-            &bank4,
-            full_snapshot_slot,
-            None,
-            full_snapshot_archives_dir.path(),
-            incremental_snapshot_archives_dir.path(),
-            snapshot_archive_format,
-        )
-        .unwrap();
+        let snapshot_config = SnapshotArchiveConfig {
+            bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .path()
+                .to_path_buf(),
+            snapshot_version: SnapshotVersion::default(),
+            archive_format: snapshot_archive_format,
+        };
+        let incremental_snapshot_archive_info =
+            bank_to_incremental_snapshot_archive(&bank4, full_snapshot_slot, snapshot_config)
+                .unwrap();
 
         let (roundtrip_bank, _) = bank_from_snapshot_archives(
             &[accounts_dir],
@@ -1557,16 +1546,16 @@ mod tests {
             bank4.register_unique_tick();
         }
 
-        bank_to_incremental_snapshot_archive(
-            &bank_snapshots_dir,
-            &bank4,
-            full_snapshot_slot,
-            None,
-            &full_snapshot_archives_dir,
-            &incremental_snapshot_archives_dir,
-            snapshot_archive_format,
-        )
-        .unwrap();
+        let snapshot_config = SnapshotArchiveConfig {
+            bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .path()
+                .to_path_buf(),
+            snapshot_version: SnapshotVersion::default(),
+            archive_format: snapshot_archive_format,
+        };
+        bank_to_incremental_snapshot_archive(&bank4, full_snapshot_slot, snapshot_config).unwrap();
 
         let (deserialized_bank, ..) = bank_from_latest_snapshot_archives(
             &bank_snapshots_dir,
@@ -1694,16 +1683,18 @@ mod tests {
 
         // Take an incremental snapshot and then do a roundtrip on the bank and ensure it
         // deserializes correctly.
-        let incremental_snapshot_archive_info = bank_to_incremental_snapshot_archive(
-            bank_snapshots_dir.path(),
-            &bank2,
-            full_snapshot_slot,
-            None,
-            full_snapshot_archives_dir.path(),
-            incremental_snapshot_archives_dir.path(),
-            snapshot_archive_format,
-        )
-        .unwrap();
+        let snapshot_config = SnapshotArchiveConfig {
+            bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .path()
+                .to_path_buf(),
+            snapshot_version: SnapshotVersion::default(),
+            archive_format: snapshot_archive_format,
+        };
+        let incremental_snapshot_archive_info =
+            bank_to_incremental_snapshot_archive(&bank2, full_snapshot_slot, snapshot_config)
+                .unwrap();
         let (deserialized_bank, _) = bank_from_snapshot_archives(
             &[accounts_dir.clone()],
             bank_snapshots_dir.path(),
@@ -1757,16 +1748,18 @@ mod tests {
 
         // Take an incremental snapshot and then do a roundtrip on the bank and ensure it
         // deserializes correctly
-        let incremental_snapshot_archive_info = bank_to_incremental_snapshot_archive(
-            bank_snapshots_dir.path(),
-            &bank4,
-            full_snapshot_slot,
-            None,
-            full_snapshot_archives_dir.path(),
-            incremental_snapshot_archives_dir.path(),
-            snapshot_archive_format,
-        )
-        .unwrap();
+        let snapshot_config = SnapshotArchiveConfig {
+            bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .path()
+                .to_path_buf(),
+            snapshot_version: SnapshotVersion::default(),
+            archive_format: snapshot_archive_format,
+        };
+        let incremental_snapshot_archive_info =
+            bank_to_incremental_snapshot_archive(&bank4, full_snapshot_slot, snapshot_config)
+                .unwrap();
 
         let (deserialized_bank, _) = bank_from_snapshot_archives(
             &[accounts_dir],
@@ -1843,16 +1836,14 @@ mod tests {
             bank2.register_unique_tick();
         }
 
-        bank_to_incremental_snapshot_archive(
-            &all_snapshots_dir,
-            &bank2,
-            full_snapshot_slot,
-            None,
-            &all_snapshots_dir,
-            &all_snapshots_dir,
-            snapshot_archive_format,
-        )
-        .unwrap();
+        let snapshot_config = SnapshotArchiveConfig {
+            bank_snapshots_dir: all_snapshots_dir.path().to_path_buf(),
+            full_snapshot_archives_dir: all_snapshots_dir.path().to_path_buf(),
+            incremental_snapshot_archives_dir: all_snapshots_dir.path().to_path_buf(),
+            snapshot_version: SnapshotVersion::default(),
+            archive_format: snapshot_archive_format,
+        };
+        bank_to_incremental_snapshot_archive(&bank2, full_snapshot_slot, snapshot_config).unwrap();
 
         let bank_fields = bank_fields_from_snapshot_archives(
             &all_snapshots_dir,
@@ -2099,14 +2090,19 @@ mod tests {
         }
 
         // take incremental snapshot, save off the calculated incremental accounts hash
+        let snapshot_config = SnapshotArchiveConfig {
+            bank_snapshots_dir: bank_snapshots_dir.path().to_path_buf(),
+            full_snapshot_archives_dir: full_snapshot_archives_dir.path().to_path_buf(),
+            incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
+                .path()
+                .to_path_buf(),
+            snapshot_version: SnapshotVersion::default(),
+            archive_format: ArchiveFormat::Tar,
+        };
         let incremental_snapshot_archive = bank_to_incremental_snapshot_archive(
-            &bank_snapshots_dir,
             &bank,
             full_snapshot_archive.slot(),
-            None,
-            &full_snapshot_archives_dir,
-            &incremental_snapshot_archives_dir,
-            ArchiveFormat::Tar,
+            snapshot_config,
         )
         .unwrap();
         let incremental_accounts_hash = bank

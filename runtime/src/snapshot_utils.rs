@@ -9,7 +9,7 @@ use {
             SnapshotArchiveInfoGetter,
         },
         snapshot_bank_utils,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{SnapshotArchiveConfig, SnapshotConfig},
         snapshot_hash::SnapshotHash,
         snapshot_package::{SnapshotKind, SnapshotPackage},
         snapshot_utils::snapshot_storage_rebuilder::{
@@ -744,7 +744,7 @@ pub fn remove_tmp_snapshot_archives(snapshot_archives_dir: impl AsRef<Path>) {
 /// Serializes and archives a snapshot package
 pub fn serialize_and_archive_snapshot_package(
     snapshot_package: SnapshotPackage,
-    snapshot_config: &SnapshotConfig,
+    snapshot_config: &SnapshotArchiveConfig,
 ) -> Result<SnapshotArchiveInfo> {
     let SnapshotPackage {
         snapshot_kind,

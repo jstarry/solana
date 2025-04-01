@@ -41,6 +41,7 @@ use {
         snapshot_bank_utils::{
             bank_to_full_snapshot_archive, bank_to_incremental_snapshot_archive,
         },
+        snapshot_config::SnapshotArchiveConfig,
         snapshot_controller::SnapshotController,
         snapshot_utils::{
             get_highest_full_snapshot_archive_slot, get_highest_incremental_snapshot_archive_slot,
@@ -570,13 +571,9 @@ pub(crate) fn generate_snapshot(
             )?;
         }
         bank_to_incremental_snapshot_archive(
-            &snapshot_config.bank_snapshots_dir,
             &new_root_bank,
             full_snapshot_slot,
-            Some(snapshot_config.snapshot_version),
-            &snapshot_config.full_snapshot_archives_dir,
-            &snapshot_config.incremental_snapshot_archives_dir,
-            snapshot_config.archive_format,
+            (&snapshot_config).into(),
         )?
         .path()
         .display()

@@ -40,7 +40,7 @@ impl SnapshotPackagerService {
             .name("solSnapshotPkgr".to_string())
             .spawn(move || {
                 info!("SnapshotPackagerService has started");
-                let snapshot_config = snapshot_controller.snapshot_config();
+                let snapshot_config = snapshot_controller.snapshot_packager_options();
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
                 let mut snapshot_gossip_manager = enable_gossip_push
                     .then(|| SnapshotGossipManager::new(cluster_info, starting_snapshot_hashes));
@@ -70,7 +70,7 @@ impl SnapshotPackagerService {
                     let (archive_result, archive_time_us) =
                         measure_us!(snapshot_utils::serialize_and_archive_snapshot_package(
                             snapshot_package,
-                            snapshot_config,
+                            &snapshot_config.archive_config,
                         ));
                     if let Err(err) = archive_result {
                         error!(

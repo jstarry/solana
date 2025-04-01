@@ -58,6 +58,7 @@ use {
         inflation_rewards::points::{InflationPointCalculationEvent, PointValue},
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils,
+        snapshot_config::SnapshotArchiveConfig,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
             ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
@@ -2432,15 +2433,18 @@ fn main() {
                             exit(1);
                         }
 
+                        let snapshot_config = SnapshotArchiveConfig {
+                            bank_snapshots_dir: ledger_path.clone(),
+                            snapshot_version,
+                            full_snapshot_archives_dir: output_directory.clone(),
+                            incremental_snapshot_archives_dir: output_directory,
+                            archive_format: snapshot_archive_format,
+                        };
                         let incremental_snapshot_archive_info =
                             snapshot_bank_utils::bank_to_incremental_snapshot_archive(
-                                ledger_path,
                                 &bank,
                                 full_snapshot_slot,
-                                Some(snapshot_version),
-                                output_directory.clone(),
-                                output_directory,
-                                snapshot_archive_format,
+                                snapshot_config,
                             )
                             .unwrap_or_else(|err| {
                                 eprintln!("Unable to create incremental snapshot: {err}");

@@ -5,12 +5,13 @@ use {
         },
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
         bank_forks::SetRootError,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{SnapshotArchiveConfig, SnapshotConfig},
     },
     log::*,
     solana_measure::measure::Measure,
     solana_sdk::clock::Slot,
     std::{
+        num::NonZeroUsize,
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc,
@@ -30,6 +31,28 @@ pub struct SnapshotController {
     latest_abs_request_slot: AtomicU64,
 }
 
+pub struct SnapshotRequestOptions {
+    /// Generate a new full snapshot archive every this many slots
+    pub full_snapshot_archive_interval_slots: Slot,
+
+    /// Generate a new incremental snapshot archive every this many slots
+    pub incremental_snapshot_archive_interval_slots: Slot,
+}
+
+pub struct SnapshotPackagerOptions {
+    pub archive_config: SnapshotArchiveConfig,
+
+    /// Maximum number of full snapshot archives to retain
+    pub maximum_full_snapshot_archives_to_retain: NonZeroUsize,
+
+    /// Maximum number of incremental snapshot archives to retain
+    /// NOTE: Incremental snapshots will only be kept for the latest full snapshot
+    pub maximum_incremental_snapshot_archives_to_retain: NonZeroUsize,
+
+    // Thread niceness adjustment for snapshot packager service
+    pub packager_thread_niceness_adj: i8,
+}
+
 impl SnapshotController {
     pub fn new(
         abs_request_sender: SnapshotRequestSender,
@@ -43,9 +66,22 @@ impl SnapshotController {
         }
     }
 
-    pub fn snapshot_config(&self) -> &SnapshotConfig {
-        &self.snapshot_config
+    pub fn snapshot_packager_options(&self) -> SnapshotPackagerOptions {
+        SnapshotPackagerOptions {
+            archive_config: SnapshotArchiveConfig::from(&self.snapshot_config),
+            maximum_full_snapshot_archives_to_retain: self
+                .snapshot_config
+                .maximum_full_snapshot_archives_to_retain,
+            maximum_incremental_snapshot_archives_to_retain: self
+                .snapshot_config
+                .maximum_incremental_snapshot_archives_to_retain,
+            packager_thread_niceness_adj: self.snapshot_config.packager_thread_niceness_adj,
+        }
     }
+
+    // pub fn snapshot_config(&self) -> &SnapshotConfig {
+    //     &self.snapshot_config
+    // }
 
     pub fn request_sender(&self) -> &SnapshotRequestSender {
         &self.abs_request_sender

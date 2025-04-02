@@ -72,11 +72,10 @@ impl AccountsHashVerifier {
                     info!("handling accounts package: {accounts_package:?}");
                     let enqueued_time = accounts_package.enqueued.elapsed();
 
-                    let snapshot_config = snapshot_controller.snapshot_config();
                     let (result, handling_time_us) = measure_us!(Self::process_accounts_package(
                         accounts_package,
                         &pending_snapshot_packages,
-                        snapshot_config,
+                        &snapshot_controller,
                     ));
                     if let Err(err) = result {
                         error!(
@@ -216,14 +215,17 @@ impl AccountsHashVerifier {
     fn process_accounts_package(
         accounts_package: AccountsPackage,
         pending_snapshot_packages: &Mutex<PendingSnapshotPackages>,
-        snapshot_config: &SnapshotConfig,
+        snapshot_controller: &SnapshotController,
     ) -> IoResult<()> {
         let (merkle_or_lattice_accounts_hash, bank_incremental_snapshot_persistence) =
-            Self::calculate_and_verify_accounts_hash(&accounts_package, snapshot_config)?;
+            Self::calculate_and_verify_accounts_hash(
+                &accounts_package,
+                snapshot_controller.snapshot_config(),
+            )?;
 
         Self::save_epoch_accounts_hash(&accounts_package, &merkle_or_lattice_accounts_hash);
 
-        Self::purge_old_accounts_hashes(&accounts_package, snapshot_config);
+        Self::purge_old_accounts_hashes(&accounts_package, snapshot_controller);
 
         Self::submit_for_packaging(
             accounts_package,
@@ -457,10 +459,10 @@ impl AccountsHashVerifier {
 
     fn purge_old_accounts_hashes(
         accounts_package: &AccountsPackage,
-        snapshot_config: &SnapshotConfig,
+        snapshot_controller: &SnapshotController,
     ) {
         let should_purge = match (
-            snapshot_config.should_generate_snapshots(),
+            snapshot_controller.should_generate_snapshots(),
             accounts_package.package_kind,
         ) {
             (false, _) => {

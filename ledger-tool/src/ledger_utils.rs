@@ -352,6 +352,7 @@ pub fn load_and_process_ledger(
             blockstore.as_ref(),
             account_paths,
             &snapshot_config,
+            None,
             &process_options,
             block_meta_sender.as_ref(),
             None, // Maybe support this later, though

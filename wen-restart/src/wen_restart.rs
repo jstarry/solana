@@ -540,7 +540,7 @@ pub(crate) fn generate_snapshot(
     // validator is configured not the generate snapshot, it will only have the initial
     // snapshot on disk, which might be too old to generate an incremental snapshot from.
     // In this case we also set full_snapshot_slot to None.
-    let full_snapshot_slot = if snapshot_config.should_generate_snapshots() {
+    let full_snapshot_slot = if snapshot_controller.should_generate_snapshots() {
         get_highest_full_snapshot_archive_slot(directory)
     } else {
         None

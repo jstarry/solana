@@ -5,6 +5,7 @@ use {
         },
         bank::{epoch_accounts_hash_utils, Bank, SquashTiming},
         bank_forks::SetRootError,
+        snapshot_bank_utils,
         snapshot_config::SnapshotConfig,
     },
     log::*,
@@ -19,13 +20,28 @@ use {
     },
 };
 
-struct SnapshotGenerationIntervals {
-    full_snapshot_interval: Slot,
-    incremental_snapshot_interval: Slot,
+#[derive(Clone, Debug)]
+pub struct SnapshotGenerationIntervals {
+    /// Generate a new full snapshot archive every this many slots
+    pub full_snapshot_interval: Slot,
+    /// Generate a new incremental snapshot archive every this many slots
+    pub incremental_snapshot_interval: Slot,
+}
+
+impl Default for SnapshotGenerationIntervals {
+    fn default() -> Self {
+        Self {
+            full_snapshot_interval:
+                snapshot_bank_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            incremental_snapshot_interval:
+                snapshot_bank_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+        }
+    }
 }
 
 pub struct SnapshotController {
     abs_request_sender: SnapshotRequestSender,
+    generation_intervals: Option<SnapshotGenerationIntervals>,
     snapshot_config: SnapshotConfig,
     latest_abs_request_slot: AtomicU64,
 }
@@ -34,13 +50,19 @@ impl SnapshotController {
     pub fn new(
         abs_request_sender: SnapshotRequestSender,
         snapshot_config: SnapshotConfig,
+        generation_intervals: Option<SnapshotGenerationIntervals>,
         root_slot: Slot,
     ) -> Self {
         Self {
             abs_request_sender,
             snapshot_config,
+            generation_intervals,
             latest_abs_request_slot: AtomicU64::new(root_slot),
         }
+    }
+
+    pub fn should_generate_snapshots(&self) -> bool {
+        self.generation_intervals.is_some()
     }
 
     pub fn snapshot_config(&self) -> &SnapshotConfig {
@@ -77,7 +99,7 @@ impl SnapshotController {
         if let Some(SnapshotGenerationIntervals {
             full_snapshot_interval,
             incremental_snapshot_interval,
-        }) = self.snapshot_generation_intervals()
+        }) = &self.generation_intervals
         {
             if let Some((bank, request_kind)) = banks.iter().find_map(|bank| {
                 if bank.slot() <= self.latest_abs_request_slot() {
@@ -122,21 +144,6 @@ impl SnapshotController {
         }
 
         Ok((is_root_bank_squashed, squash_timing, total_snapshot_ms))
-    }
-
-    /// Returns the intervals, in slots, for sending snapshot requests
-    ///
-    /// Returns None if snapshot generation is disabled and snapshot requests
-    /// should not be sent
-    fn snapshot_generation_intervals(&self) -> Option<SnapshotGenerationIntervals> {
-        self.snapshot_config
-            .should_generate_snapshots()
-            .then_some(SnapshotGenerationIntervals {
-                full_snapshot_interval: self.snapshot_config.full_snapshot_archive_interval_slots,
-                incremental_snapshot_interval: self
-                    .snapshot_config
-                    .incremental_snapshot_archive_interval_slots,
-            })
     }
 
     /// Sends an EpochAccountsHash request if one of the `banks` crosses the EAH boundary.

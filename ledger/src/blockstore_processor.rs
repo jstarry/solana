@@ -35,7 +35,7 @@ use {
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
-        snapshot_controller::SnapshotController,
+        snapshot_controller::{SnapshotController, SnapshotGenerationIntervals},
         transaction_batch::{OwnedOrBorrowed, TransactionBatch},
         vote_sender_types::ReplayVoteSender,
     },
@@ -872,6 +872,7 @@ pub fn test_process_blockstore(
     let snapshot_controller = SnapshotController::new(
         snapshot_request_sender,
         snapshot_config,
+        None,
         bank_forks.read().unwrap().root(),
     );
     let bg_exit = Arc::new(AtomicBool::new(false));

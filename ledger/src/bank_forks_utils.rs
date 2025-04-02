@@ -122,6 +122,7 @@ pub fn load_bank_forks(
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     snapshot_config: &SnapshotConfig,
+    snapshot_generation_intervals: Option<&SnapshotGenerationIntervals>,
     process_options: &ProcessOptions,
     block_meta_sender: Option<&BlockMetaSender>,
     entry_notification_sender: Option<&EntryNotifierSender>,

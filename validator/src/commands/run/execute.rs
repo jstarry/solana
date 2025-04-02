@@ -962,14 +962,12 @@ pub fn execute(
             }
         };
 
-    validator_config.snapshot_config = SnapshotConfig {
-        usage: if full_snapshot_archive_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
-            SnapshotUsage::LoadOnly
-        } else {
-            SnapshotUsage::LoadAndGenerate
-        },
+    validator_config.snapshot_generation_intervals = (
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
+    );
+    validator_config.snapshot_config = SnapshotConfig {
+        load_at_startup: true,
         bank_snapshots_dir,
         full_snapshot_archives_dir: full_snapshot_archives_dir.clone(),
         incremental_snapshot_archives_dir: incremental_snapshot_archives_dir.clone(),

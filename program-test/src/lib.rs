@@ -27,7 +27,7 @@ use {
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
         snapshot_config::SnapshotConfig,
-        snapshot_controller::SnapshotController,
+        snapshot_controller::{SnapshotController, SnapshotGenerationIntervals},
     },
     solana_sdk::{
         account::{create_account_shared_data_for_test, Account, AccountSharedData},
@@ -1176,6 +1176,7 @@ impl ProgramTestContext {
         let snapshot_controller = SnapshotController::new(
             snapshot_request_sender,
             SnapshotConfig::new_disabled(),
+            None,
             bank_forks.root(),
         );
 

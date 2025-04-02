@@ -106,7 +106,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_bank_utils::{self, DISABLED_SNAPSHOT_ARCHIVE_INTERVAL},
         snapshot_config::SnapshotConfig,
-        snapshot_controller::SnapshotController,
+        snapshot_controller::{SnapshotController, SnapshotGenerationIntervals},
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{self, clean_orphaned_account_snapshot_dirs},
     },
@@ -257,6 +257,7 @@ pub struct ValidatorConfig {
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: SnapshotConfig,
+    pub snapshot_generation_intervals: Option<SnapshotGenerationIntervals>,
     pub max_ledger_shreds: Option<u64>,
     pub blockstore_options: BlockstoreOptions,
     pub broadcast_stage_type: BroadcastStageType,
@@ -334,6 +335,7 @@ impl Default for ValidatorConfig {
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: SnapshotConfig::new_load_only(),
+            snapshot_generation_intervals: Some(SnapshotGenerationIntervals::default()),
             broadcast_stage_type: BroadcastStageType::Standard,
             turbine_disabled: Arc::<AtomicBool>::default(),
             fixed_leader_schedule: None,
@@ -879,20 +881,20 @@ impl Validator {
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
 
-        assert!(is_snapshot_config_valid(&config.snapshot_config));
+        assert!(is_snapshot_config_valid(
+            &config.snapshot_generation_intervals
+        ));
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
         let snapshot_controller = Arc::new(SnapshotController::new(
             snapshot_request_sender.clone(),
             config.snapshot_config.clone(),
+            config.snapshot_generation_intervals.clone(),
             bank_forks.read().unwrap().root(),
         ));
 
         let pending_snapshot_packages = Arc::new(Mutex::new(PendingSnapshotPackages::default()));
-        let snapshot_packager_service = if snapshot_controller
-            .snapshot_config()
-            .should_generate_snapshots()
-        {
+        let snapshot_packager_service = if snapshot_controller.should_generate_snapshots() {
             let enable_gossip_push = true;
             let snapshot_packager_service = SnapshotPackagerService::new(
                 pending_snapshot_packages.clone(),
@@ -2077,6 +2079,7 @@ fn load_blockstore(
             &blockstore,
             config.account_paths.clone(),
             &config.snapshot_config,
+            config.snapshot_generation_intervals.as_ref(),
             &process_options,
             transaction_history_services.block_meta_sender.as_ref(),
             entry_notifier_service
@@ -2754,22 +2757,20 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
     }
 }
 
-pub fn is_snapshot_config_valid(snapshot_config: &SnapshotConfig) -> bool {
-    // if the snapshot config is configured to *not* take snapshots, then it is valid
-    if !snapshot_config.should_generate_snapshots() {
+pub fn is_snapshot_config_valid(snapshot_intervals: &Option<SnapshotGenerationIntervals>) -> bool {
+    let Some(snapshot_intervals) = &snapshot_intervals else {
         return true;
-    }
+    };
 
-    let full_snapshot_interval_slots = snapshot_config.full_snapshot_archive_interval_slots;
-    let incremental_snapshot_interval_slots =
-        snapshot_config.incremental_snapshot_archive_interval_slots;
+    let full_snapshot_interval = snapshot_intervals.full_snapshot_interval;
+    let incremental_snapshot_interval = snapshot_intervals.incremental_snapshot_interval;
 
-    if incremental_snapshot_interval_slots == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
+    if incremental_snapshot_interval == DISABLED_SNAPSHOT_ARCHIVE_INTERVAL {
         true
-    } else if incremental_snapshot_interval_slots == 0 {
+    } else if incremental_snapshot_interval == 0 {
         false
     } else {
-        full_snapshot_interval_slots > incremental_snapshot_interval_slots
+        full_snapshot_interval > incremental_snapshot_interval
     }
 }
 

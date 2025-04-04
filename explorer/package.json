@@ -31,7 +31,7 @@
     "@types/react-router-dom": "^5.3.3",
     "@types/react-select": "^5.0.0",
     "@types/socket.io-client": "^3.0.0",
-    "bignumber.js": "^9.1.2",
+    "bignumber.js": "^9.2.0",
     "bn.js": "^5.2.1",
     "bootstrap": "~5.3.3",
     "bs58": "^6.0.0",

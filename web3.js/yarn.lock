@@ -3491,9 +3491,9 @@ destroyable-server@^1.1.1:
   dependencies:
     "@types/node" "*"
 
-devtools-protocol@0.0.1413902:
-  version "0.0.1413902"
-  resolved "https://registry.yarnpkg.com/devtools-protocol/-/devtools-protocol-0.0.1413902.tgz#a0f00fe9eb25ab337a8f9656a29e0a1a69f42401"
+devtools-protocol@0.0.1425554:
+  version "0.0.1425554"
+  resolved "https://registry.yarnpkg.com/devtools-protocol/-/devtools-protocol-0.0.1425554.tgz#51ed2fed1405f56783d24a393f7c75b6bbb58029"
 
 diff@^4.0.1:
   version "4.0.2"
@@ -7459,26 +7459,26 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@24.5.0:
-  version "24.5.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.5.0.tgz#65126c46e1701922739a8372027e5c5b1eba56fe"
+puppeteer-core@24.6.0:
+  version "24.6.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.6.0.tgz#cea180600cd539d69517a63d8321c882f287ad06"
   dependencies:
     "@puppeteer/browsers" "2.9.0"
     chromium-bidi "3.0.0"
     debug "^4.4.0"
-    devtools-protocol "0.0.1413902"
+    devtools-protocol "0.0.1425554"
     typed-query-selector "^2.12.0"
     ws "^8.18.1"
 
 puppeteer@^24.0.0:
-  version "24.5.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.5.0.tgz#b0f533eb4613eedbc6d2bce9424feb4dcb2b9534"
+  version "24.6.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.6.0.tgz#39f3d58c89f1e2c97eafd4284e56488e2dd844cf"
   dependencies:
     "@puppeteer/browsers" "2.9.0"
     chromium-bidi "3.0.0"
     cosmiconfig "^9.0.0"
-    devtools-protocol "0.0.1413902"
-    puppeteer-core "24.5.0"
+    devtools-protocol "0.0.1425554"
+    puppeteer-core "24.6.0"
     typed-query-selector "^2.12.0"
 
 qrcode-terminal@^0.12.0:

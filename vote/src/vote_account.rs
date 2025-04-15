@@ -6,7 +6,6 @@ use {
         ser::{Serialize, Serializer},
     },
     solana_account::{AccountSharedData, ReadableAccount},
-    solana_instruction::error::InstructionError,
     solana_pubkey::Pubkey,
     std::{
         cmp::Ordering,
@@ -25,10 +24,12 @@ pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error(transparent)]
-    InstructionError(#[from] InstructionError),
-    #[error("Invalid vote account owner: {0}")]
-    InvalidOwner(/*owner:*/ Pubkey),
+    #[error("Invalid vote account data")]
+    InvalidData,
+    #[error("Invalid vote account owner")]
+    InvalidOwner,
+    #[error("Uninitialized vote state")]
+    Uninitialized,
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
@@ -321,12 +322,18 @@ impl TryFrom<AccountSharedData> for VoteAccount {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if !solana_sdk_ids::vote::check_id(account.owner()) {
-            return Err(Error::InvalidOwner(*account.owner()));
+            return Err(Error::InvalidOwner);
+        }
+        let vote_state_view =
+            VoteStateView::try_new(account.data_clone()).map_err(|_| Error::InvalidData)?;
+
+        // Initialized vote state should have a valid node_pubkey.
+        if vote_state_view.node_pubkey() == &Pubkey::default() {
+            return Err(Error::Uninitialized);
         }
 
         Ok(Self(Arc::new(VoteAccountInner {
-            vote_state_view: VoteStateView::try_new(account.data_clone())
-                .map_err(|_| Error::InstructionError(InstructionError::InvalidAccountData))?,
+            vote_state_view,
             account,
         })))
     }

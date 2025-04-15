@@ -4,8 +4,6 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         account_utils::StateMut,
-        instruction::InstructionError,
-        pubkey::Pubkey,
         stake::state::{Delegation, Stake, StakeStateV2},
     },
     std::marker::PhantomData,
@@ -24,14 +22,13 @@ pub struct StakeAccount<T> {
 }
 
 #[derive(Debug, Error)]
-#[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[error(transparent)]
-    InstructionError(#[from] InstructionError),
-    #[error("Invalid delegation: {0:?}")]
-    InvalidDelegation(Box<StakeStateV2>),
-    #[error("Invalid stake account owner: {0}")]
-    InvalidOwner(/*owner:*/ Pubkey),
+    #[error("Invalid stake account data")]
+    InvalidData,
+    #[error("Invalid stake account owner")]
+    InvalidOwner,
+    #[error("Unstaked stake account")]
+    Unstaked,
 }
 
 impl<T> StakeAccount<T> {
@@ -66,11 +63,11 @@ impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if account.owner() != &solana_stake_program::id() {
-            return Err(Error::InvalidOwner(*account.owner()));
+            return Err(Error::InvalidOwner);
         }
-        let stake_state: StakeStateV2 = account.state()?;
+        let stake_state: StakeStateV2 = account.state().map_err(|_| Error::InvalidData)?;
         if stake_state.delegation().is_none() {
-            return Err(Error::InvalidDelegation(Box::new(stake_state)));
+            return Err(Error::Unstaked);
         }
         Ok(Self {
             account,

@@ -1,7 +1,7 @@
 use {
     solana_sdk::clock::Slot,
     solana_vote::vote_state_view::VoteStateView,
-    solana_vote_program::vote_state::{Lockout, VoteState, VoteState1_14_11, MAX_LOCKOUT_HISTORY},
+    solana_vote_program::vote_state::{Lockout, VoteState1_14_11, MAX_LOCKOUT_HISTORY},
     std::collections::VecDeque,
 };
 
@@ -12,6 +12,23 @@ pub struct TowerVoteState {
 }
 
 impl TowerVoteState {
+    pub(super) fn from_persisted_vote_state(vote_state: VoteState1_14_11) -> Self {
+        let VoteState1_14_11 {
+            votes, root_slot, ..
+        } = vote_state;
+
+        Self { votes, root_slot }
+    }
+
+    pub(super) fn into_persisted_vote_state(self) -> VoteState1_14_11 {
+        let Self { votes, root_slot } = self;
+        VoteState1_14_11 {
+            votes,
+            root_slot,
+            ..VoteState1_14_11::default()
+        }
+    }
+
     pub fn tower(&self) -> Vec<Slot> {
         self.votes.iter().map(|v| v.slot()).collect()
     }
@@ -80,49 +97,11 @@ impl TowerVoteState {
     }
 }
 
-impl From<VoteState> for TowerVoteState {
-    fn from(vote_state: VoteState) -> Self {
-        let VoteState {
-            votes, root_slot, ..
-        } = vote_state;
-
-        Self {
-            votes: votes
-                .into_iter()
-                .map(|landed_vote| landed_vote.into())
-                .collect(),
-            root_slot,
-        }
-    }
-}
-
-impl From<VoteState1_14_11> for TowerVoteState {
-    fn from(vote_state: VoteState1_14_11) -> Self {
-        let VoteState1_14_11 {
-            votes, root_slot, ..
-        } = vote_state;
-
-        Self { votes, root_slot }
-    }
-}
-
 impl From<&VoteStateView> for TowerVoteState {
     fn from(vote_state: &VoteStateView) -> Self {
         Self {
             votes: vote_state.votes_iter().collect(),
             root_slot: vote_state.root_slot(),
-        }
-    }
-}
-
-impl From<TowerVoteState> for VoteState1_14_11 {
-    fn from(vote_state: TowerVoteState) -> Self {
-        let TowerVoteState { votes, root_slot } = vote_state;
-
-        VoteState1_14_11 {
-            votes,
-            root_slot,
-            ..Self::default()
         }
     }
 }

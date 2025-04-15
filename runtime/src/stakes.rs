@@ -1,7 +1,10 @@
 //! Stakes serve as a cache of stake and vote accounts to derive
 //! node stakes
 use {
-    crate::{stake_account, stake_history::StakeHistory},
+    crate::{
+        stake_account::{self, Error as StakeAccountError},
+        stake_history::StakeHistory,
+    },
     im::HashMap as ImHashMap,
     log::error,
     num_derive::ToPrimitive,
@@ -11,10 +14,9 @@ use {
         clock::Epoch,
         pubkey::Pubkey,
         stake::state::{Delegation, StakeActivationStatus},
-        vote::state::VoteStateVersions,
     },
     solana_stake_program::stake_state::Stake,
-    solana_vote::vote_account::{VoteAccount, VoteAccounts},
+    solana_vote::vote_account::{Error as VoteAccountError, VoteAccount, VoteAccounts},
     std::{
         collections::HashMap,
         ops::Add,
@@ -32,7 +34,7 @@ pub enum Error {
     #[error("Invalid delegation: {0}")]
     InvalidDelegation(Pubkey),
     #[error(transparent)]
-    InvalidStakeAccount(#[from] stake_account::Error),
+    InvalidStakeAccount(#[from] StakeAccountError),
     #[error("Stake account not found: {0}")]
     StakeAccountNotFound(Pubkey),
     #[error("Vote account mismatch: {0}")]
@@ -91,48 +93,39 @@ impl StakesCache {
             return;
         }
         debug_assert_ne!(account.lamports(), 0u64);
-        if solana_vote_program::check_id(owner) {
-            if VoteStateVersions::is_correct_size_and_initialized(account.data()) {
-                match VoteAccount::try_from(account.to_account_shared_data()) {
-                    Ok(vote_account) => {
-                        // drop the old account after releasing the lock
-                        let _old_vote_account = {
-                            let mut stakes = self.0.write().unwrap();
-                            stakes.upsert_vote_account(
-                                pubkey,
-                                vote_account,
-                                new_rate_activation_epoch,
-                            )
-                        };
-                    }
-                    Err(_) => {
-                        // drop the old account after releasing the lock
-                        let _old_vote_account = {
-                            let mut stakes = self.0.write().unwrap();
-                            stakes.remove_vote_account(pubkey)
-                        };
-                    }
-                }
-            } else {
+        match VoteAccount::try_from(account.to_account_shared_data()) {
+            Ok(vote_account) => {
+                // drop the old account after releasing the lock
+                let _old_vote_account = {
+                    let mut stakes = self.0.write().unwrap();
+                    stakes.upsert_vote_account(pubkey, vote_account, new_rate_activation_epoch)
+                };
+            }
+            Err(VoteAccountError::InstructionError(_)) | Err(VoteAccountError::Uninitialized) => {
                 // drop the old account after releasing the lock
                 let _old_vote_account = {
                     let mut stakes = self.0.write().unwrap();
                     stakes.remove_vote_account(pubkey)
                 };
-            };
-        } else if solana_stake_program::check_id(owner) {
-            match StakeAccount::try_from(account.to_account_shared_data()) {
-                Ok(stake_account) => {
-                    let mut stakes = self.0.write().unwrap();
-                    stakes.upsert_stake_delegation(
-                        *pubkey,
-                        stake_account,
-                        new_rate_activation_epoch,
-                    );
-                }
-                Err(_) => {
-                    let mut stakes = self.0.write().unwrap();
-                    stakes.remove_stake_delegation(pubkey, new_rate_activation_epoch);
+            }
+            Err(VoteAccountError::InvalidOwner(_)) => {
+                match StakeAccount::try_from(account.to_account_shared_data()) {
+                    Ok(stake_account) => {
+                        let mut stakes = self.0.write().unwrap();
+                        stakes.upsert_stake_delegation(
+                            *pubkey,
+                            stake_account,
+                            new_rate_activation_epoch,
+                        );
+                    }
+                    Err(StakeAccountError::InstructionError(_))
+                    | Err(StakeAccountError::InvalidDelegation(_)) => {
+                        let mut stakes = self.0.write().unwrap();
+                        stakes.remove_stake_delegation(pubkey, new_rate_activation_epoch);
+                    }
+                    Err(StakeAccountError::InvalidOwner(_)) => {
+                        // Nothing to do
+                    }
                 }
             }
         }
@@ -230,9 +223,7 @@ impl Stakes<StakeAccount> {
                 let voter_pubkey = &delegation.voter_pubkey;
                 if stakes.vote_accounts.get(voter_pubkey).is_none() {
                     if let Some(account) = get_account(voter_pubkey) {
-                        if VoteStateVersions::is_correct_size_and_initialized(account.data())
-                            && VoteAccount::try_from(account.clone()).is_ok()
-                        {
+                        if VoteAccount::try_from(account.clone()).is_ok() {
                             error!("vote account not cached: {voter_pubkey}, {account:?}");
                             return Err(Error::VoteAccountNotCached(*voter_pubkey));
                         }

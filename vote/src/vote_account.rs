@@ -29,6 +29,8 @@ pub enum Error {
     InstructionError(#[from] InstructionError),
     #[error("Invalid vote account owner: {0}")]
     InvalidOwner(/*owner:*/ Pubkey),
+    #[error("Uninitialized vote state")]
+    Uninitialized,
 }
 
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
@@ -324,9 +326,16 @@ impl TryFrom<AccountSharedData> for VoteAccount {
             return Err(Error::InvalidOwner(*account.owner()));
         }
 
+        let vote_state_view = VoteStateView::try_new(account.data_clone())
+            .map_err(|_| Error::InstructionError(InstructionError::InvalidAccountData))?;
+
+        // Initialized vote state should have a valid node_pubkey.
+        if vote_state_view.node_pubkey() == &Pubkey::default() {
+            return Err(Error::Uninitialized);
+        }
+
         Ok(Self(Arc::new(VoteAccountInner {
-            vote_state_view: VoteStateView::try_new(account.data_clone())
-                .map_err(|_| Error::InstructionError(InstructionError::InvalidAccountData))?,
+            vote_state_view,
             account,
         })))
     }

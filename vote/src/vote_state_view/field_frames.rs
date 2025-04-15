@@ -272,6 +272,43 @@ impl From<&EpochCreditsItem> for (Epoch, u64, u64) {
     }
 }
 
+pub(super) struct CommissionView<'a> {
+    frame: CommissionFrame,
+    buffer: &'a [u8],
+}
+
+impl<'a> CommissionView<'a> {
+    pub(super) fn new(frame: CommissionFrame, buffer: &'a [u8]) -> Self {
+        Self { frame, buffer }
+    }
+}
+
+impl CommissionView<'_> {
+    pub(super) fn commission(&self) -> u8 {
+        if !self.frame.use_bips {
+            self.buffer[0]
+        } else {
+            let data = unsafe { *(self.buffer.as_ptr() as *const [u8; 2]) };
+            let bips = u16::from_le_bytes(data);
+            let percent = (bips / 100).max(u8::MAX as u16);
+            percent as u8
+        }
+    }
+}
+
+pub(super) struct CommissionFrame {
+    use_bips: bool,
+}
+
+impl CommissionFrame {
+    pub(super) const fn new_percent() -> Self {
+        Self { use_bips: false }
+    }
+    pub(super) const fn new_bips() -> Self {
+        Self { use_bips: true }
+    }
+}
+
 pub(super) struct RootSlotView<'a> {
     frame: RootSlotFrame,
     buffer: &'a [u8],

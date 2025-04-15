@@ -9,6 +9,8 @@ use {
         list_view::ListView,
     },
     core::fmt::Debug,
+    field_frames::{CommissionFrame, CommissionView},
+    frame_v4::VoteStateFrameV4,
     solana_clock::{Epoch, Slot},
     solana_pubkey::Pubkey,
     solana_vote_interface::state::{BlockTimestamp, Lockout},
@@ -23,6 +25,7 @@ use {
 mod field_frames;
 mod frame_v1_14_11;
 mod frame_v3;
+mod frame_v4;
 mod list_view;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -73,9 +76,7 @@ impl VoteStateView {
     }
 
     pub fn commission(&self) -> u8 {
-        let offset = self.frame.offset(Field::Commission);
-        // SAFETY: `frame` was created from `data`.
-        self.data[offset]
+        self.commission_view().commission()
     }
 
     pub fn votes_iter(&self) -> impl Iterator<Item = Lockout> + '_ {
@@ -128,6 +129,11 @@ impl VoteStateView {
         }
     }
 
+    fn commission_view(&self) -> CommissionView {
+        let offset = self.frame.offset(Field::Commission);
+        CommissionView::new(self.frame.commission_frame(), &self.data[offset..])
+    }
+
     fn votes_view(&self) -> ListView<VotesFrame> {
         let offset = self.frame.offset(Field::Votes);
         // SAFETY: `frame` was created from `data`.
@@ -167,6 +173,7 @@ impl From<VoteState> for VoteStateView {
 enum VoteStateFrame {
     V1_14_11(VoteStateFrameV1_14_11),
     V3(VoteStateFrameV3),
+    V4(VoteStateFrameV4),
 }
 
 impl VoteStateFrame {
@@ -182,6 +189,7 @@ impl VoteStateFrame {
             0 => return Err(VoteStateViewError::OldVersion),
             1 => Self::V1_14_11(VoteStateFrameV1_14_11::try_new(bytes)?),
             2 => Self::V3(VoteStateFrameV3::try_new(bytes)?),
+            3 => Self::V4(VoteStateFrameV4::try_new(bytes)?),
             _ => return Err(VoteStateViewError::UnsupportedVersion),
         })
     }
@@ -190,6 +198,15 @@ impl VoteStateFrame {
         match &self {
             Self::V1_14_11(frame) => frame.field_offset(field),
             Self::V3(frame) => frame.field_offset(field),
+            Self::V4(frame) => frame.field_offset(field),
+        }
+    }
+
+    fn commission_frame(&self) -> CommissionFrame {
+        match &self {
+            Self::V1_14_11(_) => CommissionFrame::new_percent(),
+            Self::V3(_) => CommissionFrame::new_percent(),
+            Self::V4(_) => CommissionFrame::new_bips(),
         }
     }
 
@@ -197,6 +214,7 @@ impl VoteStateFrame {
         match &self {
             Self::V1_14_11(frame) => VotesFrame::Lockout(frame.votes_frame),
             Self::V3(frame) => VotesFrame::Landed(frame.votes_frame),
+            Self::V4(frame) => VotesFrame::Landed(frame.votes_frame),
         }
     }
 
@@ -204,6 +222,7 @@ impl VoteStateFrame {
         match &self {
             Self::V1_14_11(vote_frame) => vote_frame.root_slot_frame,
             Self::V3(vote_frame) => vote_frame.root_slot_frame,
+            Self::V4(vote_frame) => vote_frame.root_slot_frame,
         }
     }
 
@@ -211,6 +230,7 @@ impl VoteStateFrame {
         match &self {
             Self::V1_14_11(frame) => frame.authorized_voters_frame,
             Self::V3(frame) => frame.authorized_voters_frame,
+            Self::V4(frame) => frame.authorized_voters_frame,
         }
     }
 
@@ -218,6 +238,7 @@ impl VoteStateFrame {
         match &self {
             Self::V1_14_11(frame) => frame.epoch_credits_frame,
             Self::V3(frame) => frame.epoch_credits_frame,
+            Self::V4(frame) => frame.epoch_credits_frame,
         }
     }
 }

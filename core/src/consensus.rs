@@ -1818,6 +1818,7 @@ pub mod test {
                     ..Account::default()
                 });
                 let mut vote_state = VoteState::default();
+                vote_state.node_pubkey = Pubkey::new_unique();
                 for slot in *votes {
                     process_slot_vote_unchecked(&mut vote_state, *slot);
                 }

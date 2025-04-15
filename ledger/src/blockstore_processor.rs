@@ -4743,6 +4743,7 @@ pub mod tests {
                 .map(|(root, stake)| {
                     let mut vote_state = VoteState::default();
                     vote_state.root_slot = Some(root);
+                    vote_state.node_pubkey = Pubkey::new_unique();
                     let mut vote_account =
                         AccountSharedData::new(1, VoteState::size_of(), &solana_vote_program::id());
                     let versioned = VoteStateVersions::new_current(vote_state);

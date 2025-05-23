@@ -64,7 +64,7 @@ pbkdf2 = { version = "0.10.1", default-features = false }
 qstring = "0.7.2"
 rand = { version = "0.8.5", optional = true }
 rand_chacha = { version = "0.2.2", optional = true }
-rustversion = "1.0.6"
+rustversion = "1.0.21"
 serde = "1.0.136"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"

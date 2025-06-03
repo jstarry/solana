@@ -185,8 +185,7 @@ static RESERVED_ACCOUNTS: std::sync::LazyLock<Vec<ReservedAccount>> =
 
 #[cfg(test)]
 mod tests {
-    #![allow(deprecated)]
-    use {super::*, solana_message::legacy::BUILTIN_PROGRAMS_KEYS, solana_sysvar::ALL_IDS};
+    use super::*;
 
     #[test]
     fn test_is_reserved() {
@@ -246,16 +245,5 @@ mod tests {
         assert!(reserved_account_keys.is_reserved(&active_reserved_key));
         assert!(reserved_account_keys.is_reserved(&pending_reserved_keys[0]));
         assert!(reserved_account_keys.is_reserved(&pending_reserved_keys[1]));
-    }
-
-    #[test]
-    fn test_static_list_compat() {
-        let mut static_set = HashSet::new();
-        static_set.extend(ALL_IDS.iter().cloned());
-        static_set.extend(BUILTIN_PROGRAMS_KEYS.iter().cloned());
-
-        let initial_active_set = ReservedAccountKeys::default().active;
-
-        assert_eq!(initial_active_set, static_set);
     }
 }

@@ -280,10 +280,6 @@ impl solana_runtime_transaction::transaction_meta::StaticMeta for WritableKeysTr
     fn instruction_data_len(&self) -> u16 {
         unimplemented!("WritableKeysTransaction::instruction_data_len")
     }
-
-    fn address_resolution_error(&self) -> Option<solana_transaction_error::TransactionError> {
-        unimplemented!("WritableKeysTransaction::address_resolution_error")
-    }
 }
 
 #[cfg(feature = "dev-context-only-utils")]

@@ -72,7 +72,9 @@ use {
     },
     solana_accounts_db::{
         account_locks::validate_account_locks,
-        accounts::{AccountAddressFilter, Accounts, PubkeyAccountSlot},
+        accounts::{
+            AccountAddressFilter, Accounts, PubkeyAccountSlot, TransactionAccountLockStatus,
+        },
         accounts_db::{
             AccountStorageEntry, AccountsDb, AccountsDbConfig, DuplicatesLtHash, PubkeyHashAccount,
         },
@@ -3205,7 +3207,8 @@ impl Bank {
 
     pub fn unlock_accounts<'a, Tx: SVMMessage + 'a>(
         &self,
-        txs_and_results: impl Iterator<Item = (&'a Tx, &'a Result<()>)> + Clone,
+        txs_and_results: impl Iterator<Item = (&'a Tx, &'a Result<TransactionAccountLockStatus>)>
+            + Clone,
     ) {
         self.rc.accounts.unlock_accounts(txs_and_results)
     }

@@ -58,10 +58,10 @@ impl Bank {
         )
     }
 
-    pub fn check_transactions<Tx: TransactionWithMeta>(
+    pub fn check_transactions<Tx: TransactionWithMeta, Ok>(
         &self,
         sanitized_txs: &[impl core::borrow::Borrow<Tx>],
-        lock_results: &[TransactionResult<()>],
+        lock_results: &[TransactionResult<Ok>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
@@ -74,10 +74,10 @@ impl Bank {
         self.check_status_cache(sanitized_txs, lock_results, error_counters)
     }
 
-    fn check_age_and_compute_budget_limits<Tx: TransactionWithMeta>(
+    fn check_age_and_compute_budget_limits<Tx: TransactionWithMeta, Ok>(
         &self,
         sanitized_txs: &[impl core::borrow::Borrow<Tx>],
-        lock_results: &[TransactionResult<()>],
+        lock_results: &[TransactionResult<Ok>],
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
@@ -96,7 +96,7 @@ impl Bank {
             .iter()
             .zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
-                Ok(()) => {
+                Ok(_) => {
                     let compute_budget_and_limits = tx
                         .borrow()
                         .compute_budget_instruction_details()

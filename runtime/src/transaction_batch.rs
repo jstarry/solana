@@ -1,5 +1,7 @@
 use {
-    crate::bank::Bank, core::ops::Deref, solana_svm_transaction::svm_message::SVMMessage,
+    crate::bank::Bank, core::ops::Deref,
+    solana_accounts_db::accounts::TransactionAccountLockStatus,
+    solana_svm_transaction::svm_message::SVMMessage,
     solana_transaction_error::TransactionResult as Result,
 };
 
@@ -21,7 +23,7 @@ impl<T> Deref for OwnedOrBorrowed<'_, T> {
 
 // Represents the results of trying to lock a set of accounts
 pub struct TransactionBatch<'a, 'b, Tx: SVMMessage> {
-    lock_results: Vec<Result<()>>,
+    lock_results: Vec<Result<TransactionAccountLockStatus>>,
     bank: &'a Bank,
     sanitized_txs: OwnedOrBorrowed<'b, Tx>,
     needs_unlock: bool,
@@ -29,7 +31,7 @@ pub struct TransactionBatch<'a, 'b, Tx: SVMMessage> {
 
 impl<'a, 'b, Tx: SVMMessage> TransactionBatch<'a, 'b, Tx> {
     pub fn new(
-        lock_results: Vec<Result<()>>,
+        lock_results: Vec<Result<TransactionAccountLockStatus>>,
         bank: &'a Bank,
         sanitized_txs: OwnedOrBorrowed<'b, Tx>,
     ) -> Self {
@@ -42,7 +44,7 @@ impl<'a, 'b, Tx: SVMMessage> TransactionBatch<'a, 'b, Tx> {
         }
     }
 
-    pub fn lock_results(&self) -> &Vec<Result<()>> {
+    pub fn lock_results(&self) -> &Vec<Result<TransactionAccountLockStatus>> {
         &self.lock_results
     }
 
@@ -73,7 +75,7 @@ impl<'a, 'b, Tx: SVMMessage> TransactionBatch<'a, 'b, Tx> {
         }
 
         let txs_and_results = transaction_results
-            .iter()
+            .into_iter()
             .enumerate()
             .inspect(|(index, result)| {
                 // It's not valid to update a previously recorded lock error to
@@ -82,17 +84,22 @@ impl<'a, 'b, Tx: SVMMessage> TransactionBatch<'a, 'b, Tx> {
                 // when they were not currently locked.
                 assert!(!(result.is_ok() && self.lock_results[*index].is_err()))
             })
-            .filter(|(index, result)| result.is_err() && self.lock_results[*index].is_ok())
-            .map(|(index, _)| (&self.sanitized_txs[index], &self.lock_results[index]));
+            .filter_map(|(index, result)| {
+                self.lock_results[index]
+                    .ok()
+                    .and_then(|_| result.err().map(|err| (index, err)))
+            })
+            .map(|(index, err)| {
+                // Record all new errors by overwriting lock results. Note that it's
+                // not valid to update from err -> ok and the assertion above enforces
+                // that validity constraint.
+                let lock_result = std::mem::replace(&mut self.lock_results[index], Err(err));
+                (&self.sanitized_txs[index], lock_result)
+            });
 
-        // Unlock the accounts for all transactions which will be updated to an
-        // lock error below.
+        // Unlock the accounts for all transactions which have been updated to an
+        // lock error above.
         self.bank.unlock_accounts(txs_and_results);
-
-        // Record all new errors by overwriting lock results. Note that it's
-        // not valid to update from err -> ok and the assertion above enforces
-        // that validity constraint.
-        self.lock_results = transaction_results;
     }
 }
 

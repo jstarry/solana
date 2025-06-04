@@ -25,7 +25,7 @@ use {
     },
     solana_transaction::sanitized::SanitizedTransaction,
     solana_transaction_context::TransactionAccount,
-    solana_transaction_error::TransactionResult as Result,
+    solana_transaction_error::{TransactionError, TransactionResult as Result},
     std::{
         cmp::Reverse,
         collections::{BinaryHeap, HashMap, HashSet},
@@ -37,6 +37,13 @@ use {
 };
 
 pub type PubkeyAccountSlot = (Pubkey, AccountSharedData, Slot);
+
+pub enum TransactionAccountLockStatus {
+    Full,
+    /// Only the nonce and fee payer accounts were locked because
+    /// the transaction is not executable by the SVM.
+    NonceAndFeePayer(TransactionError),
+}
 
 struct TransactionAccountLocksIterator<'a, T: SVMMessage> {
     transaction: &'a T,
@@ -530,7 +537,8 @@ impl Accounts {
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
     pub fn unlock_accounts<'a, Tx: SVMMessage + 'a>(
         &self,
-        txs_and_results: impl Iterator<Item = (&'a Tx, &'a Result<()>)> + Clone,
+        txs_and_results: impl Iterator<Item = (&'a Tx, &'a Result<TransactionAccountLockStatus>)>
+            + Clone,
     ) {
         if !txs_and_results.clone().any(|(_, res)| res.is_ok()) {
             return;
@@ -539,9 +547,29 @@ impl Accounts {
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
         for (tx, res) in txs_and_results {
-            if res.is_ok() {
+            if let Ok(TransactionAccountLockStatus::Full) = res {
                 let tx_account_locks = TransactionAccountLocksIterator::new(tx);
                 account_locks.unlock_accounts(tx_account_locks.accounts_with_is_writable());
+            } else if let Ok(TransactionAccountLockStatus::NonceAndFeePayer(_)) = res {
+                let fee_payer = tx.fee_payer();
+
+                let mut unlock_accounts = Vec::with_capacity(2);
+                unlock_accounts.push(fee_payer);
+
+                // TransactionAccountLockStatus::NonceAndFeePayer will only be
+                // used if the `require_static_nonce_account` feature is
+                // enabled.
+                if let Some(nonce) =
+                    tx.get_durable_nonce(true /* require_static_nonce_account */)
+                {
+                    if nonce != fee_payer {
+                        unlock_accounts.push(nonce);
+                    }
+                }
+                account_locks.unlock_accounts(unlock_accounts.into_iter().map(|key| {
+                    // Fee payer and nonce accounts are always writable
+                    (key, true /* is_writable */)
+                }));
             }
         }
     }

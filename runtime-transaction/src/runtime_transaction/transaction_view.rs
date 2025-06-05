@@ -2,7 +2,7 @@ use {
     super::{ComputeBudgetInstructionDetails, RuntimeTransaction},
     crate::{
         instruction_meta::InstructionMeta,
-        transaction_meta::{StaticMeta, TransactionMeta},
+        transaction_meta::{DynamicMeta, StaticMeta, TransactionMeta},
         transaction_with_meta::TransactionWithMeta,
     },
     agave_transaction_view::{
@@ -22,7 +22,7 @@ use {
         simple_vote_transaction_checker::is_simple_vote_transaction_impl,
         versioned::VersionedTransaction,
     },
-    solana_transaction_error::{TransactionError, TransactionResult as Result},
+    solana_transaction_error::{TransactionError, TransactionResult},
     std::{borrow::Cow, collections::HashSet},
 };
 
@@ -43,7 +43,7 @@ impl<D: TransactionData> RuntimeTransaction<SanitizedTransactionView<D>> {
         transaction: SanitizedTransactionView<D>,
         message_hash: MessageHash,
         is_simple_vote_tx: Option<bool>,
-    ) -> Result<Self> {
+    ) -> TransactionResult<Self> {
         let message_hash = match message_hash {
             MessageHash::Precomputed(hash) => hash,
             MessageHash::Compute => VersionedMessage::hash_raw_message(transaction.message_data()),
@@ -78,23 +78,32 @@ impl<D: TransactionData> RuntimeTransaction<SanitizedTransactionView<D>> {
     }
 }
 
+impl<D: TransactionData> DynamicMeta for RuntimeTransaction<ResolvedTransactionView<D>> {
+    fn resolved_addresses(&self) -> Result<&LoadedAddresses, &TransactionError> {
+        self.transaction.resolved_addresses_result.as_ref()
+    }
+}
+
 impl<D: TransactionData> RuntimeTransaction<ResolvedTransactionView<D>> {
     /// Create a new `RuntimeTransaction<ResolvedTransactionView>` from a
     /// `RuntimeTransaction<SanitizedTransactionView>` that already has
     /// static metadata loaded.
     pub fn try_from(
         statically_loaded_runtime_tx: RuntimeTransaction<SanitizedTransactionView<D>>,
-        loaded_addresses: Option<LoadedAddresses>,
+        resolved_addresses_result: TransactionResult<LoadedAddresses>,
         reserved_account_keys: &HashSet<Pubkey>,
-    ) -> Result<Self> {
+    ) -> TransactionResult<Self> {
         let RuntimeTransaction { transaction, meta } = statically_loaded_runtime_tx;
         // transaction-view does not distinguish between different types of errors here.
         // return generic sanitize failure error here.
         // these transactions should be immediately dropped, and we generally
         // will not care about the specific error at this point.
-        let transaction =
-            ResolvedTransactionView::try_new(transaction, loaded_addresses, reserved_account_keys)
-                .map_err(|_| TransactionError::SanitizeFailure)?;
+        let transaction = ResolvedTransactionView::try_new(
+            transaction,
+            resolved_addresses_result,
+            reserved_account_keys,
+        )
+        .map_err(|_| TransactionError::SanitizeFailure)?;
         Ok(Self { transaction, meta })
     }
 }
@@ -117,7 +126,9 @@ impl<D: TransactionData> TransactionWithMeta for RuntimeTransaction<ResolvedTran
             }),
             VersionedMessage::V0(message) => SanitizedMessage::V0(LoadedMessage {
                 message: Cow::Owned(message),
-                loaded_addresses: Cow::Owned(self.loaded_addresses().unwrap().clone()),
+                loaded_addresses: Cow::Owned(
+                    self.resolved_addresses_result.clone().unwrap_or_default(),
+                ),
                 is_writable_account_cache,
             }),
         };

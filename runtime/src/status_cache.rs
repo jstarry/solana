@@ -24,8 +24,8 @@ pub type Status<T> = Arc<Mutex<HashMap<Hash, (usize, Vec<(KeySlice, T)>)>>>;
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample))]
 #[derive(Clone, Debug)]
 pub struct BlockhashStatus<T: Serialize + Clone> {
-    /// highest fork this blockhash has been observed on
-    pub max_slot: Slot,
+    /// lowest fork this blockhash has been observed on
+    pub min_slot: Slot,
     /// The index of the key slice in the key
     pub key_index: usize,
     /// Map of the key slice + Fork status for that key
@@ -69,13 +69,13 @@ impl<T: Serialize + Clone + PartialEq> PartialEq for StatusCache<T> {
                 |(
                     hash,
                     BlockhashStatus {
-                        max_slot: slot,
+                        min_slot: slot,
                         key_index,
                         transaction_key_map: hash_map,
                     },
                 )| {
                     if let Some(BlockhashStatus {
-                        max_slot: other_slot,
+                        min_slot: other_slot,
                         key_index: other_key_index,
                         transaction_key_map: other_hash_map,
                     }) = other.blockhash_cache.get(hash)
@@ -210,23 +210,20 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
         // Get the cache entry for this blockhash.
         let BlockhashStatus {
-            max_slot,
             key_index,
             transaction_key_map,
+            ..
         } = self
             .blockhash_cache
             .entry(*tx_blockhash)
             .or_insert_with(|| {
                 let key_index = thread_rng().gen_range(0..max_key_index + 1);
                 BlockhashStatus {
-                    max_slot: current_slot,
+                    min_slot: current_slot,
                     key_index,
                     transaction_key_map: HashMap::new(),
                 }
             });
-
-        // Update the max slot observed to contain txs using this blockhash.
-        *max_slot = std::cmp::max(current_slot, *max_slot);
 
         // Grab the key slice.
         let key_index = (*key_index).min(max_key_index);
@@ -246,7 +243,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
             if let Some(min) = self.roots.iter().min().cloned() {
                 self.roots.remove(&min);
                 self.blockhash_cache
-                    .retain(|_, BlockhashStatus { max_slot, .. }| *max_slot > min);
+                    .retain(|_, BlockhashStatus { min_slot, .. }| *min_slot > min);
                 self.slot_deltas.retain(|slot, _| *slot > min);
             }
         }
@@ -314,11 +311,10 @@ impl<T: Serialize + Clone> StatusCache<T> {
             self.blockhash_cache
                 .entry(*tx_blockhash)
                 .or_insert(BlockhashStatus {
-                    max_slot: slot,
+                    min_slot: slot,
                     key_index,
                     transaction_key_map: HashMap::new(),
                 });
-        blockhash_status.max_slot = std::cmp::max(slot, blockhash_status.max_slot);
 
         let forks = blockhash_status
             .transaction_key_map

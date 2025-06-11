@@ -125,7 +125,7 @@ struct UnusedAccounts {
 // Deserializable version of Bank which need not be serializable,
 // because it's handled by SerializableVersionedBank.
 // So, sync fields with it!
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 struct DeserializableVersionedBank {
     blockhash_queue: BlockhashQueue,
     ancestors: AncestorsForSerialization,
@@ -205,7 +205,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
 
 // Serializable version of Bank, not Deserializable to avoid cloning by using refs.
 // Sync fields with DeserializableVersionedBank!
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 struct SerializableVersionedBank {
     blockhash_queue: BlockhashQueue,
     ancestors: AncestorsForSerialization,
@@ -1291,4 +1291,102 @@ fn cstring_from_path(path: &Path) -> io::Result<CString> {
     // https://docs.rs/compiler_builtins/latest/compiler_builtins/probestack/index.html.
     CString::new(path.as_os_str().as_encoded_bytes())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
+}
+
+#[cfg(test)]
+mod serde_test {
+    use super::*;
+
+    // Serializable version of Bank, not Deserializable to avoid cloning by using refs.
+    // Sync fields with DeserializableVersionedBank!
+    #[derive(Serialize, Default)]
+    #[allow(unused)]
+    struct UpdatedSerializableVersionedBank {
+        blockhash_queue: BlockhashQueue,
+        ancestors: AncestorsForSerialization,
+        hash: Hash,
+        parent_hash: Hash,
+        parent_slot: Slot,
+        hard_forks: HardForks,
+        transaction_count: u64,
+        tick_height: u64,
+        signature_count: u64,
+        capitalization: u64,
+        max_tick_height: u64,
+        hashes_per_tick: Option<u64>,
+        ticks_per_slot: u64,
+        ns_per_slot: u128,
+        genesis_creation_time: UnixTimestamp,
+        slots_per_year: f64,
+        accounts_data_len: u64,
+        slot: Slot,
+        epoch: Epoch,
+        block_height: u64,
+        collector_id: Pubkey,
+        collector_fees: u64,
+        fee_calculator: FeeCalculator,
+        fee_rate_governor: FeeRateGovernor,
+        collected_rent: u64,
+        rent_collector: RentCollector,
+        epoch_schedule: EpochSchedule,
+        inflation: Inflation,
+        #[serde(serialize_with = "serde_stakes_to_delegation_format::serialize")]
+        stakes: StakesEnum,
+        unused_accounts: UnusedAccounts,
+        unused_epoch_stakes: HashMap<Epoch, ()>,
+        is_delta: bool,
+    }
+
+    // Deserializable version of Bank which need not be serializable,
+    // because it's handled by SerializableVersionedBank.
+    // So, sync fields with it!
+    #[derive(Clone, Default, Deserialize)]
+    #[allow(unused)]
+    struct UpdatedDeserializableVersionedBank {
+        blockhash_queue: BlockhashQueue,
+        ancestors: AncestorsForSerialization,
+        hash: Hash,
+        parent_hash: Hash,
+        parent_slot: Slot,
+        hard_forks: HardForks,
+        transaction_count: u64,
+        tick_height: u64,
+        signature_count: u64,
+        capitalization: u64,
+        max_tick_height: u64,
+        hashes_per_tick: Option<u64>,
+        ticks_per_slot: u64,
+        ns_per_slot: u128,
+        genesis_creation_time: UnixTimestamp,
+        slots_per_year: f64,
+        accounts_data_len: u64,
+        slot: Slot,
+        epoch: Epoch,
+        block_height: u64,
+        collector_id: Pubkey,
+        collector_fees: u64,
+        _fee_calculator: FeeCalculator,
+        fee_rate_governor: FeeRateGovernor,
+        collected_rent: u64,
+        rent_collector: RentCollector,
+        epoch_schedule: EpochSchedule,
+        inflation: Inflation,
+        stakes: Stakes<Delegation>,
+        #[allow(dead_code)]
+        unused_accounts: UnusedAccounts,
+        unused_epoch_stakes: HashMap<Epoch, ()>,
+        is_delta: bool,
+    }
+
+    #[test]
+    fn test_serialization() {
+        let old = SerializableVersionedBank::default();
+        let old_bytes = bincode::serialize(&old).unwrap();
+        let new = UpdatedSerializableVersionedBank::default();
+        let new_bytes = bincode::serialize(&new).unwrap();
+        assert_eq!(old_bytes, new_bytes);
+
+        let _: DeserializableVersionedBank = bincode::deserialize(&new_bytes).unwrap();
+        let _: UpdatedDeserializableVersionedBank = bincode::deserialize(&old_bytes).unwrap();
+    }
 }

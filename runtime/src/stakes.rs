@@ -189,6 +189,12 @@ pub enum StakesEnum {
     Stakes(Stakes<Stake>),
 }
 
+impl Default for StakesEnum {
+    fn default() -> Self {
+        Self::Accounts(Stakes::default())
+    }
+}
+
 impl<T: Clone> Stakes<T> {
     pub fn vote_accounts(&self) -> &VoteAccounts {
         &self.vote_accounts

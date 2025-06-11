@@ -936,12 +936,12 @@ fn serialize_snapshot(
         .unzip();
 
         let bank_snapshot_serializer = move |stream: &mut BufWriter<fs::File>| -> Result<()> {
-            let versioned_epoch_stakes = mem::take(&mut bank_fields.versioned_epoch_stakes);
+            let epoch_stakes = mem::take(&mut bank_fields.epoch_stakes);
             let extra_fields = ExtraFieldsToSerialize {
                 lamports_per_signature: bank_fields.fee_rate_governor.lamports_per_signature,
                 incremental_snapshot_persistence: bank_incremental_snapshot_persistence,
                 epoch_accounts_hash,
-                versioned_epoch_stakes,
+                epoch_stakes,
                 accounts_lt_hash: bank_fields.accounts_lt_hash.clone().map(Into::into),
             };
             serde_snapshot::serialize_bank_snapshot_into(

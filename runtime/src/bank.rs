@@ -41,7 +41,7 @@ use {
             partitioned_epoch_rewards::{EpochRewardStatus, StakeRewards, VoteRewardsAccounts},
         },
         bank_forks::BankForks,
-        epoch_stakes::{NodeVoteAccounts, VersionedEpochStakes},
+        epoch_stakes::{EpochStakes, NodeVoteAccounts},
         inflation_rewards::points::InflationPointCalculationEvent,
         installed_scheduler_pool::{BankWithScheduler, InstalledSchedulerRwLock},
         rent_collector::RentCollectorWithMetrics,
@@ -451,7 +451,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) epoch_schedule: EpochSchedule,
     pub(crate) inflation: Inflation,
     pub(crate) stakes: Stakes<Delegation>,
-    pub(crate) versioned_epoch_stakes: HashMap<Epoch, VersionedEpochStakes>,
+    pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
@@ -500,7 +500,7 @@ pub struct BankFieldsToSerialize {
     pub stakes: StakesEnum,
     pub is_delta: bool,
     pub accounts_data_len: u64,
-    pub versioned_epoch_stakes: HashMap<u64, VersionedEpochStakes>,
+    pub epoch_stakes: HashMap<u64, EpochStakes>,
     // When removing the accounts lt hash featurization code, also remove this Option wrapper
     pub accounts_lt_hash: Option<AccountsLtHash>,
 }
@@ -662,7 +662,7 @@ impl BankFieldsToSerialize {
             stakes: Stakes::<Delegation>::default().into(),
             is_delta: bool::default(),
             accounts_data_len: u64::default(),
-            versioned_epoch_stakes: HashMap::default(),
+            epoch_stakes: HashMap::default(),
             accounts_lt_hash: Some(AccountsLtHash(LtHash([0x7E57; LtHash::NUM_ELEMENTS]))),
         }
     }
@@ -844,7 +844,7 @@ pub struct Bank {
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule calculation boundary
-    epoch_stakes: HashMap<Epoch, VersionedEpochStakes>,
+    epoch_stakes: HashMap<Epoch, EpochStakes>,
 
     /// A boolean reflecting whether any entries were recorded into the PoH
     /// stream for the slot == self.slot
@@ -1112,7 +1112,7 @@ impl Bank {
             epoch_schedule: EpochSchedule::default(),
             inflation: Arc::<RwLock<Inflation>>::default(),
             stakes_cache: StakesCache::default(),
-            epoch_stakes: HashMap::<Epoch, VersionedEpochStakes>::default(),
+            epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
@@ -1205,7 +1205,7 @@ impl Bank {
             let stakes = SerdeStakesToStakeFormat::from(stakes);
             for epoch in 0..=bank.get_leader_schedule_epoch(bank.slot) {
                 bank.epoch_stakes
-                    .insert(epoch, VersionedEpochStakes::new(stakes.clone(), epoch));
+                    .insert(epoch, EpochStakes::new(stakes.clone(), epoch));
             }
             bank.update_stake_history(None);
         }
@@ -1846,7 +1846,7 @@ impl Bank {
             epoch_schedule: fields.epoch_schedule,
             inflation: Arc::new(RwLock::new(fields.inflation)),
             stakes_cache: StakesCache::new(stakes),
-            epoch_stakes: fields.versioned_epoch_stakes,
+            epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             rewards: RwLock::new(vec![]),
             cluster_type: Some(genesis_config.cluster_type),
@@ -2040,7 +2040,7 @@ impl Bank {
             stakes: StakesEnum::from(self.stakes_cache.stakes().clone()),
             is_delta: self.is_delta.load(Relaxed),
             accounts_data_len: self.load_accounts_data_size(),
-            versioned_epoch_stakes: self.epoch_stakes.clone(),
+            epoch_stakes: self.epoch_stakes.clone(),
             accounts_lt_hash: self
                 .is_accounts_lt_hash_enabled()
                 .then(|| self.accounts_lt_hash.lock().unwrap().clone()),
@@ -2310,7 +2310,7 @@ impl Bank {
             });
             let stakes = self.stakes_cache.stakes().clone();
             let stakes = SerdeStakesToStakeFormat::from(stakes);
-            let new_epoch_stakes = VersionedEpochStakes::new(stakes, leader_schedule_epoch);
+            let new_epoch_stakes = EpochStakes::new(stakes, leader_schedule_epoch);
             info!(
                 "new epoch stakes, epoch: {}, total_stake: {}",
                 leader_schedule_epoch,
@@ -2335,7 +2335,7 @@ impl Bank {
     }
 
     #[cfg(feature = "dev-context-only-utils")]
-    pub fn set_epoch_stakes_for_test(&mut self, epoch: Epoch, stakes: VersionedEpochStakes) {
+    pub fn set_epoch_stakes_for_test(&mut self, epoch: Epoch, stakes: EpochStakes) {
         self.epoch_stakes.insert(epoch, stakes);
     }
 
@@ -6225,7 +6225,7 @@ impl Bank {
     }
 
     /// Get the EpochStakes for the current Bank::epoch
-    pub fn current_epoch_stakes(&self) -> &VersionedEpochStakes {
+    pub fn current_epoch_stakes(&self) -> &EpochStakes {
         // The stakes for a given epoch (E) in self.epoch_stakes are keyed by leader schedule epoch
         // (E + 1) so the stakes for the current epoch are stored at self.epoch_stakes[E + 1]
         self.epoch_stakes
@@ -6234,11 +6234,11 @@ impl Bank {
     }
 
     /// Get the EpochStakes for a given epoch
-    pub fn epoch_stakes(&self, epoch: Epoch) -> Option<&VersionedEpochStakes> {
+    pub fn epoch_stakes(&self, epoch: Epoch) -> Option<&EpochStakes> {
         self.epoch_stakes.get(&epoch)
     }
 
-    pub fn epoch_stakes_map(&self) -> &HashMap<Epoch, VersionedEpochStakes> {
+    pub fn epoch_stakes_map(&self) -> &HashMap<Epoch, EpochStakes> {
         &self.epoch_stakes
     }
 

@@ -3,7 +3,7 @@ use std::ffi::{CStr, CString};
 use {
     crate::{
         bank::{Bank, BankFieldsToDeserialize, BankFieldsToSerialize, BankHashStats, BankRc},
-        epoch_stakes::VersionedEpochStakes,
+        epoch_stakes::EpochStakes,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{SnapshotError, StorageAndNextAccountsFileId},
@@ -196,9 +196,9 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
             epoch_accounts_hash: None,
-            versioned_epoch_stakes: HashMap::default(), // populated from ExtraFieldsToDeserialize
-            accounts_lt_hash: None,                     // populated from ExtraFieldsToDeserialize
-            bank_hash_stats: BankHashStats::default(),  // populated from AccountsDbFields
+            epoch_stakes: HashMap::default(), // populated from ExtraFieldsToDeserialize
+            accounts_lt_hash: None,           // populated from ExtraFieldsToDeserialize
+            bank_hash_stats: BankHashStats::default(), // populated from AccountsDbFields
         }
     }
 }
@@ -397,7 +397,7 @@ struct ExtraFieldsToDeserialize {
     #[serde(deserialize_with = "default_on_eof")]
     epoch_accounts_hash: Option<Hash>,
     #[serde(deserialize_with = "default_on_eof")]
-    versioned_epoch_stakes: HashMap<u64, VersionedEpochStakes>,
+    epoch_stakes: HashMap<u64, EpochStakes>,
     #[serde(deserialize_with = "default_on_eof")]
     accounts_lt_hash: Option<SerdeAccountsLtHash>,
 }
@@ -415,7 +415,7 @@ pub struct ExtraFieldsToSerialize<'a> {
     pub lamports_per_signature: u64,
     pub incremental_snapshot_persistence: Option<&'a BankIncrementalSnapshotPersistence>,
     pub epoch_accounts_hash: Option<EpochAccountsHash>,
-    pub versioned_epoch_stakes: HashMap<u64, VersionedEpochStakes>,
+    pub epoch_stakes: HashMap<u64, EpochStakes>,
     pub accounts_lt_hash: Option<SerdeAccountsLtHash>,
 }
 
@@ -448,7 +448,7 @@ where
         lamports_per_signature,
         incremental_snapshot_persistence,
         epoch_accounts_hash,
-        versioned_epoch_stakes,
+        epoch_stakes,
         accounts_lt_hash,
     } = extra_fields;
 
@@ -457,7 +457,7 @@ where
         .clone_with_lamports_per_signature(lamports_per_signature);
     bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
     bank_fields.epoch_accounts_hash = epoch_accounts_hash;
-    bank_fields.versioned_epoch_stakes = versioned_epoch_stakes;
+    bank_fields.epoch_stakes = epoch_stakes;
     bank_fields.accounts_lt_hash = accounts_lt_hash.map(Into::into);
 
     Ok((bank_fields, accounts_db_fields))
@@ -703,7 +703,7 @@ impl Serialize for SerializableBankAndStorage<'_> {
         let accounts_hash = accounts_db.get_accounts_hash(slot).unwrap().0;
         let write_version = accounts_db.write_version.load(Ordering::Acquire);
         let lamports_per_signature = bank_fields.fee_rate_governor.lamports_per_signature;
-        let versioned_epoch_stakes = std::mem::take(&mut bank_fields.versioned_epoch_stakes);
+        let epoch_stakes = std::mem::take(&mut bank_fields.epoch_stakes);
         let accounts_lt_hash = bank_fields.accounts_lt_hash.clone().map(Into::into);
         let bank_fields_to_serialize = (
             SerializableVersionedBank::from(bank_fields),
@@ -719,7 +719,7 @@ impl Serialize for SerializableBankAndStorage<'_> {
                 lamports_per_signature,
                 incremental_snapshot_persistence: None,
                 epoch_accounts_hash: self.bank.get_epoch_accounts_hash_to_serialize(),
-                versioned_epoch_stakes,
+                epoch_stakes,
                 accounts_lt_hash,
             },
         );

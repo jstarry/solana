@@ -249,7 +249,7 @@ mod tests {
         solana_hash::Hash,
         solana_runtime::{
             bank::Bank,
-            epoch_stakes::VersionedEpochStakes,
+            epoch_stakes::EpochStakes,
             genesis_utils::{
                 create_genesis_config_with_vote_accounts, GenesisConfigInfo, ValidatorVoteKeypairs,
             },
@@ -791,7 +791,7 @@ mod tests {
                 )
             })
             .collect();
-        let epoch1_epoch_stakes = VersionedEpochStakes::new_for_tests(vote_accounts_hash_map, 1);
+        let epoch1_epoch_stakes = EpochStakes::new_for_tests(vote_accounts_hash_map, 1);
         new_root_bank.set_epoch_stakes_for_test(1, epoch1_epoch_stakes);
 
         let last_voted_fork_slots = vec![root_bank.slot() + 1, root_bank.get_slots_in_epoch(0) + 1];

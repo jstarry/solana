@@ -5,7 +5,7 @@ mod tests {
             bank::{
                 epoch_accounts_hash_utils, test_utils as bank_test_utils, Bank, EpochRewardStatus,
             },
-            epoch_stakes::{EpochAuthorizedVoters, NodeIdToVoteAccounts, VersionedEpochStakes},
+            epoch_stakes::{EpochAuthorizedVoters, EpochStakes, NodeIdToVoteAccounts},
             genesis_utils::activate_all_features,
             runtime_config::RuntimeConfig,
             serde_snapshot::{
@@ -166,7 +166,7 @@ mod tests {
         let mut writer = BufWriter::new(cursor);
         {
             let mut bank_fields = bank2.get_fields_to_serialize();
-            let versioned_epoch_stakes = mem::take(&mut bank_fields.versioned_epoch_stakes);
+            let epoch_stakes = mem::take(&mut bank_fields.epoch_stakes);
             let accounts_lt_hash = bank_fields.accounts_lt_hash.clone().map(Into::into);
             serde_snapshot::serialize_bank_snapshot_into(
                 &mut writer,
@@ -180,7 +180,7 @@ mod tests {
                     incremental_snapshot_persistence: expected_incremental_snapshot_persistence
                         .as_ref(),
                     epoch_accounts_hash: expected_epoch_accounts_hash,
-                    versioned_epoch_stakes,
+                    epoch_stakes,
                     accounts_lt_hash,
                 },
                 accounts_db.write_version.load(Ordering::Acquire),
@@ -291,7 +291,7 @@ mod tests {
         // entries are of type Stakes<StakeAccount> so add a new entry for Stakes<Stake>.
         bank.epoch_stakes.insert(
             42,
-            VersionedEpochStakes::Current {
+            EpochStakes::Current {
                 stakes: SerdeStakesToStakeFormat::Stake(Stakes::<Stake>::default()),
                 total_stake: 42,
                 node_id_to_vote_accounts: Arc::<NodeIdToVoteAccounts>::default(),
@@ -513,7 +513,7 @@ mod tests {
         #[cfg_attr(
             feature = "frozen-abi",
             derive(AbiExample),
-            frozen_abi(digest = "CsLEuMN7aF93CutCEYfUQrWi3kBV4weLtmckWs8f6Kt1")
+            frozen_abi(digest = "9u5XRVLFPYYM5cAexmjFhaLqF1uBj2aWXrhubzWJzdS")
         )]
         #[derive(Serialize)]
         pub struct BankAbiTestWrapper {
@@ -539,7 +539,7 @@ mod tests {
             };
 
             let mut bank_fields = bank.get_fields_to_serialize();
-            let versioned_epoch_stakes = std::mem::take(&mut bank_fields.versioned_epoch_stakes);
+            let epoch_stakes = std::mem::take(&mut bank_fields.epoch_stakes);
             serde_snapshot::serialize_bank_snapshot_with(
                 serializer,
                 bank_fields,
@@ -551,7 +551,7 @@ mod tests {
                     lamports_per_signature: bank.fee_rate_governor.lamports_per_signature,
                     incremental_snapshot_persistence: Some(&incremental_snapshot_persistence),
                     epoch_accounts_hash: Some(EpochAccountsHash::new(Hash::new_unique())),
-                    versioned_epoch_stakes,
+                    epoch_stakes,
                     accounts_lt_hash: Some(AccountsLtHash(LtHash::identity()).into()),
                 },
                 u64::default(), // obsolete, formerly write_version

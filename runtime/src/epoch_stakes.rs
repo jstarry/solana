@@ -20,7 +20,7 @@ pub struct NodeVoteAccounts {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "frozen-abi", derive(AbiExample, AbiEnumVisitor))]
 #[cfg_attr(feature = "dev-context-only-utils", derive(PartialEq))]
-pub enum VersionedEpochStakes {
+pub enum EpochStakes {
     Current {
         stakes: SerdeStakesToStakeFormat,
         total_stake: u64,
@@ -29,7 +29,7 @@ pub enum VersionedEpochStakes {
     },
 }
 
-impl VersionedEpochStakes {
+impl EpochStakes {
     pub(crate) fn new(stakes: SerdeStakesToStakeFormat, leader_schedule_epoch: Epoch) -> Self {
         let epoch_vote_accounts = stakes.vote_accounts();
         let (total_stake, node_id_to_vote_accounts, epoch_authorized_voters) =
@@ -250,7 +250,7 @@ pub(crate) mod tests {
             new_epoch_vote_accounts(&vote_accounts_map, |_| stake_per_account);
 
         let (total_stake, mut node_id_to_vote_accounts, epoch_authorized_voters) =
-            VersionedEpochStakes::parse_epoch_vote_accounts(&epoch_vote_accounts, 0);
+            EpochStakes::parse_epoch_vote_accounts(&epoch_vote_accounts, 0);
 
         // Verify the results
         node_id_to_vote_accounts
@@ -289,7 +289,7 @@ pub(crate) mod tests {
         let epoch_vote_accounts = new_epoch_vote_accounts(&vote_accounts_map, |node_id| {
             *node_id_to_stake_map.get(node_id).unwrap()
         });
-        let epoch_stakes = VersionedEpochStakes::new_for_tests(epoch_vote_accounts, 0);
+        let epoch_stakes = EpochStakes::new_for_tests(epoch_vote_accounts, 0);
 
         assert_eq!(epoch_stakes.total_stake(), 11000);
         for (node_id, stake) in node_id_to_stake_map.iter() {

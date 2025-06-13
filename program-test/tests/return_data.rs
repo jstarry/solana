@@ -1,7 +1,6 @@
 use {
     assert_matches::assert_matches,
     solana_account_info::{next_account_info, AccountInfo},
-    solana_banks_client::BanksClientError,
     solana_commitment_config::CommitmentLevel,
     solana_instruction::{AccountMeta, Instruction},
     solana_msg::msg,

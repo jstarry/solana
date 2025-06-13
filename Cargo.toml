@@ -9,9 +9,6 @@ members = [
     "accounts-db/store-tool",
     "banking-bench",
     "banking-stage-ingress-types",
-    "banks-client",
-    "banks-interface",
-    "banks-server",
     "bench-streamer",
     "bench-tps",
     "bench-vote",
@@ -379,9 +376,6 @@ solana-account-info = "2.3.0"
 solana-accounts-db = { path = "accounts-db", version = "=3.0.0" }
 solana-address-lookup-table-interface = "2.2.2"
 solana-atomic-u64 = "2.2.1"
-solana-banks-client = { path = "banks-client", version = "=3.0.0" }
-solana-banks-interface = { path = "banks-interface", version = "=3.0.0" }
-solana-banks-server = { path = "banks-server", version = "=3.0.0" }
 solana-bench-tps = { path = "bench-tps", version = "=3.0.0" }
 solana-big-mod-exp = "2.2.1"
 solana-bincode = "2.2.1"

@@ -1,6 +1,5 @@
 use {
     solana_account_info::AccountInfo,
-    solana_banks_client::BanksClient,
     solana_hash::Hash,
     solana_instruction::Instruction,
     solana_keypair::Keypair,

@@ -8,7 +8,6 @@ use {
     setup::{setup_stake, setup_vote},
     solana_account::Account,
     solana_account_info::{next_account_info, AccountInfo},
-    solana_banks_client::BanksClient,
     solana_clock::Clock,
     solana_instruction::{error::InstructionError, AccountMeta, Instruction},
     solana_keypair::Keypair,

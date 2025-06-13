@@ -11,8 +11,6 @@ use {
     log::*,
     solana_account::{create_account_shared_data_for_test, Account, AccountSharedData},
     solana_account_info::AccountInfo,
-    solana_banks_client::start_client,
-    solana_banks_server::banks_server::start_local_server,
     solana_clock::{Epoch, Slot},
     solana_compute_budget::compute_budget::ComputeBudget,
     solana_fee_calculator::{FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
@@ -66,8 +64,6 @@ use {
 };
 // Export types so test clients can limit their solana crate dependencies
 pub use {
-    solana_banks_client::{BanksClient, BanksClientError},
-    solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sbpf::{
         error::EbpfError,

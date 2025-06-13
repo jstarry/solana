@@ -9,9 +9,6 @@ update_solana_dependencies() {
   crates=(
     solana-account-decoder
     solana-account-decoder-client-types
-    solana-banks-client
-    solana-banks-interface
-    solana-banks-server
     solana-bloom
     solana-bucket-map
     solana-builtins-default-costs
@@ -98,9 +95,6 @@ patch_crates_io_solana_no_header() {
   crates_map=()
   crates_map+=("solana-account-decoder account-decoder")
   crates_map+=("solana-account-decoder-client-types account-decoder-client-types")
-  crates_map+=("solana-banks-client banks-client")
-  crates_map+=("solana-banks-interface banks-interface")
-  crates_map+=("solana-banks-server banks-server")
   crates_map+=("solana-bloom bloom")
   crates_map+=("solana-bucket-map bucket_map")
   crates_map+=("solana-builtins-default-costs builtins-default-costs")

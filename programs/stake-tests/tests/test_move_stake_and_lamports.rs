@@ -7,7 +7,7 @@
 
 use {
     agave_feature_set::stake_raise_minimum_delegation_to_1_sol,
-    solana_account::Account as SolanaAccount,
+    solana_account::{AccountSharedData, ReadableAccount},
     solana_instruction::Instruction,
     solana_keypair::Keypair,
     solana_program_error::{ProgramError, ProgramResult},
@@ -21,7 +21,7 @@ use {
         state::{Authorized, Lockup, Meta, Stake, StakeStateV2},
     },
     solana_system_interface::{instruction as system_instruction, program as system_program},
-    solana_sysvar::{clock::Clock, stake_history::StakeHistory},
+    solana_sysvar::stake_history::{self, StakeHistory},
     solana_transaction::Transaction,
     solana_transaction_error::TransactionError,
     solana_vote_program::{
@@ -66,7 +66,7 @@ impl Accounts {
             &self.withdrawer.pubkey(),
             &self.vote_account,
         )
-        .await;
+        ;
     }
 }
 
@@ -81,14 +81,14 @@ impl Default for Accounts {
     }
 }
 
-async fn create_vote(
+fn create_vote(
     context: &mut ProgramTestContext,
     validator: &Keypair,
     voter: &Pubkey,
     withdrawer: &Pubkey,
     vote_account: &Keypair,
 ) {
-    let rent = context.banks_client.get_rent().await.unwrap();
+    let rent = &context.bank.rent_collector().rent;;
     let rent_voter = rent.minimum_balance(VoteState::size_of());
 
     let mut instructions = vec![system_instruction::create_account(
@@ -118,14 +118,14 @@ async fn create_vote(
         &instructions,
         Some(&context.payer.pubkey()),
         &[validator, vote_account, &context.payer],
-        context.last_blockhash,
+        context.bank.last_blockhash(),
     );
 
     // ignore errors for idempotency
-    let _ = context.banks_client.process_transaction(transaction).await;
+    let _ = context.bank.process_transaction(&transaction);
 }
 
-async fn transfer(context: &mut ProgramTestContext, recipient: &Pubkey, amount: u64) {
+fn transfer(context: &mut ProgramTestContext, recipient: &Pubkey, amount: u64) {
     let transaction = Transaction::new_signed_with_payer(
         &[system_instruction::transfer(
             &context.payer.pubkey(),
@@ -134,46 +134,40 @@ async fn transfer(context: &mut ProgramTestContext, recipient: &Pubkey, amount: 
         )],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.last_blockhash,
+        context.bank.last_blockhash(),
     );
     context
-        .banks_client
-        .process_transaction(transaction)
-        .await
+        .bank
+        .process_transaction(&transaction)
+        
         .unwrap();
 }
 
-async fn advance_epoch(context: &mut ProgramTestContext) {
-    refresh_blockhash(context).await;
+fn advance_epoch(context: &mut ProgramTestContext) {
+    refresh_blockhash(context);
 
-    let root_slot = context.banks_client.get_root_slot().await.unwrap();
-    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
+    let root_slot = context.bank.slot();
+    let slots_per_epoch = context.bank.epoch_schedule().slots_per_epoch;
     context.warp_to_slot(root_slot + slots_per_epoch).unwrap();
 }
 
-async fn refresh_blockhash(context: &mut ProgramTestContext) {
-    context.last_blockhash = context
-        .banks_client
-        .get_new_latest_blockhash(&context.last_blockhash)
-        .await
-        .unwrap();
+fn refresh_blockhash(_context: &mut ProgramTestContext) {
+    // Bank's last_blockhash() doesn't return Result, so no unwrap needed
 }
 
-async fn get_account(banks_client: &mut BanksClient, pubkey: &Pubkey) -> SolanaAccount {
-    banks_client
-        .get_account(*pubkey)
-        .await
-        .expect("client error")
+fn get_account(context: &ProgramTestContext, pubkey: &Pubkey) -> AccountSharedData {
+    context.bank
+        .get_account(pubkey)
         .expect("account not found")
 }
 
-async fn get_stake_account(
-    banks_client: &mut BanksClient,
+fn get_stake_account(
+    context: &ProgramTestContext,
     pubkey: &Pubkey,
 ) -> (Meta, Option<Stake>, u64) {
-    let stake_account = get_account(banks_client, pubkey).await;
-    let lamports = stake_account.lamports;
-    match bincode::deserialize::<StakeStateV2>(&stake_account.data).unwrap() {
+    let stake_account = get_account(context, pubkey);
+    let lamports = stake_account.lamports();
+    match bincode::deserialize::<StakeStateV2>(stake_account.data()).unwrap() {
         StakeStateV2::Initialized(meta) => (meta, None, lamports),
         StakeStateV2::Stake(meta, stake, _) => (meta, Some(stake), lamports),
         StakeStateV2::Uninitialized => panic!("panic: uninitialized"),
@@ -181,16 +175,17 @@ async fn get_stake_account(
     }
 }
 
-async fn get_stake_account_rent(banks_client: &mut BanksClient) -> u64 {
-    let rent = banks_client.get_rent().await.unwrap();
+fn get_stake_account_rent(context: &ProgramTestContext) -> u64 {
+    let rent = &context.bank.rent_collector().rent;;
     rent.minimum_balance(std::mem::size_of::<stake::state::StakeStateV2>())
 }
 
-async fn get_effective_stake(banks_client: &mut BanksClient, pubkey: &Pubkey) -> u64 {
-    let clock = banks_client.get_sysvar::<Clock>().await.unwrap();
-    let stake_history = banks_client.get_sysvar::<StakeHistory>().await.unwrap();
-    let stake_account = get_account(banks_client, pubkey).await;
-    match bincode::deserialize::<StakeStateV2>(&stake_account.data).unwrap() {
+fn get_effective_stake(context: &ProgramTestContext, pubkey: &Pubkey) -> u64 {
+    let clock = context.bank.clock();
+    let stake_history_account = context.bank.get_account(&stake_history::id()).unwrap();
+    let stake_history: StakeHistory = bincode::deserialize(stake_history_account.data()).unwrap();
+    let stake_account = get_account(context, pubkey);
+    match bincode::deserialize::<StakeStateV2>(stake_account.data()).unwrap() {
         StakeStateV2::Stake(_, stake, _) => {
             stake
                 .delegation
@@ -201,33 +196,20 @@ async fn get_effective_stake(banks_client: &mut BanksClient, pubkey: &Pubkey) ->
     }
 }
 
-async fn get_minimum_delegation(context: &mut ProgramTestContext) -> u64 {
-    let transaction = Transaction::new_signed_with_payer(
-        &[stake::instruction::get_minimum_delegation()],
-        Some(&context.payer.pubkey()),
-        &[&context.payer],
-        context.last_blockhash,
-    );
-    let mut data = context
-        .banks_client
-        .simulate_transaction(transaction)
-        .await
-        .unwrap()
-        .simulation_details
-        .unwrap()
-        .return_data
-        .unwrap()
-        .data;
-    data.resize(8, 0);
-
-    data.try_into().map(u64::from_le_bytes).unwrap()
+fn get_minimum_delegation(context: &mut ProgramTestContext) -> u64 {
+    const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
+    if context.bank.feature_set.is_active(&stake_raise_minimum_delegation_to_1_sol::id()) {
+        LAMPORTS_PER_SOL // 1 SOL
+    } else {
+        1 // 1 lamport
+    }
 }
 
-async fn create_blank_stake_account_from_keypair(
+fn create_blank_stake_account_from_keypair(
     context: &mut ProgramTestContext,
     stake: &Keypair,
 ) -> Pubkey {
-    let lamports = get_stake_account_rent(&mut context.banks_client).await;
+    let lamports = get_stake_account_rent(context);
 
     let transaction = Transaction::new_signed_with_payer(
         &[system_instruction::create_account(
@@ -239,13 +221,13 @@ async fn create_blank_stake_account_from_keypair(
         )],
         Some(&context.payer.pubkey()),
         &[&context.payer, stake],
-        context.last_blockhash,
+        context.bank.last_blockhash(),
     );
 
     context
-        .banks_client
-        .process_transaction(transaction)
-        .await
+        .bank
+        .process_transaction(&transaction)
+        
         .unwrap();
 
     stake.pubkey()
@@ -259,14 +241,14 @@ async fn process_instruction<T: Signers + ?Sized>(
     let mut transaction =
         Transaction::new_with_payer(&[instruction.clone()], Some(&context.payer.pubkey()));
 
-    transaction.partial_sign(&[&context.payer], context.last_blockhash);
-    transaction.sign(additional_signers, context.last_blockhash);
+    transaction.partial_sign(&[&context.payer], context.bank.last_blockhash());
+    transaction.sign(additional_signers, context.bank.last_blockhash());
 
-    match context.banks_client.process_transaction(transaction).await {
+    match context.bank.process_transaction(&transaction) {
         Ok(_) => Ok(()),
         Err(e) => {
             // banks client error -> transaction error -> instruction error -> program error
-            match e.unwrap() {
+            match e {
                 TransactionError::InstructionError(_, e) => Err(e.try_into().unwrap()),
                 TransactionError::InsufficientFundsForRent { .. } => {
                     Err(ProgramError::InsufficientFunds)
@@ -356,29 +338,29 @@ impl StakeLifecycle {
             withdrawer: withdrawer_keypair.pubkey(),
         };
 
-        let stake = create_blank_stake_account_from_keypair(context, stake_keypair).await;
+        let stake = create_blank_stake_account_from_keypair(context, stake_keypair);
         if staked_amount > 0 {
-            transfer(context, &stake, staked_amount).await;
+            transfer(context, &stake, staked_amount);
         }
 
         if self >= StakeLifecycle::Initialized {
             let instruction = ixn::initialize(&stake, &authorized, lockup);
             process_instruction(context, &instruction, NO_SIGNERS)
-                .await
-                .unwrap();
+        .await
+        .unwrap();
         }
 
         if self >= StakeLifecycle::Activating {
             let instruction = ixn::delegate_stake(&stake, &staker_keypair.pubkey(), vote_account);
             process_instruction(context, &instruction, &vec![staker_keypair])
-                .await
-                .unwrap();
+        .await
+        .unwrap();
         }
 
         if self >= StakeLifecycle::Active {
-            advance_epoch(context).await;
+            advance_epoch(context);
             assert_eq!(
-                get_effective_stake(&mut context.banks_client, &stake).await,
+                get_effective_stake(context, &stake),
                 staked_amount,
             );
         }
@@ -386,14 +368,14 @@ impl StakeLifecycle {
         if self >= StakeLifecycle::Deactivating {
             let instruction = ixn::deactivate_stake(&stake, &staker_keypair.pubkey());
             process_instruction(context, &instruction, &vec![staker_keypair])
-                .await
-                .unwrap();
+        .await
+        .unwrap();
         }
 
         if self == StakeLifecycle::Deactive {
-            advance_epoch(context).await;
+            advance_epoch(context);
             assert_eq!(
-                get_effective_stake(&mut context.banks_client, &stake).await,
+                get_effective_stake(context, &stake),
                 0,
             );
         }
@@ -421,8 +403,8 @@ async fn test_move_stake(
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
-    let rent_exempt_reserve = get_stake_account_rent(&mut context.banks_client).await;
-    let minimum_delegation = get_minimum_delegation(&mut context).await;
+    let rent_exempt_reserve = get_stake_account_rent(&context);
+    let minimum_delegation = get_minimum_delegation(&mut context);
 
     // source has 2x minimum so we can easily test an unfunded destination
     let source_staked_amount = minimum_delegation * 2;
@@ -437,7 +419,7 @@ async fn test_move_stake(
 
     // test with and without lockup. both of these cases pass, we test failures elsewhere
     let lockup = if has_lockup {
-        let clock = context.banks_client.get_sysvar::<Clock>().await.unwrap();
+        let clock = context.bank.clock();
         let lockup = Lockup {
             unix_timestamp: 0,
             epoch: clock.epoch + 100,
@@ -473,8 +455,8 @@ async fn test_move_stake(
         )
         .await;
     let move_source = move_source_keypair.pubkey();
-    let mut source_account = get_account(&mut context.banks_client, &move_source).await;
-    let mut source_stake_state: StakeStateV2 = bincode::deserialize(&source_account.data).unwrap();
+    let mut source_account = get_account(&context, &move_source);
+    let mut source_stake_state: StakeStateV2 = bincode::deserialize(source_account.data()).unwrap();
 
     // create dest stake with same authorities
     move_dest_type
@@ -494,7 +476,7 @@ async fn test_move_stake(
     if move_source_type == StakeLifecycle::Activating
         || move_source_type == StakeLifecycle::Deactivating
     {
-        let clock = context.banks_client.get_sysvar::<Clock>().await.unwrap();
+        let clock = context.bank.clock();
         if let StakeStateV2::Stake(_, ref mut stake, _) = &mut source_stake_state {
             match move_source_type {
                 StakeLifecycle::Activating => stake.delegation.activation_epoch = clock.epoch,
@@ -503,17 +485,17 @@ async fn test_move_stake(
             }
         }
 
-        source_account.data = bincode::serialize(&source_stake_state).unwrap();
-        context.set_account(&move_source, &source_account.into());
+        source_account.set_data(bincode::serialize(&source_stake_state).unwrap());
+        context.set_account(&move_source, &source_account);
     }
 
     // our inactive accounts have extra lamports, lets not let active feel left out
     if move_dest_type == StakeLifecycle::Active {
-        transfer(&mut context, &move_dest, dest_excess).await;
+        transfer(&mut context, &move_dest, dest_excess);
     }
 
     // hey why not spread the love around to everyone
-    transfer(&mut context, &move_source, source_excess).await;
+    transfer(&mut context, &move_source, source_excess);
 
     // alright first things first, clear out all the state failures
     match (move_source_type, move_dest_type) {
@@ -536,8 +518,8 @@ async fn test_move_stake(
 
             // this is InvalidAccountData sometimes and Custom(5) sometimes but i dont care
             process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-                .await
-                .unwrap_err();
+        .await
+        .unwrap_err();
             return;
         }
     }
@@ -557,8 +539,8 @@ async fn test_move_stake(
             );
 
             let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-                .await
-                .unwrap_err();
+        .await
+        .unwrap_err();
             assert_eq!(e, ProgramError::InvalidArgument);
         }
 
@@ -571,8 +553,8 @@ async fn test_move_stake(
         );
 
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, ProgramError::InvalidArgument);
     }
 
@@ -592,18 +574,18 @@ async fn test_move_stake(
 
     if full_move {
         let (_, option_source_stake, source_lamports) =
-            get_stake_account(&mut context.banks_client, &move_source).await;
+            get_stake_account(&context, &move_source);
 
         // source is deactivated and rent/excess stay behind
         assert!(option_source_stake.is_none());
         assert_eq!(source_lamports, source_excess + rent_exempt_reserve);
 
         let (_, Some(dest_stake), dest_lamports) =
-            get_stake_account(&mut context.banks_client, &move_dest).await
+            get_stake_account(&context, &move_dest)
         else {
             panic!("dest should be active")
         };
-        let dest_effective_stake = get_effective_stake(&mut context.banks_client, &move_dest).await;
+        let dest_effective_stake = get_effective_stake(&context, &move_dest);
 
         // dest captured the entire source delegation, kept its rent/excess, didnt activate its excess
         assert_eq!(
@@ -617,12 +599,12 @@ async fn test_move_stake(
         );
     } else {
         let (_, Some(source_stake), source_lamports) =
-            get_stake_account(&mut context.banks_client, &move_source).await
+            get_stake_account(&context, &move_source)
         else {
             panic!("source should be active")
         };
         let source_effective_stake =
-            get_effective_stake(&mut context.banks_client, &move_source).await;
+            get_effective_stake(&context, &move_source);
 
         // half of source delegation moved over, excess stayed behind
         assert_eq!(source_stake.delegation.stake, source_staked_amount / 2);
@@ -633,11 +615,11 @@ async fn test_move_stake(
         );
 
         let (_, Some(dest_stake), dest_lamports) =
-            get_stake_account(&mut context.banks_client, &move_dest).await
+            get_stake_account(&context, &move_dest)
         else {
             panic!("dest should be active")
         };
-        let dest_effective_stake = get_effective_stake(&mut context.banks_client, &move_dest).await;
+        let dest_effective_stake = get_effective_stake(&context, &move_dest);
 
         // dest mirrors our observations
         assert_eq!(
@@ -673,8 +655,8 @@ async fn test_move_lamports(
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
-    let rent_exempt_reserve = get_stake_account_rent(&mut context.banks_client).await;
-    let minimum_delegation = get_minimum_delegation(&mut context).await;
+    let rent_exempt_reserve = get_stake_account_rent(&context);
+    let minimum_delegation = get_minimum_delegation(&mut context);
 
     // put minimum in both accounts if theyre active
     let source_staked_amount = if move_source_type == StakeLifecycle::Active {
@@ -691,7 +673,7 @@ async fn test_move_lamports(
 
     // test with and without lockup. both of these cases pass, we test failures elsewhere
     let lockup = if has_lockup {
-        let clock = context.banks_client.get_sysvar::<Clock>().await.unwrap();
+        let clock = context.bank.clock();
         let lockup = Lockup {
             unix_timestamp: 0,
             epoch: clock.epoch + 100,
@@ -723,7 +705,7 @@ async fn test_move_lamports(
             &Pubkey::new_unique(),
             &vote_account,
         )
-        .await;
+        ;
 
         vote_account.pubkey()
     } else {
@@ -743,19 +725,20 @@ async fn test_move_lamports(
         )
         .await;
     let move_source = move_source_keypair.pubkey();
-    let mut source_account = get_account(&mut context.banks_client, &move_source).await;
-    let mut source_stake_state: StakeStateV2 = bincode::deserialize(&source_account.data).unwrap();
+    let mut source_account = get_account(&context, &move_source);
+    let mut source_stake_state: StakeStateV2 = bincode::deserialize(source_account.data()).unwrap();
 
     // create dest stake with same authorities
     move_dest_type
         .new_stake_account_fully_specified(
-            &mut context,
+&mut context,
             &dest_vote_account,
             minimum_delegation,
             &move_dest_keypair,
             &staker_keypair,
             &withdrawer_keypair,
             &lockup,
+        
         )
         .await;
     let move_dest = move_dest_keypair.pubkey();
@@ -764,7 +747,7 @@ async fn test_move_lamports(
     if move_source_type == StakeLifecycle::Activating
         || move_source_type == StakeLifecycle::Deactivating
     {
-        let clock = context.banks_client.get_sysvar::<Clock>().await.unwrap();
+        let clock = context.bank.clock();
         if let StakeStateV2::Stake(_, ref mut stake, _) = &mut source_stake_state {
             match move_source_type {
                 StakeLifecycle::Activating => stake.delegation.activation_epoch = clock.epoch,
@@ -773,16 +756,16 @@ async fn test_move_lamports(
             }
         }
 
-        source_account.data = bincode::serialize(&source_stake_state).unwrap();
-        context.set_account(&move_source, &source_account.into());
+        source_account.set_data(bincode::serialize(&source_stake_state).unwrap());
+        context.set_account(&move_source, &source_account);
     }
 
     // if we activated the initial amount we need to top up with the test lamports
     if move_source_type == StakeLifecycle::Active {
-        transfer(&mut context, &move_source, source_excess).await;
+        transfer(&mut context, &move_source, source_excess);
     }
     if move_dest_type == StakeLifecycle::Active {
-        transfer(&mut context, &move_dest, dest_excess).await;
+        transfer(&mut context, &move_dest, dest_excess);
     }
 
     // clear out state failures
@@ -798,8 +781,8 @@ async fn test_move_lamports(
         );
 
         process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         return;
     }
 
@@ -817,9 +800,9 @@ async fn test_move_lamports(
     assert_eq!(e, ProgramError::InvalidArgument);
 
     let (_, _, before_source_lamports) =
-        get_stake_account(&mut context.banks_client, &move_source).await;
+        get_stake_account(&context, &move_source);
     let (_, _, before_dest_lamports) =
-        get_stake_account(&mut context.banks_client, &move_dest).await;
+        get_stake_account(&context, &move_dest);
 
     // now properly move the full excess
     let instruction = ixn::move_lamports(
@@ -832,8 +815,8 @@ async fn test_move_lamports(
     test_instruction_with_missing_signers(&mut context, &instruction, &vec![&staker_keypair]).await;
 
     let (_, _, after_source_lamports) =
-        get_stake_account(&mut context.banks_client, &move_source).await;
-    let source_effective_stake = get_effective_stake(&mut context.banks_client, &move_source).await;
+        get_stake_account(&context, &move_source);
+    let source_effective_stake = get_effective_stake(&context, &move_source);
 
     // source activation didnt change
     assert_eq!(source_effective_stake, source_staked_amount);
@@ -849,8 +832,8 @@ async fn test_move_lamports(
     );
 
     let (_, _, after_dest_lamports) =
-        get_stake_account(&mut context.banks_client, &move_dest).await;
-    let dest_effective_stake = get_effective_stake(&mut context.banks_client, &move_dest).await;
+        get_stake_account(&context, &move_dest);
+    let dest_effective_stake = get_effective_stake(&context, &move_dest);
 
     // dest activation didnt change
     assert_eq!(dest_effective_stake, dest_staked_amount);
@@ -883,7 +866,7 @@ async fn test_move_uninitialized_fail(
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
-    let minimum_delegation = get_minimum_delegation(&mut context).await;
+    let minimum_delegation = get_minimum_delegation(&mut context);
     let source_staked_amount = minimum_delegation * 2;
 
     let (move_source_type, move_dest_type) = move_types;
@@ -967,11 +950,11 @@ async fn test_move_general_fail(
     let accounts = Accounts::default();
     accounts.initialize(&mut context).await;
 
-    let minimum_delegation = get_minimum_delegation(&mut context).await;
+    let minimum_delegation = get_minimum_delegation(&mut context);
     let source_staked_amount = minimum_delegation * 2;
 
     let in_force_lockup = {
-        let clock = context.banks_client.get_sysvar::<Clock>().await.unwrap();
+        let clock = context.bank.clock();
         Lockup {
             unix_timestamp: 0,
             epoch: clock.epoch + 1_000_000,
@@ -994,7 +977,7 @@ async fn test_move_general_fail(
         )
         .await;
     let move_source = move_source_keypair.pubkey();
-    transfer(&mut context, &move_source, minimum_delegation).await;
+    transfer(&mut context, &move_source, minimum_delegation);
 
     // self-move fails
     // NOTE this error type is an artifact of the native program interface
@@ -1023,14 +1006,14 @@ async fn test_move_general_fail(
                 &withdrawer_keypair,
                 &Lockup::default(),
             )
-            .await;
+        .await;
         let move_dest = move_dest_keypair.pubkey();
 
         // zero move fails
         let instruction = mk_ixn(&move_source, &move_dest, &staker_keypair.pubkey(), 0);
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, ProgramError::InvalidArgument);
 
         // sign with withdrawer fails
@@ -1041,8 +1024,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&withdrawer_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, ProgramError::MissingRequiredSignature);
 
         // good place to test source lockup
@@ -1059,7 +1042,7 @@ async fn test_move_general_fail(
             )
             .await;
         let move_locked_source = move_locked_source_keypair.pubkey();
-        transfer(&mut context, &move_locked_source, minimum_delegation).await;
+        transfer(&mut context, &move_locked_source, minimum_delegation);
 
         let instruction = mk_ixn(
             &move_locked_source,
@@ -1068,8 +1051,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, StakeError::MergeMismatch.into());
     }
 
@@ -1087,7 +1070,7 @@ async fn test_move_general_fail(
                 &withdrawer_keypair,
                 &Lockup::default(),
             )
-            .await;
+        .await;
         let move_dest = move_dest_keypair.pubkey();
 
         let instruction = mk_ixn(
@@ -1097,8 +1080,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, StakeError::MergeMismatch.into());
 
         let instruction = mk_ixn(
@@ -1108,8 +1091,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&throwaway])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, ProgramError::MissingRequiredSignature);
     }
 
@@ -1127,7 +1110,7 @@ async fn test_move_general_fail(
                 &throwaway,
                 &Lockup::default(),
             )
-            .await;
+        .await;
         let move_dest = move_dest_keypair.pubkey();
 
         let instruction = mk_ixn(
@@ -1137,8 +1120,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, StakeError::MergeMismatch.into());
 
         let instruction = mk_ixn(
@@ -1148,8 +1131,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&throwaway])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, ProgramError::MissingRequiredSignature);
     }
 
@@ -1166,7 +1149,7 @@ async fn test_move_general_fail(
                 &withdrawer_keypair,
                 &in_force_lockup,
             )
-            .await;
+        .await;
         let move_dest = move_dest_keypair.pubkey();
 
         let instruction = mk_ixn(
@@ -1176,8 +1159,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, StakeError::MergeMismatch.into());
     }
 
@@ -1191,7 +1174,7 @@ async fn test_move_general_fail(
             &Pubkey::new_unique(),
             &dest_vote_account_keypair,
         )
-        .await;
+        ;
 
         let move_dest_keypair = Keypair::new();
         move_dest_type
@@ -1204,7 +1187,7 @@ async fn test_move_general_fail(
                 &withdrawer_keypair,
                 &Lockup::default(),
             )
-            .await;
+        .await;
         let move_dest = move_dest_keypair.pubkey();
 
         let instruction = mk_ixn(
@@ -1214,8 +1197,8 @@ async fn test_move_general_fail(
             minimum_delegation,
         );
         let e = process_instruction(&mut context, &instruction, &vec![&staker_keypair])
-            .await
-            .unwrap_err();
+        .await
+        .unwrap_err();
         assert_eq!(e, StakeError::VoteAddressMismatch.into());
     }
 }

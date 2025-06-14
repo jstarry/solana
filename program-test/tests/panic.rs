@@ -27,10 +27,10 @@ async fn panic_test() {
         &[instruction],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
     assert_eq!(
-        context.bank.process_transaction(&transaction).unwrap_err(),
+        context.working_bank().process_transaction(&transaction).unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
     );
 }

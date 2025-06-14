@@ -59,10 +59,13 @@ fn check_with_program(
         &instructions,
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 #[tokio::test]

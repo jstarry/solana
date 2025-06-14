@@ -55,7 +55,7 @@ async fn test_extend_program() {
     .await;
 
     let payer = &context.payer;
-    let recent_blockhash = context.bank.last_blockhash();
+    let recent_blockhash = context.working_bank().last_blockhash();
     const ADDITIONAL_BYTES: u32 = 42;
     let transaction = Transaction::new_signed_with_payer(
         &[extend_program_checked(
@@ -69,8 +69,8 @@ async fn test_extend_program() {
         recent_blockhash,
     );
 
-    assert_matches!(context.bank.process_transaction(&transaction), Ok(()));
-    let updated_program_data_account = context.bank.get_account(&programdata_address).unwrap();
+    assert_matches!(context.working_bank().process_transaction(&transaction), Ok(()));
+    let updated_program_data_account = context.working_bank().get_account(&programdata_address).unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
         program_data_len + ADDITIONAL_BYTES as usize
@@ -111,7 +111,7 @@ async fn test_failed_extend_twice_in_same_slot() {
     .await;
 
     let payer = &context.payer;
-    let recent_blockhash = context.bank.last_blockhash();
+    let recent_blockhash = context.working_bank().last_blockhash();
     const ADDITIONAL_BYTES: u32 = 42;
     let transaction = Transaction::new_signed_with_payer(
         &[extend_program_checked(
@@ -125,14 +125,14 @@ async fn test_failed_extend_twice_in_same_slot() {
         recent_blockhash,
     );
 
-    assert_matches!(context.bank.process_transaction(&transaction), Ok(()));
-    let updated_program_data_account = context.bank.get_account(&programdata_address).unwrap();
+    assert_matches!(context.working_bank().process_transaction(&transaction), Ok(()));
+    let updated_program_data_account = context.working_bank().get_account(&programdata_address).unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
         program_data_len + ADDITIONAL_BYTES as usize
     );
 
-    let recent_blockhash = context.bank.last_blockhash();
+    let recent_blockhash = context.working_bank().last_blockhash();
     // Extending the program in the same slot should fail
     let transaction = Transaction::new_signed_with_payer(
         &[extend_program_checked(
@@ -147,7 +147,7 @@ async fn test_failed_extend_twice_in_same_slot() {
     );
 
     assert_matches!(
-        context.bank.process_transaction(&transaction).unwrap_err(),
+        context.working_bank().process_transaction(&transaction).unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }
@@ -186,7 +186,7 @@ async fn test_failed_extend_upgrade_authority_did_not_sign() {
     .await;
 
     let payer = &context.payer;
-    let recent_blockhash = context.bank.last_blockhash();
+    let recent_blockhash = context.working_bank().last_blockhash();
     const ADDITIONAL_BYTES: u32 = 42;
     let transaction = Transaction::new_signed_with_payer(
         &[extend_program_checked(
@@ -201,7 +201,7 @@ async fn test_failed_extend_upgrade_authority_did_not_sign() {
     );
 
     assert_matches!(
-        context.bank.process_transaction(&transaction).unwrap_err(),
+        context.working_bank().process_transaction(&transaction).unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::IncorrectAuthority)
     );
 
@@ -220,7 +220,7 @@ async fn test_failed_extend_upgrade_authority_did_not_sign() {
     );
 
     assert_matches!(
-        context.bank.process_transaction(&transaction).unwrap_err(),
+        context.working_bank().process_transaction(&transaction).unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
     );
 }
@@ -357,7 +357,7 @@ async fn test_extend_program_past_max_size() {
 #[tokio::test]
 async fn test_extend_program_with_invalid_payer() {
     let mut context = setup_test_context().await;
-    let rent = context.bank.rent_collector().rent.clone();
+    let rent = context.working_bank().rent_collector().rent.clone();
     let upgrade_authority_address = context.payer.pubkey();
 
     let program_address = Pubkey::new_unique();
@@ -460,7 +460,7 @@ async fn test_extend_program_with_invalid_payer() {
 #[tokio::test]
 async fn test_extend_program_without_payer() {
     let mut context = setup_test_context().await;
-    let rent = context.bank.rent_collector().rent.clone();
+    let rent = context.working_bank().rent_collector().rent.clone();
 
     let program_file = find_file("noop.so").expect("Failed to find the file");
     let data = read_file(program_file);
@@ -502,7 +502,7 @@ async fn test_extend_program_without_payer() {
     .await;
 
     let payer = &context.payer;
-    let recent_blockhash = context.bank.last_blockhash();
+    let recent_blockhash = context.working_bank().last_blockhash();
 
     const ADDITIONAL_BYTES: u32 = 42;
     let min_balance_increase_for_extend = rent
@@ -528,8 +528,8 @@ async fn test_extend_program_without_payer() {
         recent_blockhash,
     );
 
-    assert_matches!(context.bank.process_transaction(&transaction), Ok(()));
-    let updated_program_data_account = context.bank.get_account(&programdata_address).unwrap();
+    assert_matches!(context.working_bank().process_transaction(&transaction), Ok(()));
+    let updated_program_data_account = context.working_bank().get_account(&programdata_address).unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
         program_data_len + ADDITIONAL_BYTES as usize

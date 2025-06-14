@@ -743,9 +743,12 @@ async fn test_verify_proof_without_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // try to verify an invalid proof (without creating a context account)
     let instructions = vec![proof_instruction.encode_verify_proof(None, fail_proof_data)];
@@ -753,9 +756,12 @@ async fn test_verify_proof_without_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
@@ -773,9 +779,12 @@ async fn test_verify_proof_without_context<T, U>(
             &instruction.with_max_compute_unit_limit(),
             Some(&payer.pubkey()),
             &[payer],
-            context.bank.last_blockhash(),
+            context.working_bank().last_blockhash(),
         );
-        let err = context.bank.process_transaction(&transaction).unwrap_err();
+        let err = context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap_err();
         assert_eq!(
             err,
             TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
@@ -789,9 +798,12 @@ async fn test_verify_proof_without_context<T, U>(
         &instruction,
         Some(&payer.pubkey()),
         &[payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // try to verify an invalid proof from an account
     let instruction =
@@ -800,9 +812,12 @@ async fn test_verify_proof_without_context<T, U>(
         &instruction,
         Some(&payer.pubkey()),
         &[payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::InvalidInstructionData)
@@ -822,7 +837,7 @@ async fn test_verify_proof_with_context<T, U>(
     // the most expensive proof is the transfer-with-fee proof with 407_000 CUs
     program_test.set_compute_max_units(500_000);
     let context = program_test.start_with_context().await;
-    let rent = &context.bank.rent_collector().rent;
+    let rent = context.working_bank().rent_collector().rent.clone();
 
     let payer = &context.payer;
 
@@ -849,9 +864,12 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(1, InstructionError::InvalidInstructionData)
@@ -872,9 +890,12 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(1, InstructionError::InvalidAccountData)
@@ -895,9 +916,12 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InsufficientFundsForRent { account_index: 1 },
@@ -924,9 +948,12 @@ async fn test_verify_proof_with_context<T, U>(
             &instructions.with_max_compute_unit_limit(),
             Some(&payer.pubkey()),
             &[payer, &context_state_account],
-            context.bank.last_blockhash(),
+            context.working_bank().last_blockhash(),
         );
-        let err = context.bank.process_transaction(&transaction).unwrap_err();
+        let err = context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap_err();
         assert_eq!(
             err,
             TransactionError::InstructionError(1, InstructionError::InvalidInstructionData)
@@ -948,9 +975,12 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // try overwriting the context state
     let instructions =
@@ -959,9 +989,12 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::AccountAlreadyInitialized)
@@ -988,9 +1021,12 @@ async fn test_verify_proof_with_context<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account_and_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 async fn test_verify_proof_from_account_with_context<T, U>(
@@ -1026,7 +1062,7 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         },
     );
     let context = program_test.start_with_context().await;
-    let rent = &context.bank.rent_collector().rent;
+    let rent = context.working_bank().rent_collector().rent.clone();
 
     let payer = &context.payer;
 
@@ -1057,9 +1093,12 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(1, InstructionError::InvalidInstructionData)
@@ -1084,9 +1123,12 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // try overwriting the context state
     let instructions = vec![instruction_type.encode_verify_proof_from_account(
@@ -1098,9 +1140,12 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::AccountAlreadyInitialized)
@@ -1131,9 +1176,12 @@ async fn test_verify_proof_from_account_with_context<T, U>(
         &instructions,
         Some(&payer.pubkey()),
         &[payer, &context_state_account_and_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 async fn test_close_context_state<T, U>(
@@ -1148,7 +1196,7 @@ async fn test_close_context_state<T, U>(
     // the most expensive proof is the transfer-with-fee proof with 407_000 CUs
     program_test.set_compute_max_units(500_000);
     let context = program_test.start_with_context().await;
-    let rent = &context.bank.rent_collector().rent;
+    let rent = context.working_bank().rent_collector().rent.clone();
 
     let payer = &context.payer;
 
@@ -1177,9 +1225,12 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // try to close context state with incorrect authority
     let incorrect_authority = Keypair::new();
@@ -1194,9 +1245,12 @@ async fn test_close_context_state<T, U>(
         &vec![instruction].with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &incorrect_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(0, InstructionError::InvalidAccountOwner)
@@ -1214,9 +1268,12 @@ async fn test_close_context_state<T, U>(
         &vec![instruction.clone()].with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // create and close proof context in a single transaction
     let instructions = vec![
@@ -1240,9 +1297,12 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account, &context_state_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // close proof context state with owner as destination
     let instructions = vec![
@@ -1266,9 +1326,12 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account, &context_state_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // try close account with itself as destination
     let instructions = vec![
@@ -1292,9 +1355,12 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account, &context_state_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    let err = context.bank.process_transaction(&transaction).unwrap_err();
+    let err = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     assert_eq!(
         err,
         TransactionError::InstructionError(2, InstructionError::InvalidInstructionData)
@@ -1322,9 +1388,12 @@ async fn test_close_context_state<T, U>(
         &instructions.with_max_compute_unit_limit(),
         Some(&payer.pubkey()),
         &[payer, &context_state_account_and_authority],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 // native programs consumes compute budget, some of ZK program consumes more than default

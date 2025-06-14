@@ -51,10 +51,13 @@ async fn get_sysvar() {
         &instructions,
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 fn epoch_reward_sysvar_getter_process_instruction(
@@ -103,10 +106,13 @@ async fn get_epoch_rewards_sysvar() {
         &instructions,
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // wrap to 1st slot of next epoch (inside reward interval)
     let first_slot_in_new_epoch = first_normal_slot.saturating_add(slots_per_epoch);
@@ -118,8 +124,11 @@ async fn get_epoch_rewards_sysvar() {
         &instructions,
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }

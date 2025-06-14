@@ -51,7 +51,7 @@ async fn versioned_transaction() {
 
     let program_id = Pubkey::new_unique();
     let account = Keypair::new();
-    let rent = &context.bank.rent_collector().rent;
+    let rent = context.working_bank().rent_collector().rent.clone();
     let space = 82;
     let transaction = VersionedTransaction::try_new(
         VersionedMessage::V0(
@@ -65,7 +65,7 @@ async fn versioned_transaction() {
                     &program_id,
                 )],
                 &[],
-                context.bank.last_blockhash(),
+                context.working_bank().last_blockhash(),
             )
             .unwrap(),
         ),
@@ -74,7 +74,7 @@ async fn versioned_transaction() {
     .unwrap();
 
     context
-        .bank
+        .working_bank()
         .process_transaction_with_metadata(transaction)
         .unwrap()
         .status

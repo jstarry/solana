@@ -775,7 +775,7 @@ impl ProgramTest {
         self.deactivate_feature_set.insert(feature_id);
     }
 
-    fn setup_bank(&mut self) -> (Arc<Bank>, Arc<RwLock<BankForks>>, GenesisConfigInfo) {
+    fn setup(&mut self) -> (Arc<RwLock<BankForks>>, GenesisConfigInfo) {
         {
             use std::sync::Once;
             static ONCE: Once = Once::new();
@@ -894,10 +894,8 @@ impl ProgramTest {
             bank
         };
         let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().root_bank();
 
         (
-            bank,
             bank_forks,
             GenesisConfigInfo {
                 genesis_config,
@@ -909,7 +907,8 @@ impl ProgramTest {
     }
 
     pub async fn start(mut self) -> (Arc<Bank>, Keypair) {
-        let (bank, bank_forks, gci) = self.setup_bank();
+        let (bank_forks, gci) = self.setup();
+        let bank = bank_forks.read().unwrap().working_bank();
         let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;
         let target_slot_duration = target_tick_duration * gci.genesis_config.ticks_per_slot as u32;
 
@@ -935,8 +934,8 @@ impl ProgramTest {
     /// Returns a `BanksClient` interface into the test environment as well as a payer `Keypair`
     /// with SOL for sending transactions
     pub async fn start_with_context(mut self) -> ProgramTestContext {
-        let (bank, bank_forks, gci) = self.setup_bank();
-        ProgramTestContext::new(bank_forks, bank, gci)
+        let (bank_forks, gci) = self.setup();
+        ProgramTestContext::new(bank_forks, gci)
     }
 }
 
@@ -957,7 +956,6 @@ impl<T> Drop for DroppableTask<T> {
 }
 
 pub struct ProgramTestContext {
-    pub bank: Arc<Bank>,
     pub payer: Keypair,
     genesis_config: GenesisConfig,
     bank_forks: Arc<RwLock<BankForks>>,
@@ -965,11 +963,7 @@ pub struct ProgramTestContext {
 }
 
 impl ProgramTestContext {
-    fn new(
-        bank_forks: Arc<RwLock<BankForks>>,
-        bank: Arc<Bank>,
-        genesis_config_info: GenesisConfigInfo,
-    ) -> Self {
+    fn new(bank_forks: Arc<RwLock<BankForks>>, genesis_config_info: GenesisConfigInfo) -> Self {
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
         // test
@@ -999,7 +993,6 @@ impl ProgramTestContext {
         );
 
         Self {
-            bank,
             payer: genesis_config_info.mint_keypair,
             genesis_config: genesis_config_info.genesis_config,
             bank_forks,
@@ -1011,14 +1004,17 @@ impl ProgramTestContext {
         &self.genesis_config
     }
 
+    pub fn working_bank(&self) -> Arc<Bank> {
+        self.bank_forks.read().unwrap().working_bank()
+    }
+
     /// Manually increment vote credits for the current epoch in the specified vote account to simulate validator voting activity
     pub fn increment_vote_account_credits(
         &mut self,
         vote_account_address: &Pubkey,
         number_of_credits: u64,
     ) {
-        let bank_forks = self.bank_forks.read().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = self.working_bank();
 
         // generate some vote activity for rewards
         let mut vote_account = bank.get_account(vote_account_address).unwrap();
@@ -1040,8 +1036,7 @@ impl ProgramTestContext {
     /// Beware that it can be used to create states that would not be reachable
     /// by sending transactions!
     pub fn set_account(&mut self, address: &Pubkey, account: &AccountSharedData) {
-        let bank_forks = self.bank_forks.read().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = self.working_bank();
         bank.store_account(address, account);
     }
 
@@ -1052,8 +1047,7 @@ impl ProgramTestContext {
     /// that it can be used to create states that would not be reachable
     /// under normal conditions!
     pub fn set_sysvar<T: SysvarId + Sysvar>(&self, sysvar: &T) {
-        let bank_forks = self.bank_forks.read().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = self.working_bank();
         bank.set_sysvar_for_tests(sysvar);
     }
 
@@ -1134,7 +1128,6 @@ impl ProgramTestContext {
             warp_slot,
         ));
 
-        self.bank = bank_forks.working_bank();
         Ok(())
     }
 
@@ -1171,7 +1164,6 @@ impl ProgramTestContext {
         warp_bank.force_reward_interval_end_for_tests();
         bank_forks.insert(warp_bank);
 
-        self.bank = bank_forks.working_bank();
         Ok(())
     }
 
@@ -1179,11 +1171,14 @@ impl ProgramTestContext {
     pub async fn get_new_latest_blockhash(&mut self) -> io::Result<Hash> {
         let mut bank_forks = self.bank_forks.write().unwrap();
         let bank = bank_forks.working_bank();
-        let child_slot = self.bank.slot() + 1;
-        let new_bank = Bank::new_from_parent(bank, &Pubkey::default(), child_slot);
+
+        // Fill ticks until a new blockhash is recorded
+        bank.fill_bank_with_ticks_for_tests();
+        let child_slot = bank.slot() + 1;
+        let new_bank = Bank::new_from_parent(bank.clone(), &Pubkey::default(), child_slot);
+        let new_latest_blockhash = new_bank.last_blockhash();
         bank_forks.insert(new_bank);
-        self.bank = bank_forks.working_bank();
-        Ok(self.bank.last_blockhash())
+        Ok(new_latest_blockhash)
     }
 
     /// record a hard fork slot in working bank; should be in the past

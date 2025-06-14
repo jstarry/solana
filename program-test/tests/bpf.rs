@@ -21,7 +21,7 @@ async fn test_add_bpf_program() {
     let context = program_test.start_with_context().await;
 
     // Assert the program is a BPF Loader 2 program.
-    let program_account = context.bank.get_account(&program_id).unwrap();
+    let program_account = context.working_bank().get_account(&program_id).unwrap();
     assert_eq!(program_account.owner(), &bpf_loader::id());
 
     // Invoke the program.
@@ -30,9 +30,12 @@ async fn test_add_bpf_program() {
         &[instruction],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 #[test_case(64, true, true; "success with 64 accounts and without feature")]
@@ -63,13 +66,19 @@ async fn test_max_accounts(num_accounts: u8, deactivate_feature: bool, expect_su
         &[instruction],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
     // Invoke the program.
     if expect_success {
-        context.bank.process_transaction(&transaction).unwrap();
+        context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap();
     } else {
-        context.bank.process_transaction(&transaction).unwrap_err();
+        context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap_err();
     }
 }

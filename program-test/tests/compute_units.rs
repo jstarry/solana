@@ -26,7 +26,7 @@ async fn max_compute_units() {
     // manifest.
     let token_2022_id = spl_generic_token::token_2022::id();
     let mint = Keypair::new();
-    let rent = &context.bank.rent_collector().rent;
+    let rent = context.working_bank().rent_collector().rent.clone();
     let space = 82;
     let transaction = Transaction::new_signed_with_payer(
         &[
@@ -48,8 +48,11 @@ async fn max_compute_units() {
         ],
         Some(&context.payer.pubkey()),
         &[&context.payer, &mint],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }

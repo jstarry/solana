@@ -31,7 +31,7 @@ async fn genesis_accounts() {
 
     // Verify the accounts are present.
     for (pubkey, account) in my_genesis_accounts.iter() {
-        let fetched_account = context.bank.get_account(pubkey).unwrap();
+        let fetched_account = context.working_bank().get_account(pubkey).unwrap();
         assert_eq!(fetched_account, account.clone().into());
     }
 }

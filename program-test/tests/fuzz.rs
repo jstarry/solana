@@ -64,7 +64,7 @@ fn simulate_fuzz_with_context() {
     // so we have to use the runtime directly to run async functions
     rt.block_on(run_fuzz_instructions(
         &[1, 2, 3, 4, 5],
-        &context.bank,
+        &context.working_bank(),
         &context.payer,
         &program_id,
     ));

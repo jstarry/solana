@@ -9,7 +9,7 @@ use {
 };
 
 fn assert_bpf_program(context: &ProgramTestContext, program_id: &Pubkey) {
-    let program_account = context.bank.get_account(program_id).unwrap();
+    let program_account = context.working_bank().get_account(program_id).unwrap();
     assert_eq!(program_account.owner(), &bpf_loader_upgradeable::id());
     assert!(program_account.executable());
 }
@@ -43,7 +43,7 @@ async fn test_add_core_bpf_program_manually() {
         &[instruction],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context.working_bank().process_transaction(&transaction).unwrap();
 }

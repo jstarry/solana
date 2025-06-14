@@ -87,7 +87,7 @@ fn create_vote(
     withdrawer: &Pubkey,
     vote_account: &Keypair,
 ) {
-    let rent = &context.bank.rent_collector().rent;
+    let rent = context.working_bank().rent_collector().rent.clone();
     let rent_voter = rent.minimum_balance(VoteState::size_of());
 
     let mut instructions = vec![system_instruction::create_account(
@@ -117,11 +117,11 @@ fn create_vote(
         &instructions,
         Some(&context.payer.pubkey()),
         &[validator, vote_account, &context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
     // ignore errors for idempotency
-    let _ = context.bank.process_transaction(&transaction);
+    let _ = context.working_bank().process_transaction(&transaction);
 }
 
 fn transfer(context: &mut ProgramTestContext, recipient: &Pubkey, amount: u64) {
@@ -133,16 +133,19 @@ fn transfer(context: &mut ProgramTestContext, recipient: &Pubkey, amount: u64) {
         )],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 fn advance_epoch(context: &mut ProgramTestContext) {
     refresh_blockhash(context);
 
-    let root_slot = context.bank.slot();
-    let slots_per_epoch = context.bank.epoch_schedule().slots_per_epoch;
+    let root_slot = context.working_bank().slot();
+    let slots_per_epoch = context.working_bank().epoch_schedule().slots_per_epoch;
     context.warp_to_slot(root_slot + slots_per_epoch).unwrap();
 }
 
@@ -151,7 +154,10 @@ fn refresh_blockhash(_context: &mut ProgramTestContext) {
 }
 
 fn get_account(context: &ProgramTestContext, pubkey: &Pubkey) -> AccountSharedData {
-    context.bank.get_account(pubkey).expect("account not found")
+    context
+        .working_bank()
+        .get_account(pubkey)
+        .expect("account not found")
 }
 
 fn get_stake_account(context: &ProgramTestContext, pubkey: &Pubkey) -> (Meta, Option<Stake>, u64) {
@@ -166,13 +172,16 @@ fn get_stake_account(context: &ProgramTestContext, pubkey: &Pubkey) -> (Meta, Op
 }
 
 fn get_stake_account_rent(context: &ProgramTestContext) -> u64 {
-    let rent = &context.bank.rent_collector().rent;
+    let rent = context.working_bank().rent_collector().rent.clone();
     rent.minimum_balance(std::mem::size_of::<stake::state::StakeStateV2>())
 }
 
 fn get_effective_stake(context: &ProgramTestContext, pubkey: &Pubkey) -> u64 {
-    let clock = context.bank.clock();
-    let stake_history_account = context.bank.get_account(&stake_history::id()).unwrap();
+    let clock = context.working_bank().clock();
+    let stake_history_account = context
+        .working_bank()
+        .get_account(&stake_history::id())
+        .unwrap();
     let stake_history: StakeHistory = bincode::deserialize(stake_history_account.data()).unwrap();
     let stake_account = get_account(context, pubkey);
     match bincode::deserialize::<StakeStateV2>(stake_account.data()).unwrap() {
@@ -189,7 +198,7 @@ fn get_effective_stake(context: &ProgramTestContext, pubkey: &Pubkey) -> u64 {
 fn get_minimum_delegation(context: &mut ProgramTestContext) -> u64 {
     const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
     if context
-        .bank
+        .working_bank()
         .feature_set
         .is_active(&stake_raise_minimum_delegation_to_1_sol::id())
     {
@@ -215,10 +224,13 @@ fn create_blank_stake_account_from_keypair(
         )],
         Some(&context.payer.pubkey()),
         &[&context.payer, stake],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
 
-    context.bank.process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     stake.pubkey()
 }
@@ -231,10 +243,10 @@ async fn process_instruction<T: Signers + ?Sized>(
     let mut transaction =
         Transaction::new_with_payer(&[instruction.clone()], Some(&context.payer.pubkey()));
 
-    transaction.partial_sign(&[&context.payer], context.bank.last_blockhash());
-    transaction.sign(additional_signers, context.bank.last_blockhash());
+    transaction.partial_sign(&[&context.payer], context.working_bank().last_blockhash());
+    transaction.sign(additional_signers, context.working_bank().last_blockhash());
 
-    match context.bank.process_transaction(&transaction) {
+    match context.working_bank().process_transaction(&transaction) {
         Ok(_) => Ok(()),
         Err(e) => {
             // banks client error -> transaction error -> instruction error -> program error
@@ -403,7 +415,7 @@ async fn test_move_stake(
 
     // test with and without lockup. both of these cases pass, we test failures elsewhere
     let lockup = if has_lockup {
-        let clock = context.bank.clock();
+        let clock = context.working_bank().clock();
         let lockup = Lockup {
             unix_timestamp: 0,
             epoch: clock.epoch + 100,
@@ -460,7 +472,7 @@ async fn test_move_stake(
     if move_source_type == StakeLifecycle::Activating
         || move_source_type == StakeLifecycle::Deactivating
     {
-        let clock = context.bank.clock();
+        let clock = context.working_bank().clock();
         if let StakeStateV2::Stake(_, ref mut stake, _) = &mut source_stake_state {
             match move_source_type {
                 StakeLifecycle::Activating => stake.delegation.activation_epoch = clock.epoch,
@@ -650,7 +662,7 @@ async fn test_move_lamports(
 
     // test with and without lockup. both of these cases pass, we test failures elsewhere
     let lockup = if has_lockup {
-        let clock = context.bank.clock();
+        let clock = context.working_bank().clock();
         let lockup = Lockup {
             unix_timestamp: 0,
             epoch: clock.epoch + 100,
@@ -722,7 +734,7 @@ async fn test_move_lamports(
     if move_source_type == StakeLifecycle::Activating
         || move_source_type == StakeLifecycle::Deactivating
     {
-        let clock = context.bank.clock();
+        let clock = context.working_bank().clock();
         if let StakeStateV2::Stake(_, ref mut stake, _) = &mut source_stake_state {
             match move_source_type {
                 StakeLifecycle::Activating => stake.delegation.activation_epoch = clock.epoch,
@@ -925,7 +937,7 @@ async fn test_move_general_fail(
     let source_staked_amount = minimum_delegation * 2;
 
     let in_force_lockup = {
-        let clock = context.bank.clock();
+        let clock = context.working_bank().clock();
         Lockup {
             unix_timestamp: 0,
             epoch: clock.epoch + 1_000_000,

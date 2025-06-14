@@ -74,10 +74,10 @@ async fn clock_sysvar_updated_from_warp() {
         &[instruction.clone()],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
     assert_eq!(
-        context.bank.process_transaction(&transaction).unwrap_err(),
+        context.working_bank().process_transaction(&transaction).unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::Custom(WRONG_SLOT_ERROR))
     );
 
@@ -92,9 +92,9 @@ async fn clock_sysvar_updated_from_warp() {
         &[instruction],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context.working_bank().process_transaction(&transaction).unwrap();
 
     // Try warping ahead one slot (corner case in warp logic)
     expected_slot += 1;
@@ -108,9 +108,9 @@ async fn clock_sysvar_updated_from_warp() {
         &[instruction],
         Some(&context.payer.pubkey()),
         &[&context.payer],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context.working_bank().process_transaction(&transaction).unwrap();
 
     // Try warping again to the same slot
     assert_eq!(
@@ -133,13 +133,13 @@ async fn stake_rewards_from_warp() {
     let stake_address =
         setup_stake(&mut context, &user_keypair, &vote_address, stake_lamports).await;
 
-    let account = context.bank.get_account(&stake_address).unwrap();
+    let account = context.working_bank().get_account(&stake_address).unwrap();
     assert_eq!(account.lamports(), stake_lamports);
 
     // warp one epoch forward for normal inflation, no rewards collected
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
     context.warp_to_slot(first_normal_slot).unwrap();
-    let account = context.bank.get_account(&stake_address).unwrap();
+    let account = context.working_bank().get_account(&stake_address).unwrap();
     assert_eq!(account.lamports(), stake_lamports);
 
     context.increment_vote_account_credits(&vote_address, 100);
@@ -150,13 +150,13 @@ async fn stake_rewards_from_warp() {
         .warp_to_slot(first_normal_slot + slots_per_epoch + 1) // when partitioned rewards are enabled, the rewards are paid at 1 slot after the first slot of the epoch
         .unwrap();
 
-    let account = context.bank.get_account(&stake_address).unwrap();
+    let account = context.working_bank().get_account(&stake_address).unwrap();
     assert!(account.lamports() > stake_lamports);
 
     // check that stake is fully active
-    let stake_history_account = context.bank.get_account(&stake_history::id()).unwrap();
+    let stake_history_account = context.working_bank().get_account(&stake_history::id()).unwrap();
 
-    let clock_account = context.bank.get_account(&clock::id()).unwrap();
+    let clock_account = context.working_bank().get_account(&clock::id()).unwrap();
 
     let stake_state: StakeStateV2 = deserialize(account.data()).unwrap();
     let stake_history: StakeHistory = deserialize(stake_history_account.data()).unwrap();
@@ -213,13 +213,13 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
     let stake_address =
         setup_stake(&mut context, &user_keypair, &vote_address, stake_lamports).await;
 
-    let account = context.bank.get_account(&stake_address).unwrap();
+    let account = context.working_bank().get_account(&stake_address).unwrap();
     assert_eq!(account.lamports(), stake_lamports);
 
     // warp one epoch forward for normal inflation, no rewards collected
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
     context.warp_to_slot(first_normal_slot).unwrap();
-    let account = context.bank.get_account(&stake_address).unwrap();
+    let account = context.working_bank().get_account(&stake_address).unwrap();
     assert_eq!(account.lamports(), stake_lamports);
 
     context.increment_vote_account_credits(&vote_address, 100);
@@ -230,19 +230,19 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
         .warp_to_slot(first_normal_slot + slots_per_epoch + 1) // when partitioned rewards are enabled, the rewards are paid at 1 slot after the first slot of the epoch
         .unwrap();
 
-    let account = context.bank.get_account(&stake_address).unwrap();
+    let account = context.working_bank().get_account(&stake_address).unwrap();
     assert!(account.lamports() > stake_lamports);
 
     // check that filtered stake accounts are excluded from receiving epoch rewards
     for stake_address in to_filter {
-        let account = context.bank.get_account(&stake_address).unwrap();
+        let account = context.working_bank().get_account(&stake_address).unwrap();
         assert_eq!(account.lamports(), TEST_FILTER_STAKE);
     }
 
     // check that stake is fully active
-    let stake_history_account = context.bank.get_account(&stake_history::id()).unwrap();
+    let stake_history_account = context.working_bank().get_account(&stake_history::id()).unwrap();
 
-    let clock_account = context.bank.get_account(&clock::id()).unwrap();
+    let clock_account = context.working_bank().get_account(&clock::id()).unwrap();
 
     let stake_state: StakeStateV2 = deserialize(account.data()).unwrap();
     let stake_history: StakeHistory = deserialize(stake_history_account.data()).unwrap();
@@ -261,7 +261,7 @@ async fn check_credits_observed(
     stake_address: Pubkey,
     expected_credits: u64,
 ) {
-    let stake_account = context.bank.get_account(&stake_address).unwrap();
+    let stake_account = context.working_bank().get_account(&stake_address).unwrap();
     let stake_state: StakeStateV2 = deserialize(stake_account.data()).unwrap();
     assert_eq!(
         stake_state.stake().unwrap().credits_observed,
@@ -295,7 +295,7 @@ async fn stake_merge_immediately_after_activation() {
     check_credits_observed(&context, base_stake_address, 100).await;
     context.increment_vote_account_credits(&vote_address, 100);
 
-    let clock_account = context.bank.get_account(&clock::id()).unwrap();
+    let clock_account = context.working_bank().get_account(&clock::id()).unwrap();
     let clock: Clock = deserialize(clock_account.data()).unwrap();
     context.warp_to_epoch(clock.epoch + 1).unwrap();
     current_slot += slots_per_epoch;
@@ -315,19 +315,19 @@ async fn stake_merge_immediately_after_activation() {
     context.warp_forward_force_reward_interval_end().unwrap();
 
     // check that base stake has earned rewards and credits moved forward
-    let stake_account = context.bank.get_account(&base_stake_address).unwrap();
+    let stake_account = context.working_bank().get_account(&base_stake_address).unwrap();
     let stake_state: StakeStateV2 = deserialize(stake_account.data()).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert!(stake_account.lamports() > stake_lamports);
 
     // check that new stake hasn't earned rewards, but that credits_observed have been advanced
-    let stake_account = context.bank.get_account(&absorbed_stake_address).unwrap();
+    let stake_account = context.working_bank().get_account(&absorbed_stake_address).unwrap();
     let stake_state: StakeStateV2 = deserialize(stake_account.data()).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert_eq!(stake_account.lamports(), stake_lamports);
 
     // sanity-check that the activation epoch was actually last epoch
-    let clock_account = context.bank.get_account(&clock::id()).unwrap();
+    let clock_account = context.working_bank().get_account(&clock::id()).unwrap();
     let clock: Clock = deserialize(clock_account.data()).unwrap();
     assert_eq!(
         clock.epoch,
@@ -343,9 +343,9 @@ async fn stake_merge_immediately_after_activation() {
         ),
         Some(&context.payer.pubkey()),
         &vec![&context.payer, &user_keypair],
-        context.bank.last_blockhash(),
+        context.working_bank().last_blockhash(),
     );
-    context.bank.process_transaction(&transaction).unwrap();
+    context.working_bank().process_transaction(&transaction).unwrap();
 }
 
 #[tokio::test]
@@ -356,7 +356,7 @@ async fn get_blockhash_post_warp() {
     let new_blockhash = context.get_new_latest_blockhash().await.unwrap();
     let mut tx = Transaction::new_with_payer(&[], Some(&context.payer.pubkey()));
     tx.sign(&[&context.payer], new_blockhash);
-    context.bank.process_transaction(&tx).unwrap();
+    context.working_bank().process_transaction(&tx).unwrap();
 
     context.warp_to_slot(10).unwrap();
 
@@ -364,5 +364,5 @@ async fn get_blockhash_post_warp() {
 
     let mut tx = Transaction::new_with_payer(&[], Some(&context.payer.pubkey()));
     tx.sign(&[&context.payer], new_blockhash);
-    context.bank.process_transaction(&tx).unwrap();
+    context.working_bank().process_transaction(&tx).unwrap();
 }

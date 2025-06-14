@@ -26,7 +26,7 @@ async fn test_success() {
 
     
     let payer = &context.payer;
-    let recent_blockhash = context.bank.last_blockhash();
+    let recent_blockhash = context.working_bank().last_blockhash();
 
     let privkey = generate_keypair();
     let message_arr = b"hello";
@@ -41,7 +41,7 @@ async fn test_success() {
         recent_blockhash,
     );
 
-    assert_matches!(context.bank.process_transaction(&transaction), Ok(()));
+    assert_matches!(context.working_bank().process_transaction(&transaction), Ok(()));
 }
 
 #[tokio::test]
@@ -50,7 +50,7 @@ async fn test_failure() {
 
     
     let payer = &context.payer;
-    let recent_blockhash = context.bank.last_blockhash();
+    let recent_blockhash = context.working_bank().last_blockhash();
 
     let privkey = generate_keypair();
     let message_arr = b"hello";
@@ -68,7 +68,7 @@ async fn test_failure() {
     );
 
     assert_matches!(
-        context.bank.process_transaction(&transaction),
+        context.working_bank().process_transaction(&transaction),
         Err(TransactionError::InstructionError(0, InstructionError::Custom(3)))
     );
     // this assert is for documenting the matched error code above

@@ -233,7 +233,7 @@ fn test_block_subscription() {
     let blockstore = Arc::new(blockstore);
 
     // populate ledger with test txs
-    let bank = bank_forks.read().unwrap().working_bank();
+    let bank = bank_forks.read().unwrap().highest_slot_bank();
     let keypair1 = Keypair::new();
     let keypair2 = Keypair::new();
     let keypair3 = Keypair::new();

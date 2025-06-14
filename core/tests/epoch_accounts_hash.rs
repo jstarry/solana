@@ -136,7 +136,7 @@ impl TestEnvironment {
             pruned_banks_receiver,
             Arc::clone(&bank_forks),
         );
-        let bank = bank_forks.read().unwrap().working_bank();
+        let bank = bank_forks.read().unwrap().highest_slot_bank();
         assert!(epoch_accounts_hash_utils::is_enabled_this_epoch(&bank));
 
         bank.set_startup_verification_complete();
@@ -266,7 +266,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
         .slots_per_epoch;
     for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
-            let parent = bank_forks.read().unwrap().working_bank();
+            let parent = bank_forks.read().unwrap().highest_slot_bank();
             let slot = parent.slot().checked_add(1).unwrap();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
                 parent,
@@ -379,7 +379,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
         .slots_per_epoch;
     for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
-            let parent = bank_forks.read().unwrap().working_bank();
+            let parent = bank_forks.read().unwrap().highest_slot_bank();
             let slot = parent.slot().checked_add(1).unwrap();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
                 parent,
@@ -498,7 +498,7 @@ fn test_background_services_request_handling_for_epoch_accounts_hash() {
         .slots_per_epoch;
     for _ in 0..slots_per_epoch.checked_mul(NUM_EPOCHS_TO_TEST).unwrap() {
         let bank = {
-            let parent = bank_forks.read().unwrap().working_bank();
+            let parent = bank_forks.read().unwrap().highest_slot_bank();
             let slot = parent.slot().checked_add(1).unwrap();
             let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
                 parent,
@@ -573,7 +573,7 @@ fn test_epoch_accounts_hash_and_warping() {
 
     let test_environment = TestEnvironment::new();
     let bank_forks = test_environment.bank_forks.clone();
-    let bank = bank_forks.read().unwrap().working_bank();
+    let bank = bank_forks.read().unwrap().highest_slot_bank();
     let epoch_schedule = test_environment
         .genesis_config_info
         .genesis_config

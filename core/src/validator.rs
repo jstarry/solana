@@ -937,7 +937,7 @@ impl Validator {
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let startup_verification_complete;
         let (poh_recorder, entry_receiver) = {
-            let bank = &bank_forks.read().unwrap().working_bank();
+            let bank = &bank_forks.read().unwrap().highest_slot_bank();
             startup_verification_complete = Arc::clone(bank.get_startup_verification_complete());
             PohRecorder::new_with_clear_signal(
                 bank.tick_height(),
@@ -1049,7 +1049,7 @@ impl Validator {
         let mut block_commitment_cache = BlockCommitmentCache::default();
         let bank_forks_guard = bank_forks.read().unwrap();
         block_commitment_cache.initialize_slots(
-            bank_forks_guard.working_bank().slot(),
+            bank_forks_guard.highest_slot_bank().slot(),
             bank_forks_guard.root(),
         );
         drop(bank_forks_guard);
@@ -1964,7 +1964,7 @@ fn post_process_restored_tower(
         Ok(tower) => tower,
         Err(err) => {
             let voting_has_been_active =
-                active_vote_account_exists_in_bank(&bank_forks.working_bank(), vote_account);
+                active_vote_account_exists_in_bank(&bank_forks.highest_slot_bank(), vote_account);
             if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
@@ -2216,7 +2216,7 @@ impl<'a> ProcessBlockStore<'a> {
                     .name("solRptLdgrStat".to_string())
                     .spawn(move || {
                         while !exit.load(Ordering::Relaxed) {
-                            let slot = bank_forks.read().unwrap().working_bank().slot();
+                            let slot = bank_forks.read().unwrap().highest_slot_bank().slot();
                             *start_progress.write().unwrap() =
                                 ValidatorStartProgress::ProcessingLedger { slot, max_slot };
                             sleep(Duration::from_secs(2));
@@ -2300,7 +2300,7 @@ fn maybe_warp_slot(
     if let Some(warp_slot) = config.warp_slot {
         let mut bank_forks = bank_forks.write().unwrap();
 
-        let working_bank = bank_forks.working_bank();
+        let working_bank = bank_forks.highest_slot_bank();
 
         if warp_slot <= working_bank.slot() {
             return Err(format!(
@@ -2603,7 +2603,7 @@ fn wait_for_supermajority(
                     .map_err(ValidatorError::Other)?;
             }
 
-            let bank = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.read().unwrap().highest_slot_bank();
             match wait_for_supermajority_slot.cmp(&bank.slot()) {
                 std::cmp::Ordering::Less => return Ok(false),
                 std::cmp::Ordering::Greater => {

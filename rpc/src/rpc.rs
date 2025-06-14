@@ -4776,7 +4776,7 @@ pub mod tests {
 
             let ledger_path = get_tmp_ledger_path!();
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let bank = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.read().unwrap().highest_slot_bank();
 
             let leader_pubkey = *bank.collector_id();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -4962,7 +4962,7 @@ pub mod tests {
                 return;
             }
 
-            let mut parent_bank = self.bank_forks.read().unwrap().working_bank();
+            let mut parent_bank = self.bank_forks.read().unwrap().highest_slot_bank();
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
@@ -5053,7 +5053,7 @@ pub mod tests {
         }
 
         fn working_bank(&self) -> Arc<Bank> {
-            self.bank_forks.read().unwrap().working_bank()
+            self.bank_forks.read().unwrap().highest_slot_bank()
         }
 
         fn leader_pubkey(&self) -> Pubkey {

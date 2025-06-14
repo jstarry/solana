@@ -292,11 +292,11 @@ impl BankForks {
         self.banks.values().map(|bank| bank.slot()).max().unwrap()
     }
 
-    pub fn working_bank(&self) -> Arc<Bank> {
+    pub fn highest_slot_bank(&self) -> Arc<Bank> {
         self[self.highest_slot()].clone()
     }
 
-    pub fn working_bank_with_scheduler(&self) -> BankWithScheduler {
+    pub fn highest_slot_bank_with_scheduler(&self) -> BankWithScheduler {
         self.banks[&self.highest_slot()].clone_with_scheduler()
     }
 
@@ -696,7 +696,7 @@ mod tests {
         child_bank.register_default_tick_for_test();
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
-        assert_eq!(bank_forks.working_bank().tick_height(), 1);
+        assert_eq!(bank_forks.highest_slot_bank().tick_height(), 1);
     }
 
     #[test]
@@ -861,8 +861,8 @@ mod tests {
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
         }
-        let child1 = &bank_forks0.working_bank();
-        let child2 = &bank_forks1.working_bank();
+        let child1 = &bank_forks0.highest_slot_bank();
+        let child2 = &bank_forks1.highest_slot_bank();
 
         child1.freeze();
         child2.freeze();

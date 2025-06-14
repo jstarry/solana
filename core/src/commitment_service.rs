@@ -576,7 +576,7 @@ mod tests {
             bank.process_transaction(&vote).unwrap();
         }
 
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_slot_bank();
         let vote_pubkey = validator_vote_keypairs.vote_keypair.pubkey();
         let root = get_vote_state(vote_pubkey, &working_bank)
             .root_slot
@@ -604,7 +604,7 @@ mod tests {
         );
         bank34.process_transaction(&vote33).unwrap();
 
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_slot_bank();
         let vote_state = get_vote_state(vote_pubkey, &working_bank);
         let root = vote_state.root_slot.unwrap();
         let ancestors = working_bank.status_cache_ancestors();
@@ -641,7 +641,7 @@ mod tests {
             35,
         );
 
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_slot_bank();
         let ancestors = working_bank.status_cache_ancestors();
         let _ = AggregateCommitmentService::update_commitment_cache(
             &block_commitment_cache,
@@ -687,7 +687,7 @@ mod tests {
             bank.process_transaction(&vote).unwrap();
         }
 
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_slot_bank();
         let vote_state =
             get_vote_state(validator_vote_keypairs.vote_keypair.pubkey(), &working_bank);
         let root = vote_state.root_slot.unwrap();

@@ -238,7 +238,7 @@ impl Tvu {
             let epoch_schedule = bank_forks
                 .read()
                 .unwrap()
-                .working_bank()
+                .highest_slot_bank()
                 .epoch_schedule()
                 .clone();
             let repair_info = RepairInfo {
@@ -509,7 +509,7 @@ pub mod tests {
         } = Blockstore::open_with_signal(&blockstore_path, BlockstoreOptions::default())
             .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
-        let bank = bank_forks.read().unwrap().working_bank();
+        let bank = bank_forks.read().unwrap().highest_slot_bank();
         let (exit, poh_recorder, _transaction_recorder, poh_service, _entry_receiver) =
             create_test_recorder(bank.clone(), blockstore.clone(), None, None);
         let vote_keypair = Keypair::new();

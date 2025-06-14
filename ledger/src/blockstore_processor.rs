@@ -2536,7 +2536,7 @@ pub mod tests {
 
         // One valid fork, one bad fork.  process_blockstore() should only return the valid fork
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0, 2]);
-        assert_eq!(bank_forks.read().unwrap().working_bank().slot(), 2);
+        assert_eq!(bank_forks.read().unwrap().highest_slot_bank().slot(), 2);
         assert_eq!(bank_forks.read().unwrap().root(), 0);
     }
 
@@ -2823,7 +2823,7 @@ pub mod tests {
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![1, 2, 3, 4]);
-        assert_eq!(bank_forks.working_bank().slot(), 4);
+        assert_eq!(bank_forks.highest_slot_bank().slot(), 4);
         assert_eq!(bank_forks.root(), 1);
 
         assert_eq!(
@@ -2884,7 +2884,7 @@ pub mod tests {
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 3]);
-        assert_eq!(bank_forks.working_bank().slot(), 3);
+        assert_eq!(bank_forks.highest_slot_bank().slot(), 3);
         assert_eq!(
             &bank_forks[3]
                 .parents()
@@ -2934,7 +2934,7 @@ pub mod tests {
 
         // Should see the parent of the dead child
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 2, 3]);
-        assert_eq!(bank_forks.working_bank().slot(), 3);
+        assert_eq!(bank_forks.highest_slot_bank().slot(), 3);
 
         assert_eq!(
             &bank_forks[3]
@@ -2952,7 +2952,7 @@ pub mod tests {
                 .collect::<Vec<_>>(),
             &[1, 0]
         );
-        assert_eq!(bank_forks.working_bank().slot(), 3);
+        assert_eq!(bank_forks.highest_slot_bank().slot(), 3);
         verify_fork_infos(&bank_forks);
     }
 
@@ -3183,7 +3183,7 @@ pub mod tests {
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1]);
         assert_eq!(bank_forks.root(), 0);
-        assert_eq!(bank_forks.working_bank().slot(), 1);
+        assert_eq!(bank_forks.highest_slot_bank().slot(), 1);
 
         let bank = bank_forks[1].clone();
         assert_eq!(
@@ -4297,7 +4297,7 @@ pub mod tests {
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![5, 6]);
-        assert_eq!(bank_forks.working_bank().slot(), 6);
+        assert_eq!(bank_forks.highest_slot_bank().slot(), 6);
         assert_eq!(bank_forks.root(), 5);
 
         // Verify the parents of the head of the fork

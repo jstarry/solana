@@ -1470,7 +1470,7 @@ pub(crate) mod tests {
             .control
             .assert_subscribed(&SubscriptionParams::Block(params.clone()));
 
-        let bank = bank_forks.read().unwrap().working_bank();
+        let bank = bank_forks.read().unwrap().highest_slot_bank();
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -1590,7 +1590,7 @@ pub(crate) mod tests {
             .control
             .assert_subscribed(&SubscriptionParams::Block(params.clone()));
 
-        let bank = bank_forks.read().unwrap().working_bank();
+        let bank = bank_forks.read().unwrap().highest_slot_bank();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
@@ -1703,7 +1703,7 @@ pub(crate) mod tests {
             .control
             .assert_subscribed(&SubscriptionParams::Block(params.clone()));
 
-        let bank = bank_forks.read().unwrap().working_bank();
+        let bank = bank_forks.read().unwrap().highest_slot_bank();
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();

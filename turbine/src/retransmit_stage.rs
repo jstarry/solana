@@ -284,7 +284,7 @@ fn retransmit(
     let mut epoch_fetch = Measure::start("retransmit_epoch_fetch");
     let (working_bank, root_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.working_bank(), bank_forks.root_bank())
+        (bank_forks.highest_slot_bank(), bank_forks.root_bank())
     };
     epoch_fetch.stop();
     stats.epoch_fetch += epoch_fetch.as_us();
@@ -512,7 +512,7 @@ fn cache_retransmit_addrs(
     }
     let (working_bank, root_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.working_bank(), bank_forks.root_bank())
+        (bank_forks.highest_slot_bank(), bank_forks.root_bank())
     };
     let cache: HashMap<Slot, _> = shreds
         .iter()

@@ -469,7 +469,7 @@ pub fn broadcast_shreds(
     let mut shred_select = Measure::start("shred_select");
     let (root_bank, working_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.root_bank(), bank_forks.working_bank())
+        (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
     };
     // Implementation note:
     // We are gathering the indexes of the shreds in the `shreds` vector rather than the shred

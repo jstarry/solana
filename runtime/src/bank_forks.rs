@@ -283,16 +283,27 @@ impl BankForks {
         Some(bank)
     }
 
-    pub fn highest_slot(&self) -> Slot {
+    pub fn highest_frozen_slot(&self) -> Slot {
         self.banks.values().map(|bank| bank.slot()).max().unwrap()
     }
 
-    pub fn working_bank(&self) -> Arc<Bank> {
-        self[self.highest_slot()].clone()
+    pub fn highest_frozen_bank(&self) -> Arc<Bank> {
+        self._highest_frozen_bank().clone_without_scheduler()
     }
 
-    pub fn working_bank_with_scheduler(&self) -> BankWithScheduler {
-        self.banks[&self.highest_slot()].clone_with_scheduler()
+    pub fn highest_frozen_bank_with_scheduler(&self) -> BankWithScheduler {
+        self._highest_frozen_bank().clone_with_scheduler()
+    }
+
+    fn _highest_frozen_bank(&self) -> &BankWithScheduler {
+        self.banks
+            .values()
+            .max_by(|a, b| {
+                let a_slot = if a.is_frozen() { a.slot() } else { 0 };
+                let b_slot = if b.is_frozen() { b.slot() } else { 0 };
+                a_slot.cmp(&b_slot)
+            })
+            .unwrap()
     }
 
     /// Register to be notified when a bank has been dumped (due to duplicate block handling)
@@ -624,7 +635,7 @@ impl BankForks {
 
 impl ForkGraph for BankForks {
     fn relationship(&self, a: Slot, b: Slot) -> BlockRelation {
-        let known_slot_range = self.root()..=self.highest_slot();
+        let known_slot_range = self.root()..=self.highest_frozen_slot();
         if known_slot_range.contains(&a) && known_slot_range.contains(&b) {
             {
                 (a == b)
@@ -698,7 +709,7 @@ mod tests {
         child_bank.register_default_tick_for_test();
         bank_forks.insert(child_bank);
         assert_eq!(bank_forks[1u64].tick_height(), 1);
-        assert_eq!(bank_forks.working_bank().tick_height(), 1);
+        assert_eq!(bank_forks.highest_frozen_bank().tick_height(), 1);
     }
 
     #[test]
@@ -823,8 +834,8 @@ mod tests {
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
         }
-        let child1 = &bank_forks0.working_bank();
-        let child2 = &bank_forks1.working_bank();
+        let child1 = &bank_forks0.highest_frozen_bank();
+        let child2 = &bank_forks1.highest_frozen_bank();
 
         child1.freeze();
         child2.freeze();

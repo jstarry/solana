@@ -940,7 +940,7 @@ impl ProgramTest {
                 bank_forks
                     .read()
                     .unwrap()
-                    .working_bank()
+                    .highest_frozen_bank()
                     .register_unique_recent_blockhash_for_test();
             }
         });
@@ -1062,7 +1062,7 @@ impl ProgramTestContext {
                     running_bank_forks
                         .read()
                         .unwrap()
-                        .working_bank()
+                        .highest_frozen_bank()
                         .register_unique_recent_blockhash_for_test();
                 }
             }),
@@ -1090,7 +1090,7 @@ impl ProgramTestContext {
         number_of_credits: u64,
     ) {
         let bank_forks = self.bank_forks.read().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.highest_frozen_bank();
 
         // generate some vote activity for rewards
         let mut vote_account = bank.get_account(vote_account_address).unwrap();
@@ -1113,7 +1113,7 @@ impl ProgramTestContext {
     /// by sending transactions!
     pub fn set_account(&mut self, address: &Pubkey, account: &AccountSharedData) {
         let bank_forks = self.bank_forks.read().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.highest_frozen_bank();
         bank.store_account(address, account);
     }
 
@@ -1125,14 +1125,14 @@ impl ProgramTestContext {
     /// under normal conditions!
     pub fn set_sysvar<T: SysvarId + Sysvar>(&self, sysvar: &T) {
         let bank_forks = self.bank_forks.read().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.highest_frozen_bank();
         bank.set_sysvar_for_tests(sysvar);
     }
 
     /// Force the working bank ahead to a new slot
     pub fn warp_to_slot(&mut self, warp_slot: Slot) -> Result<(), ProgramTestError> {
         let mut bank_forks = self.bank_forks.write().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.highest_frozen_bank();
 
         // Fill ticks until a new blockhash is recorded, otherwise retried transactions will have
         // the same signature
@@ -1185,7 +1185,7 @@ impl ProgramTestContext {
         // bank.
         w_block_commitment_cache.set_all_slots(warp_slot, warp_slot);
 
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.highest_frozen_bank();
         self.last_blockhash = bank.last_blockhash();
         Ok(())
     }
@@ -1201,7 +1201,7 @@ impl ProgramTestContext {
     /// warp forward one more slot and force reward interval end
     pub fn warp_forward_force_reward_interval_end(&mut self) -> Result<(), ProgramTestError> {
         let mut bank_forks = self.bank_forks.write().unwrap();
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.highest_frozen_bank();
 
         // Fill ticks until a new blockhash is recorded, otherwise retried transactions will have
         // the same signature
@@ -1232,7 +1232,7 @@ impl ProgramTestContext {
         // bank.
         w_block_commitment_cache.set_all_slots(warp_slot, warp_slot);
 
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks.highest_frozen_bank();
         self.last_blockhash = bank.last_blockhash();
         Ok(())
     }
@@ -1252,7 +1252,7 @@ impl ProgramTestContext {
         self.bank_forks
             .read()
             .unwrap()
-            .working_bank()
+            .highest_frozen_bank()
             .register_hard_fork(hard_fork_slot)
     }
 }

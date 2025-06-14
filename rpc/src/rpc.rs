@@ -4755,7 +4755,7 @@ pub mod tests {
 
             let ledger_path = get_tmp_ledger_path!();
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
-            let bank = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.read().unwrap().highest_frozen_bank();
 
             let leader_pubkey = *bank.collector_id();
             let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::default()));
@@ -4941,7 +4941,7 @@ pub mod tests {
                 return;
             }
 
-            let mut parent_bank = self.bank_forks.read().unwrap().working_bank();
+            let mut parent_bank = self.bank_forks.read().unwrap().highest_frozen_bank();
             for (i, root) in roots.iter().enumerate() {
                 let new_bank =
                     Bank::new_from_parent(parent_bank.clone(), parent_bank.collector_id(), *root);
@@ -4998,7 +4998,9 @@ pub mod tests {
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
-                CommitmentSlots::new_from_slot(self.bank_forks.read().unwrap().highest_slot()),
+                CommitmentSlots::new_from_slot(
+                    self.bank_forks.read().unwrap().highest_frozen_slot(),
+                ),
             );
             *self.block_commitment_cache.write().unwrap() = new_block_commitment;
             bank
@@ -5032,7 +5034,7 @@ pub mod tests {
         }
 
         fn working_bank(&self) -> Arc<Bank> {
-            self.bank_forks.read().unwrap().working_bank()
+            self.bank_forks.read().unwrap().highest_frozen_bank()
         }
 
         fn leader_pubkey(&self) -> Pubkey {
@@ -7052,7 +7054,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             42,
-            CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_slot()),
+            CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_frozen_slot()),
         )));
 
         let cluster_info = Arc::new(new_test_cluster_info());

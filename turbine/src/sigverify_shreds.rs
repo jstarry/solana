@@ -181,7 +181,7 @@ fn run_shred_sigverify<const K: usize>(
     });
     let (working_bank, root_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.working_bank(), bank_forks.root_bank())
+        (bank_forks.highest_frozen_bank(), bank_forks.root_bank())
     };
     verify_packets(
         thread_pool,
@@ -590,7 +590,7 @@ mod tests {
 
         let cache = RwLock::new(LruCache::new(/*capacity:*/ 128));
         let thread_pool = ThreadPoolBuilder::new().num_threads(3).build().unwrap();
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
         let mut batches = batches
             .into_iter()
             .map(PacketBatch::from)

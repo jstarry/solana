@@ -142,14 +142,14 @@ impl VoteWorker {
             BufferedPacketsDecision::Forward => {
                 // get current working bank from bank_forks, use it to sanitize transaction and
                 // load all accounts from address loader;
-                let current_bank = self.bank_forks.read().unwrap().working_bank();
+                let current_bank = self.bank_forks.read().unwrap().highest_frozen_bank();
                 self.storage.cache_epoch_boundary_info(&current_bank);
                 self.storage.clear();
             }
             BufferedPacketsDecision::ForwardAndHold => {
                 // get current working bank from bank_forks, use it to sanitize transaction and
                 // load all accounts from address loader;
-                let current_bank = self.bank_forks.read().unwrap().working_bank();
+                let current_bank = self.bank_forks.read().unwrap().highest_frozen_bank();
                 self.storage.cache_epoch_boundary_info(&current_bank);
             }
             BufferedPacketsDecision::Hold => {}

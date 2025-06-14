@@ -208,7 +208,7 @@ fn get_shred_config_from_ledger(
         None,
     );
 
-    let bank = bank_forks.read().unwrap().working_bank();
+    let bank = bank_forks.read().unwrap().highest_frozen_bank();
     let shred_version = compute_shred_version(&genesis_config.hash(), Some(&bank.hard_forks()));
     // If mock PoH is allowed, ensure that the requested slots are in
     // the same epoch as the working bank. This will ensure the values

@@ -242,7 +242,7 @@ where
             transaction_ids.push(id);
         }
 
-        let bank = self.bank_forks.read().unwrap().working_bank();
+        let bank = self.bank_forks.read().unwrap().highest_frozen_bank();
 
         const CHUNK_SIZE: usize = 128;
         let mut error_counters = TransactionErrorMetrics::default();

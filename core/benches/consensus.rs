@@ -30,7 +30,7 @@ fn bench_save_tower(bench: &mut Bencher) {
     let heaviest_bank = BankForks::new_rw_arc(Bank::default_for_tests())
         .read()
         .unwrap()
-        .working_bank();
+        .highest_frozen_bank();
     let tower_storage = FileTowerStorage::new(dir.path().to_path_buf());
     let tower = Tower::new(
         &node_keypair.pubkey(),
@@ -52,7 +52,7 @@ fn bench_generate_ancestors_descendants(bench: &mut Bencher) {
     let heaviest_bank = BankForks::new_rw_arc(Bank::default_for_tests())
         .read()
         .unwrap()
-        .working_bank();
+        .highest_frozen_bank();
     let mut tower = Tower::new(
         &node_keypair.pubkey(),
         vote_account_pubkey,

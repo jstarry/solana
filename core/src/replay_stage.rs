@@ -672,7 +672,7 @@ impl ReplayStage {
             let (working_bank, in_vote_only_mode) = {
                 let r_bank_forks = bank_forks.read().unwrap();
                 (
-                    r_bank_forks.working_bank(),
+                    r_bank_forks.highest_frozen_bank(),
                     r_bank_forks.get_vote_only_mode_signal(),
                 )
             };
@@ -4458,7 +4458,7 @@ pub(crate) mod tests {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&root_bank));
 
         // PohRecorder
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
         let poh_recorder = RwLock::new(
             PohRecorder::new(
                 working_bank.tick_height(),
@@ -9238,7 +9238,7 @@ pub(crate) mod tests {
             ..
         } = vote_simulator;
 
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
         assert!(working_bank.is_complete());
         assert!(working_bank.is_frozen());
         // Mark startup verification as complete to avoid skipping leader slots
@@ -9330,7 +9330,7 @@ pub(crate) mod tests {
             has_new_vote_been_rooted,
         ));
         // Get the new working bank, which is also the new leader bank/slot
-        let working_bank = bank_forks.read().unwrap().working_bank();
+        let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
         // The new bank's slot must NOT be dummy_slot as the blockstore already
         // had a shred inserted for dummy_slot prior to maybe_start_leader().
         // maybe_start_leader() must not pick dummy_slot to avoid creating a

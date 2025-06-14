@@ -454,7 +454,7 @@ impl BankingStage {
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         let vote_storage = {
-            let bank = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.read().unwrap().highest_frozen_bank();
             VoteStorage::new(&bank)
         };
 

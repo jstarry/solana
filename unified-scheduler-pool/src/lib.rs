@@ -3427,11 +3427,11 @@ mod tests {
         // existing banks in bank_forks shouldn't process transactions anymore in general, so
         // shouldn't be touched
         assert!(!bank_forks
-            .working_bank_with_scheduler()
+            .highest_frozen_bank_with_scheduler()
             .has_installed_scheduler());
         bank_forks.install_scheduler_pool(pool);
         assert!(!bank_forks
-            .working_bank_with_scheduler()
+            .highest_frozen_bank_with_scheduler()
             .has_installed_scheduler());
 
         let mut child_bank = bank_forks.insert(child_bank);
@@ -4440,7 +4440,10 @@ mod tests {
         } = create_genesis_config_for_block_production(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = BankForks::new_rw_arc(bank);
-        let bank = bank_forks.read().unwrap().working_bank_with_scheduler();
+        let bank = bank_forks
+            .read()
+            .unwrap()
+            .highest_frozen_bank_with_scheduler();
 
         let (tx, expected_tx_result) = match tx_result {
             TxResult::ExecutedWithSuccess => (

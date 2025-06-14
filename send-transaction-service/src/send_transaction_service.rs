@@ -336,7 +336,7 @@ impl SendTransactionService {
                         .store(transactions.len() as u64, Ordering::Relaxed);
                     let (root_bank, working_bank) = {
                         let bank_forks = bank_forks.read().unwrap();
-                        (bank_forks.root_bank(), bank_forks.working_bank())
+                        (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
                     };
 
                     let result = Self::process_transactions(
@@ -647,7 +647,7 @@ mod test {
         let config = Config::default();
 
         let root_bank = Bank::new_from_parent(
-            bank_forks.read().unwrap().working_bank(),
+            bank_forks.read().unwrap().highest_frozen_bank(),
             &Pubkey::default(),
             1,
         );
@@ -938,7 +938,7 @@ mod test {
         let config = Config::default();
 
         let root_bank = Bank::new_from_parent(
-            bank_forks.read().unwrap().working_bank(),
+            bank_forks.read().unwrap().highest_frozen_bank(),
             &Pubkey::default(),
             1,
         );

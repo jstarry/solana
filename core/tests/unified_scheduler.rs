@@ -222,7 +222,10 @@ fn test_scheduler_producing_blocks() {
     let genesis_bank = Bank::new_for_tests(&genesis_config);
     let bank_forks = BankForks::new_rw_arc(genesis_bank);
     let ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
-    let genesis_bank = bank_forks.read().unwrap().working_bank_with_scheduler();
+    let genesis_bank = bank_forks
+        .read()
+        .unwrap()
+        .highest_frozen_bank_with_scheduler();
     genesis_bank.set_fork_graph_in_program_cache(Arc::downgrade(&bank_forks));
     let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&genesis_bank));
     let (exit, poh_recorder, transaction_recorder, poh_service, signal_receiver) =
@@ -283,7 +286,10 @@ fn test_scheduler_producing_blocks() {
         .unwrap()
         .set_bank(tpu_bank.clone_with_scheduler());
     tpu_bank.unpause_new_block_production_scheduler();
-    let tpu_bank = bank_forks.read().unwrap().working_bank_with_scheduler();
+    let tpu_bank = bank_forks
+        .read()
+        .unwrap()
+        .highest_frozen_bank_with_scheduler();
     assert_eq!(tpu_bank.transaction_count(), 0);
 
     // Now, send transaction

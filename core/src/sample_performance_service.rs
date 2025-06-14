@@ -92,7 +92,7 @@ impl StatsSnapshot {
         Self {
             num_transactions: bank.transaction_count(),
             num_non_vote_transactions: bank.non_vote_transaction_count_since_restart(),
-            highest_slot: forks.highest_slot(),
+            highest_slot: forks.highest_frozen_slot(),
         }
     }
 

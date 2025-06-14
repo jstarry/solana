@@ -94,7 +94,7 @@ impl ShredFetchStage {
                 root_bank.get_slots_in_epoch(root_bank.epoch()),
                 root_bank.feature_set.clone(),
                 root_bank.epoch_schedule().clone(),
-                bank_forks_r.highest_slot(),
+                bank_forks_r.highest_frozen_slot(),
             )
         };
         let mut stats = ShredFetchStats::default();
@@ -104,7 +104,7 @@ impl ShredFetchStage {
                 last_updated = Instant::now();
                 let root_bank = {
                     let bank_forks_r = bank_forks.read().unwrap();
-                    last_slot = bank_forks_r.highest_slot();
+                    last_slot = bank_forks_r.highest_frozen_slot();
                     bank_forks_r.root_bank()
                 };
                 feature_set = root_bank.feature_set.clone();

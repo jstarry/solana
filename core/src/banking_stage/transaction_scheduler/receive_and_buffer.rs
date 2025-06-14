@@ -164,7 +164,7 @@ impl SanitizedTransactionReceiveAndBuffer {
         let (root_bank, working_bank) = {
             let bank_forks = self.bank_forks.read().unwrap();
             let root_bank = bank_forks.root_bank();
-            let working_bank = bank_forks.working_bank();
+            let working_bank = bank_forks.highest_frozen_bank();
             (root_bank, working_bank)
         };
         let alt_resolved_slot = root_bank.slot();
@@ -291,7 +291,7 @@ impl ReceiveAndBuffer for TransactionViewReceiveAndBuffer {
         let (root_bank, working_bank) = {
             let bank_forks = self.bank_forks.read().unwrap();
             let root_bank = bank_forks.root_bank();
-            let working_bank = bank_forks.working_bank();
+            let working_bank = bank_forks.highest_frozen_bank();
             (root_bank, working_bank)
         };
 

@@ -914,7 +914,7 @@ mod tests {
         rpc.block_until_processed(&rpc_subscriptions);
 
         let balance = {
-            let bank = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.read().unwrap().highest_frozen_bank();
             let rent = &bank.rent_collector().rent;
             rent.minimum_balance(StakeStateV2::size_of())
         };
@@ -968,7 +968,7 @@ mod tests {
         );
 
         let balance = {
-            let bank = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.read().unwrap().highest_frozen_bank();
             let rent = &bank.rent_collector().rent;
             rent.minimum_balance(0)
         };

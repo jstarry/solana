@@ -1762,7 +1762,13 @@ fn main() {
                         "{}",
                         compute_shred_version(
                             &genesis_config.hash(),
-                            Some(&bank_forks.read().unwrap().working_bank().hard_forks())
+                            Some(
+                                &bank_forks
+                                    .read()
+                                    .unwrap()
+                                    .highest_frozen_bank()
+                                    .hard_forks()
+                            )
                         )
                     );
                 }
@@ -1822,7 +1828,7 @@ fn main() {
                             transaction_status_sender,
                         );
 
-                    let working_bank = bank_forks.read().unwrap().working_bank();
+                    let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
                     if print_accounts_stats {
                         working_bank.print_accounts_stats();
                     }
@@ -2572,7 +2578,7 @@ fn main() {
                             process_options,
                             None,
                         );
-                    let bank = bank_forks.read().unwrap().working_bank();
+                    let bank = bank_forks.read().unwrap().highest_frozen_bank();
 
                     let include_sysvars = arg_matches.is_present("include_sysvars");
                     let output_config = if arg_matches.is_present("no_account_contents") {
@@ -2626,7 +2632,7 @@ fn main() {
                             None,
                         );
                     let bank_forks = bank_forks.read().unwrap();
-                    let slot = bank_forks.working_bank().slot();
+                    let slot = bank_forks.highest_frozen_bank().slot();
                     let bank = bank_forks.get(slot).unwrap_or_else(|| {
                         eprintln!("Error: Slot {slot} is not available");
                         exit(1);

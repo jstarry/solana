@@ -308,7 +308,7 @@ mod tests {
         }
         blockstore.set_roots([0, 9].iter()).unwrap();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks_arc.read().unwrap().working_bank(),
+            &bank_forks_arc.read().unwrap().highest_frozen_bank(),
         ));
         let (sender, receiver) = unbounded();
         let start_slot: Slot = 10;
@@ -400,7 +400,7 @@ mod tests {
         }
         blockstore.set_roots([0, 9].iter()).unwrap();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
-            &bank_forks_arc.read().unwrap().working_bank(),
+            &bank_forks_arc.read().unwrap().highest_frozen_bank(),
         ));
         let (sender, receiver) = unbounded();
         let mut duplicate_shred_handler = DuplicateShredHandler::new(

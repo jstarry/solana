@@ -334,13 +334,13 @@ impl SendTransactionService {
                     stats
                         .retry_queue_size
                         .store(transactions.len() as u64, Ordering::Relaxed);
-                    let (root_bank, working_bank) = {
+                    let (root_bank, highest_frozen_bank) = {
                         let bank_forks = bank_forks.read().unwrap();
                         (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
                     };
 
                     let result = Self::process_transactions(
-                        &working_bank,
+                        &highest_frozen_bank,
                         &root_bank,
                         &mut transactions,
                         &client,
@@ -366,7 +366,7 @@ impl SendTransactionService {
 
     /// Retry transactions sent before.
     fn process_transactions<Client: TransactionClient + std::marker::Send + 'static>(
-        working_bank: &Bank,
+        highest_frozen_bank: &Bank,
         root_bank: &Bank,
         transactions: &mut HashMap<Signature, TransactionInfo>,
         client: &Client,
@@ -401,12 +401,14 @@ impl SendTransactionService {
                 stats.rooted_transactions.fetch_add(1, Ordering::Relaxed);
                 return false;
             }
-            let signature_status = working_bank.get_committed_transaction_status_and_slot(
+            let signature_status = highest_frozen_bank.get_committed_transaction_status_and_slot(
                 &transaction_info.message_hash,
                 &transaction_info.blockhash,
             );
             if let Some((nonce_pubkey, durable_nonce)) = transaction_info.durable_nonce_info {
-                let nonce_account = working_bank.get_account(&nonce_pubkey).unwrap_or_default();
+                let nonce_account = highest_frozen_bank
+                    .get_account(&nonce_pubkey)
+                    .unwrap_or_default();
                 let now = Instant::now();
                 let expired = transaction_info
                     .last_sent_time

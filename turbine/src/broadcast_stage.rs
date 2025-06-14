@@ -467,7 +467,7 @@ pub fn broadcast_shreds(
     let mut result = Ok(());
     // Compute destinations & transmission protocols for each of the shreds to be sent
     let mut shred_select = Measure::start("shred_select");
-    let (root_bank, working_bank) = {
+    let (root_bank, highest_frozen_bank) = {
         let bank_forks = bank_forks.read().unwrap();
         (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
     };
@@ -490,7 +490,7 @@ pub fn broadcast_shreds(
         .into_iter()
         .flat_map(|(slot, shreds)| {
             let cluster_nodes =
-                cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
+                cluster_nodes_cache.get(slot, &root_bank, &highest_frozen_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
             shreds.filter_map(move |(idx, shred)| {
                 let key = shred.id();

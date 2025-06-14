@@ -161,16 +161,17 @@ impl SanitizedTransactionReceiveAndBuffer {
         // Convert to Arcs
         let packets: Vec<_> = packets.into_iter().map(Arc::new).collect();
         // Sanitize packets, generate IDs, and insert into the container.
-        let (root_bank, working_bank) = {
+        let (root_bank, highest_frozen_bank) = {
             let bank_forks = self.bank_forks.read().unwrap();
             let root_bank = bank_forks.root_bank();
-            let working_bank = bank_forks.highest_frozen_bank();
-            (root_bank, working_bank)
+            let highest_frozen_bank = bank_forks.highest_frozen_bank();
+            (root_bank, highest_frozen_bank)
         };
         let alt_resolved_slot = root_bank.slot();
         let sanitized_epoch = root_bank.epoch();
-        let transaction_account_lock_limit = working_bank.get_transaction_account_lock_limit();
-        let vote_only = working_bank.vote_only_bank();
+        let transaction_account_lock_limit =
+            highest_frozen_bank.get_transaction_account_lock_limit();
+        let vote_only = highest_frozen_bank.vote_only_bank();
 
         const CHUNK_SIZE: usize = 128;
         let lock_results: [_; CHUNK_SIZE] = core::array::from_fn(|_| Ok(()));
@@ -201,7 +202,9 @@ impl SanitizedTransactionReceiveAndBuffer {
                 })
                 .filter_map(|(tx, deactivation_slot)| {
                     tx.compute_budget_instruction_details()
-                        .sanitize_and_convert_to_compute_budget_limits(&working_bank.feature_set)
+                        .sanitize_and_convert_to_compute_budget_limits(
+                            &highest_frozen_bank.feature_set,
+                        )
                         .map(|compute_budget| (tx, deactivation_slot, compute_budget.into()))
                         .ok()
                 })
@@ -215,7 +218,7 @@ impl SanitizedTransactionReceiveAndBuffer {
                     fee_budget_limits_vec.push(fee_budget_limits);
                 });
 
-            let check_results = working_bank.check_transactions(
+            let check_results = highest_frozen_bank.check_transactions(
                 &transactions,
                 &lock_results[..transactions.len()],
                 MAX_PROCESSING_AGE,
@@ -233,13 +236,17 @@ impl SanitizedTransactionReceiveAndBuffer {
                 .zip(check_results)
                 .filter(|(_, check_result)| check_result.is_ok())
                 .filter(|(((tx, _), _), _)| {
-                    Consumer::check_fee_payer_unlocked(&working_bank, tx, &mut error_counts).is_ok()
+                    Consumer::check_fee_payer_unlocked(&highest_frozen_bank, tx, &mut error_counts)
+                        .is_ok()
                 })
             {
                 post_transaction_check_count += 1;
 
-                let (priority, cost) =
-                    calculate_priority_and_cost(&transaction, &fee_budget_limits, &working_bank);
+                let (priority, cost) = calculate_priority_and_cost(
+                    &transaction,
+                    &fee_budget_limits,
+                    &highest_frozen_bank,
+                );
 
                 if container.insert_new_transaction(transaction, max_age, priority, cost) {
                     num_dropped_on_capacity += 1;
@@ -288,11 +295,11 @@ impl ReceiveAndBuffer for TransactionViewReceiveAndBuffer {
         count_metrics: &mut SchedulerCountMetrics,
         decision: &BufferedPacketsDecision,
     ) -> Result<usize, DisconnectedError> {
-        let (root_bank, working_bank) = {
+        let (root_bank, highest_frozen_bank) = {
             let bank_forks = self.bank_forks.read().unwrap();
             let root_bank = bank_forks.root_bank();
-            let working_bank = bank_forks.highest_frozen_bank();
-            (root_bank, working_bank)
+            let highest_frozen_bank = bank_forks.highest_frozen_bank();
+            (root_bank, highest_frozen_bank)
         };
 
         // Receive packet batches.
@@ -323,7 +330,7 @@ impl ReceiveAndBuffer for TransactionViewReceiveAndBuffer {
                         count_metrics,
                         decision,
                         &root_bank,
-                        &working_bank,
+                        &highest_frozen_bank,
                         packet_batch_message,
                     );
                 }
@@ -346,7 +353,7 @@ impl ReceiveAndBuffer for TransactionViewReceiveAndBuffer {
                         count_metrics,
                         decision,
                         &root_bank,
-                        &working_bank,
+                        &highest_frozen_bank,
                         packet_batch_message,
                     );
                 }
@@ -372,7 +379,7 @@ impl TransactionViewReceiveAndBuffer {
         count_metrics: &mut SchedulerCountMetrics,
         decision: &BufferedPacketsDecision,
         root_bank: &Bank,
-        working_bank: &Bank,
+        highest_frozen_bank: &Bank,
         packet_batch_message: BankingPacketBatch,
     ) -> usize {
         // If not holding packets, just drop them immediately without parsing.
@@ -384,7 +391,8 @@ impl TransactionViewReceiveAndBuffer {
         // Sanitize packets, generate IDs, and insert into the container.
         let alt_resolved_slot = root_bank.slot();
         let sanitized_epoch = root_bank.epoch();
-        let transaction_account_lock_limit = working_bank.get_transaction_account_lock_limit();
+        let transaction_account_lock_limit =
+            highest_frozen_bank.get_transaction_account_lock_limit();
 
         let mut num_received = 0usize;
         let mut num_buffered = 0usize;
@@ -409,7 +417,7 @@ impl TransactionViewReceiveAndBuffer {
                             .get_transaction(priority_id.id)
                             .expect("transaction must exist")
                     }));
-                    working_bank.check_transactions::<RuntimeTransaction<_>>(
+                    highest_frozen_bank.check_transactions::<RuntimeTransaction<_>>(
                         &transactions,
                         &lock_results[..transactions.len()],
                         MAX_PROCESSING_AGE,
@@ -431,7 +439,7 @@ impl TransactionViewReceiveAndBuffer {
                         .get_transaction(priority_id.id)
                         .expect("transaction must exist");
                     if let Err(err) = Consumer::check_fee_payer_unlocked(
-                        working_bank,
+                        highest_frozen_bank,
                         transaction,
                         &mut error_counters,
                     ) {
@@ -465,7 +473,7 @@ impl TransactionViewReceiveAndBuffer {
                         match Self::try_handle_packet(
                             bytes,
                             root_bank,
-                            working_bank,
+                            highest_frozen_bank,
                             alt_resolved_slot,
                             sanitized_epoch,
                             transaction_account_lock_limit,
@@ -517,7 +525,7 @@ impl TransactionViewReceiveAndBuffer {
     fn try_handle_packet(
         bytes: SharedBytes,
         root_bank: &Bank,
-        working_bank: &Bank,
+        highest_frozen_bank: &Bank,
         alt_resolved_slot: Slot,
         sanitized_epoch: Epoch,
         transaction_account_lock_limit: usize,
@@ -576,14 +584,15 @@ impl TransactionViewReceiveAndBuffer {
 
         let Ok(compute_budget_limits) = view
             .compute_budget_instruction_details()
-            .sanitize_and_convert_to_compute_budget_limits(&working_bank.feature_set)
+            .sanitize_and_convert_to_compute_budget_limits(&highest_frozen_bank.feature_set)
         else {
             return Err(());
         };
 
         let max_age = calculate_max_age(sanitized_epoch, deactivation_slot, alt_resolved_slot);
         let fee_budget_limits = FeeBudgetLimits::from(compute_budget_limits);
-        let (priority, cost) = calculate_priority_and_cost(&view, &fee_budget_limits, working_bank);
+        let (priority, cost) =
+            calculate_priority_and_cost(&view, &fee_budget_limits, highest_frozen_bank);
 
         Ok(TransactionState::new(view, max_age, priority, cost))
     }

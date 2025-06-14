@@ -305,7 +305,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         }
         let slot = shreds.first().unwrap().slot();
         assert!(shreds.iter().all(|shred| shred.slot() == slot));
-        let (root_bank, working_bank) = {
+        let (root_bank, highest_frozen_bank) = {
             let bank_forks = bank_forks.read().unwrap();
             (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
         };
@@ -336,7 +336,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         // Broadcast data
         let cluster_nodes =
             self.cluster_nodes_cache
-                .get(slot, &root_bank, &working_bank, cluster_info);
+                .get(slot, &root_bank, &highest_frozen_bank, cluster_info);
         let socket_addr_space = cluster_info.socket_addr_space();
         let packets: Vec<_> = shreds
             .iter()

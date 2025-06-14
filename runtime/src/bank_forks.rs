@@ -283,27 +283,33 @@ impl BankForks {
         Some(bank)
     }
 
-    pub fn highest_frozen_slot(&self) -> Slot {
+    pub fn highest_slot(&self) -> Slot {
         self.banks.values().map(|bank| bank.slot()).max().unwrap()
     }
 
+    pub fn highest_bank(&self) -> Arc<Bank> {
+        self[self.highest_slot()].clone()
+    }
+
+    pub fn highest_bank_with_scheduler(&self) -> BankWithScheduler {
+        self.banks[&self.highest_slot()].clone_with_scheduler()
+    }
+
+    pub fn highest_frozen_slot(&self) -> Slot {
+        self.banks
+            .values()
+            .filter(|bank| bank.is_frozen())
+            .map(|bank| bank.slot())
+            .max()
+            .unwrap()
+    }
+
     pub fn highest_frozen_bank(&self) -> Arc<Bank> {
-        self._highest_frozen_bank().clone_without_scheduler()
+        self.banks[&self.highest_frozen_slot()].clone_without_scheduler()
     }
 
     pub fn highest_frozen_bank_with_scheduler(&self) -> BankWithScheduler {
-        self._highest_frozen_bank().clone_with_scheduler()
-    }
-
-    fn _highest_frozen_bank(&self) -> &BankWithScheduler {
-        self.banks
-            .values()
-            .max_by(|a, b| {
-                let a_slot = if a.is_frozen() { a.slot() } else { 0 };
-                let b_slot = if b.is_frozen() { b.slot() } else { 0 };
-                a_slot.cmp(&b_slot)
-            })
-            .unwrap()
+        self.banks[&self.highest_frozen_slot()].clone_with_scheduler()
     }
 
     /// Register to be notified when a bank has been dumped (due to duplicate block handling)

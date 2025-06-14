@@ -913,12 +913,12 @@ impl Validator {
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let startup_verification_complete;
         let (mut poh_recorder, entry_receiver) = {
-            let bank = &bank_forks.read().unwrap().highest_frozen_bank();
+            let bank = bank_forks.read().unwrap().root_bank();
             startup_verification_complete = Arc::clone(bank.get_startup_verification_complete());
             PohRecorder::new_with_clear_signal(
                 bank.tick_height(),
                 bank.last_blockhash(),
-                bank.clone(),
+                Arc::clone(&bank),
                 None,
                 bank.ticks_per_slot(),
                 config.delay_leader_block_for_pending_fork,
@@ -1027,10 +1027,8 @@ impl Validator {
 
         let mut block_commitment_cache = BlockCommitmentCache::default();
         let bank_forks_guard = bank_forks.read().unwrap();
-        block_commitment_cache.initialize_slots(
-            bank_forks_guard.highest_frozen_bank().slot(),
-            bank_forks_guard.root(),
-        );
+        block_commitment_cache
+            .initialize_slots(bank_forks_guard.highest_slot(), bank_forks_guard.root());
         drop(bank_forks_guard);
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
@@ -2205,7 +2203,7 @@ impl<'a> ProcessBlockStore<'a> {
                     .name("solRptLdgrStat".to_string())
                     .spawn(move || {
                         while !exit.load(Ordering::Relaxed) {
-                            let slot = bank_forks.read().unwrap().highest_frozen_bank().slot();
+                            let slot = bank_forks.read().unwrap().highest_slot();
                             *start_progress.write().unwrap() =
                                 ValidatorStartProgress::ProcessingLedger { slot, max_slot };
                             sleep(Duration::from_secs(2));

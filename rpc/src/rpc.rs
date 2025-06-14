@@ -4998,9 +4998,7 @@ pub mod tests {
             let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
-                CommitmentSlots::new_from_slot(
-                    self.bank_forks.read().unwrap().highest_frozen_slot(),
-                ),
+                CommitmentSlots::new_from_slot(self.bank_forks.read().unwrap().highest_slot()),
             );
             *self.block_commitment_cache.write().unwrap() = new_block_commitment;
             bank
@@ -7054,7 +7052,7 @@ pub mod tests {
         let block_commitment_cache = Arc::new(RwLock::new(BlockCommitmentCache::new(
             block_commitment,
             42,
-            CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_frozen_slot()),
+            CommitmentSlots::new_from_slot(bank_forks.read().unwrap().highest_slot()),
         )));
 
         let cluster_info = Arc::new(new_test_cluster_info());

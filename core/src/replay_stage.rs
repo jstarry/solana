@@ -669,13 +669,7 @@ impl ReplayStage {
                 last_refresh_time: Instant::now(),
                 last_print_time: Instant::now(),
             };
-            let (working_bank, in_vote_only_mode) = {
-                let r_bank_forks = bank_forks.read().unwrap();
-                (
-                    r_bank_forks.highest_frozen_bank(),
-                    r_bank_forks.get_vote_only_mode_signal(),
-                )
-            };
+            let in_vote_only_mode = bank_forks.read().unwrap().get_vote_only_mode_signal();
             let mut last_threshold_failure_slot = 0;
             // Thread pool to (maybe) replay multiple threads in parallel
             let replay_mode = if replay_forks_threads.get() == 1 {
@@ -694,14 +688,6 @@ impl ReplayStage {
                 .thread_name(|i| format!("solReplayTx{i:02}"))
                 .build()
                 .expect("new rayon threadpool");
-
-            Self::reset_poh_recorder(
-                &my_pubkey,
-                &blockstore,
-                working_bank,
-                &poh_recorder,
-                &leader_schedule_cache,
-            );
 
             loop {
                 // Stop getting entries if we get exit signal
@@ -4458,14 +4444,14 @@ pub(crate) mod tests {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&root_bank));
 
         // PohRecorder
-        let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
+        let highest_bank = bank_forks.read().unwrap().highest_bank();
         let poh_recorder = RwLock::new(
             PohRecorder::new(
-                working_bank.tick_height(),
-                working_bank.last_blockhash(),
-                working_bank.clone(),
+                highest_bank.tick_height(),
+                highest_bank.last_blockhash(),
+                highest_bank.clone(),
                 None,
-                working_bank.ticks_per_slot(),
+                highest_bank.ticks_per_slot(),
                 blockstore.clone(),
                 &leader_schedule_cache,
                 &PohConfig::default(),
@@ -9238,19 +9224,19 @@ pub(crate) mod tests {
             ..
         } = vote_simulator;
 
-        let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
-        assert!(working_bank.is_complete());
-        assert!(working_bank.is_frozen());
+        let highest_bank = bank_forks.read().unwrap().highest_bank();
+        assert!(highest_bank.is_complete());
+        assert!(highest_bank.is_frozen());
         // Mark startup verification as complete to avoid skipping leader slots
-        working_bank.set_initial_accounts_hash_verification_completed();
+        highest_bank.set_initial_accounts_hash_verification_completed();
 
         // Insert a block two slots greater than current bank. This slot does
         // not have a corresponding Bank in BankForks; this emulates a scenario
         // where the block had previously been created and added to BankForks,
         // but then got removed. This could be the case if the Bank was not on
         // the major fork.
-        let dummy_slot = working_bank.slot() + 2;
-        let initial_slot = working_bank.slot();
+        let dummy_slot = highest_bank.slot() + 2;
+        let initial_slot = highest_bank.slot();
         let num_entries = 10;
         let (shreds, _) = make_slot_entries(dummy_slot, initial_slot, num_entries);
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -9259,14 +9245,14 @@ pub(crate) mod tests {
         ReplayStage::reset_poh_recorder(
             &my_pubkey,
             &blockstore,
-            working_bank.clone(),
+            highest_bank.clone(),
             &poh_recorder,
             &leader_schedule_cache,
         );
 
         // Register just over one slot worth of ticks directly with PoH recorder
         let num_poh_ticks =
-            (working_bank.ticks_per_slot() * working_bank.hashes_per_tick().unwrap()) + 1;
+            (highest_bank.ticks_per_slot() * highest_bank.hashes_per_tick().unwrap()) + 1;
         poh_recorder
             .write()
             .map(|mut poh_recorder| {
@@ -9329,14 +9315,14 @@ pub(crate) mod tests {
             &banking_tracer,
             has_new_vote_been_rooted,
         ));
-        // Get the new working bank, which is also the new leader bank/slot
-        let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
+        // Get the new highest bank, which is also the new leader bank/slot
+        let highest_bank = bank_forks.read().unwrap().highest_bank();
         // The new bank's slot must NOT be dummy_slot as the blockstore already
         // had a shred inserted for dummy_slot prior to maybe_start_leader().
         // maybe_start_leader() must not pick dummy_slot to avoid creating a
         // duplicate block.
-        assert_eq!(working_bank.slot(), good_slot);
-        assert_eq!(working_bank.parent_slot(), initial_slot);
+        assert_eq!(highest_bank.slot(), good_slot);
+        assert_eq!(highest_bank.parent_slot(), initial_slot);
     }
 
     #[test]

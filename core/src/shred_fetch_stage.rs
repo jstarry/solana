@@ -85,7 +85,7 @@ impl ShredFetchStage {
             mut slots_per_epoch,
             mut feature_set,
             mut epoch_schedule,
-            mut last_slot,
+            mut last_frozen_slot,
         ) = {
             let bank_forks_r = bank_forks.read().unwrap();
             let root_bank = bank_forks_r.root_bank();
@@ -104,7 +104,7 @@ impl ShredFetchStage {
                 last_updated = Instant::now();
                 let root_bank = {
                     let bank_forks_r = bank_forks.read().unwrap();
-                    last_slot = bank_forks_r.highest_frozen_slot();
+                    last_frozen_slot = bank_forks_r.highest_frozen_slot();
                     bank_forks_r.root_bank()
                 };
                 feature_set = root_bank.feature_set.clone();
@@ -149,7 +149,7 @@ impl ShredFetchStage {
 
             // Filter out shreds that are way too far in the future to avoid the
             // overhead of having to hold onto them.
-            let max_slot = last_slot + MAX_SHRED_DISTANCE_MINIMUM.max(2 * slots_per_epoch);
+            let max_slot = last_frozen_slot + MAX_SHRED_DISTANCE_MINIMUM.max(2 * slots_per_epoch);
             let drop_unchained_merkle_shreds = |shred_slot| {
                 check_feature_activation(
                     &feature_set::drop_unchained_merkle_shreds::id(),

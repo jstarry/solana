@@ -353,10 +353,7 @@ fn main() {
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
     let bank0 = Bank::new_for_benches(&genesis_config);
     let bank_forks = BankForks::new_rw_arc(bank0);
-    let mut bank = bank_forks
-        .read()
-        .unwrap()
-        .highest_frozen_bank_with_scheduler();
+    let mut bank = bank_forks.read().unwrap().highest_bank_with_scheduler();
 
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
@@ -563,10 +560,7 @@ fn main() {
                 &poh_recorder,
                 new_bank,
             );
-            bank = bank_forks
-                .read()
-                .unwrap()
-                .highest_frozen_bank_with_scheduler();
+            bank = bank_forks.read().unwrap().highest_bank_with_scheduler();
             assert_matches!(poh_recorder.read().unwrap().bank(), Some(_));
             insert_time.stop();
             debug!(
@@ -603,7 +597,7 @@ fn main() {
     txs_processed += bank_forks
         .read()
         .unwrap()
-        .highest_frozen_bank()
+        .highest_bank()
         .transaction_count();
     debug!("processed: {} base: {}", txs_processed, base_tx_count);
 

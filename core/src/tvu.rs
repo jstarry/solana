@@ -239,7 +239,7 @@ impl Tvu {
             let epoch_schedule = bank_forks
                 .read()
                 .unwrap()
-                .highest_frozen_bank()
+                .root_bank()
                 .epoch_schedule()
                 .clone();
             let repair_info = RepairInfo {
@@ -486,6 +486,7 @@ pub mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(starting_balance);
 
         let bank_forks = BankForks::new_rw_arc(Bank::new_for_tests(&genesis_config));
+        let bank = bank_forks.read().unwrap().root_bank();
 
         let (turbine_quic_endpoint_sender, _turbine_quic_endpoint_receiver) =
             tokio::sync::mpsc::channel(/*capacity:*/ 128);
@@ -510,7 +511,6 @@ pub mod tests {
         } = Blockstore::open_with_signal(&blockstore_path, BlockstoreOptions::default())
             .expect("Expected to successfully open ledger");
         let blockstore = Arc::new(blockstore);
-        let bank = bank_forks.read().unwrap().highest_frozen_bank();
         let (exit, poh_recorder, _transaction_recorder, poh_service, _entry_receiver) =
             create_test_recorder(bank.clone(), blockstore.clone(), None, None);
         let vote_keypair = Keypair::new();

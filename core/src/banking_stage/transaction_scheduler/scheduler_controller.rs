@@ -242,7 +242,7 @@ where
             transaction_ids.push(id);
         }
 
-        let bank = self.bank_forks.read().unwrap().highest_frozen_bank();
+        let highest_frozen_bank = self.bank_forks.read().unwrap().highest_frozen_bank();
 
         const CHUNK_SIZE: usize = 128;
         let mut error_counters = TransactionErrorMetrics::default();
@@ -258,7 +258,7 @@ where
                 })
                 .collect();
 
-            let check_results = bank.check_transactions::<R::Transaction>(
+            let check_results = highest_frozen_bank.check_transactions::<R::Transaction>(
                 &sanitized_txs,
                 &lock_results,
                 MAX_PROCESSING_AGE,

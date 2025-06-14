@@ -522,7 +522,7 @@ impl<T: 'static> ClusterNodesCache<T> {
         &self,
         shred_slot: Slot,
         root_bank: &Bank,
-        working_bank: &Bank,
+        highest_frozen_bank: &Bank,
         cluster_info: &ClusterInfo,
     ) -> Arc<ClusterNodes<T>> {
         // Returns the cached entry for the epoch if it is either uninitialized
@@ -556,7 +556,7 @@ impl<T: 'static> ClusterNodesCache<T> {
         });
         // Initialize if needed by only a single thread outside locks.
         let (_, nodes) = entry.get_or_init(|| {
-            let epoch_staked_nodes = [root_bank, working_bank]
+            let epoch_staked_nodes = [root_bank, highest_frozen_bank]
                 .iter()
                 .find_map(|bank| bank.epoch_staked_nodes(epoch))
                 .unwrap_or_else(|| {

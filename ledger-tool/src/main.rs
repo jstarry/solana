@@ -1828,19 +1828,19 @@ fn main() {
                             transaction_status_sender,
                         );
 
-                    let working_bank = bank_forks.read().unwrap().highest_frozen_bank();
+                    let highest_frozen_bank = bank_forks.read().unwrap().highest_frozen_bank();
                     if print_accounts_stats {
-                        working_bank.print_accounts_stats();
+                        highest_frozen_bank.print_accounts_stats();
                     }
                     if print_bank_hash {
                         let slot_bank_hash = SlotBankHash {
-                            slot: working_bank.slot(),
-                            hash: working_bank.hash().to_string(),
+                            slot: highest_frozen_bank.slot(),
+                            hash: highest_frozen_bank.hash().to_string(),
                         };
                         println!("{}", output_format.formatted_string(&slot_bank_hash));
                     }
                     if write_bank_file {
-                        bank_hash_details::write_bank_hash_details_file(&working_bank)
+                        bank_hash_details::write_bank_hash_details_file(&highest_frozen_bank)
                             .map_err(|err| {
                                 warn!("Unable to write bank hash_details file: {err}");
                             })

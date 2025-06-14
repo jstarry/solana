@@ -233,7 +233,7 @@ fn test_block_subscription() {
     let blockstore = Arc::new(blockstore);
 
     // populate ledger with test txs
-    let bank = bank_forks.read().unwrap().highest_frozen_bank();
+    let bank = bank_forks.read().unwrap().root_bank();
     let keypair1 = Keypair::new();
     let keypair2 = Keypair::new();
     let keypair3 = Keypair::new();
@@ -286,7 +286,7 @@ fn test_block_subscription() {
     .unwrap();
 
     // trigger Gossip notification
-    let slot = bank_forks.read().unwrap().highest_frozen_slot();
+    let slot = bank_forks.read().unwrap().highest_slot();
     subscriptions.notify_gossip_subscribers(slot);
     let maybe_actual = receiver.recv_timeout(Duration::from_millis(400));
     match maybe_actual {

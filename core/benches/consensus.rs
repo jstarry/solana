@@ -27,17 +27,12 @@ fn bench_save_tower(bench: &mut Bencher) {
 
     let vote_account_pubkey = &Pubkey::default();
     let node_keypair = Arc::new(Keypair::new());
-    let heaviest_bank = BankForks::new_rw_arc(Bank::default_for_tests())
+    let root_bank = BankForks::new_rw_arc(Bank::default_for_tests())
         .read()
         .unwrap()
-        .highest_frozen_bank();
+        .root_bank();
     let tower_storage = FileTowerStorage::new(dir.path().to_path_buf());
-    let tower = Tower::new(
-        &node_keypair.pubkey(),
-        vote_account_pubkey,
-        0,
-        &heaviest_bank,
-    );
+    let tower = Tower::new(&node_keypair.pubkey(), vote_account_pubkey, 0, &root_bank);
 
     bench.iter(move || {
         tower.save(&tower_storage, &node_keypair).unwrap();
@@ -49,16 +44,11 @@ fn bench_save_tower(bench: &mut Bencher) {
 fn bench_generate_ancestors_descendants(bench: &mut Bencher) {
     let vote_account_pubkey = &Pubkey::default();
     let node_keypair = Arc::new(Keypair::new());
-    let heaviest_bank = BankForks::new_rw_arc(Bank::default_for_tests())
+    let root_bank = BankForks::new_rw_arc(Bank::default_for_tests())
         .read()
         .unwrap()
-        .highest_frozen_bank();
-    let mut tower = Tower::new(
-        &node_keypair.pubkey(),
-        vote_account_pubkey,
-        0,
-        &heaviest_bank,
-    );
+        .root_bank();
+    let mut tower = Tower::new(&node_keypair.pubkey(), vote_account_pubkey, 0, &root_bank);
 
     let num_banks = 500;
     let forks = tr(0);

@@ -90,7 +90,7 @@ impl BanksServer {
                 .map(|info| deserialize(&info.wire_transaction).unwrap())
                 .collect();
             loop {
-                let bank = bank_forks.read().unwrap().highest_frozen_bank();
+                let bank = bank_forks.read().unwrap().highest_bank();
                 // bank forks lock released, now verify bank hasn't been frozen yet
                 // in the mean-time the bank can not be frozen until this tx batch
                 // has been processed
@@ -111,7 +111,7 @@ impl BanksServer {
         poll_signature_status_sleep_duration: Duration,
     ) -> Self {
         let (transaction_sender, transaction_receiver) = unbounded();
-        let bank = bank_forks.read().unwrap().highest_frozen_bank();
+        let bank = bank_forks.read().unwrap().highest_bank();
         let slot = bank.slot();
         {
             // ensure that the commitment cache and bank are synced
@@ -352,7 +352,7 @@ impl Banks for BanksServer {
         _: Context,
         transaction: VersionedTransaction,
     ) -> BanksTransactionResultWithMetadata {
-        let bank = self.bank_forks.read().unwrap().highest_frozen_bank();
+        let bank = self.bank_forks.read().unwrap().highest_bank();
         match bank.process_transaction_with_metadata(transaction) {
             Err(error) => BanksTransactionResultWithMetadata {
                 result: Err(error),

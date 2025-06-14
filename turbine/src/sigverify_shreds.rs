@@ -179,14 +179,14 @@ fn run_shred_sigverify<const K: usize>(
             .map(|mut packet| packet.meta_mut().set_discard(true))
             .count()
     });
-    let (working_bank, root_bank) = {
+    let (root_bank, highest_frozen_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.highest_frozen_bank(), bank_forks.root_bank())
+        (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
     };
     verify_packets(
         thread_pool,
         &keypair.pubkey(),
-        &working_bank,
+        &highest_frozen_bank,
         leader_schedule_cache,
         recycler_cache,
         shred_buffer,
@@ -213,7 +213,7 @@ fn run_shred_sigverify<const K: usize>(
                     && !verify_retransmitter_signature(
                         shred,
                         &root_bank,
-                        &working_bank,
+                        &highest_frozen_bank,
                         cluster_info,
                         leader_schedule_cache,
                         cluster_nodes_cache,
@@ -296,7 +296,7 @@ fn run_shred_sigverify<const K: usize>(
 fn verify_retransmitter_signature(
     shred: &[u8],
     root_bank: &Bank,
-    working_bank: &Bank,
+    highest_frozen_bank: &Bank,
     cluster_info: &ClusterInfo,
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
@@ -315,7 +315,8 @@ fn verify_retransmitter_signature(
     let Some(shred) = shred::layout::get_shred_id(shred) else {
         return false;
     };
-    let Some(leader) = leader_schedule_cache.slot_leader_at(shred.slot(), Some(working_bank))
+    let Some(leader) =
+        leader_schedule_cache.slot_leader_at(shred.slot(), Some(highest_frozen_bank))
     else {
         stats
             .num_unknown_slot_leader
@@ -323,7 +324,7 @@ fn verify_retransmitter_signature(
         return false;
     };
     let cluster_nodes =
-        cluster_nodes_cache.get(shred.slot(), root_bank, working_bank, cluster_info);
+        cluster_nodes_cache.get(shred.slot(), root_bank, highest_frozen_bank, cluster_info);
     let data_plane_fanout = cluster_nodes::get_data_plane_fanout(shred.slot(), root_bank);
     let parent = match cluster_nodes.get_retransmit_parent(&leader, &shred, data_plane_fanout) {
         Ok(Some(parent)) => parent,
@@ -354,18 +355,22 @@ fn verify_retransmitter_signature(
 fn verify_packets(
     thread_pool: &ThreadPool,
     self_pubkey: &Pubkey,
-    working_bank: &Bank,
+    highest_frozen_bank: &Bank,
     leader_schedule_cache: &LeaderScheduleCache,
     recycler_cache: &RecyclerCache,
     packets: &mut [PacketBatch],
     cache: &RwLock<LruCache>,
 ) {
-    let leader_slots: HashMap<Slot, Pubkey> =
-        get_slot_leaders(self_pubkey, packets, leader_schedule_cache, working_bank)
-            .into_iter()
-            .filter_map(|(slot, pubkey)| Some((slot, pubkey?)))
-            .chain(std::iter::once((Slot::MAX, Pubkey::default())))
-            .collect();
+    let leader_slots: HashMap<Slot, Pubkey> = get_slot_leaders(
+        self_pubkey,
+        packets,
+        leader_schedule_cache,
+        highest_frozen_bank,
+    )
+    .into_iter()
+    .filter_map(|(slot, pubkey)| Some((slot, pubkey?)))
+    .chain(std::iter::once((Slot::MAX, Pubkey::default())))
+    .collect();
     let out = verify_shreds_gpu(thread_pool, packets, &leader_slots, recycler_cache, cache);
     solana_perf::sigverify::mark_disabled(packets, &out);
 }

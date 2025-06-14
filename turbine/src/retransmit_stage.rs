@@ -117,7 +117,7 @@ impl RetransmitStats {
     fn maybe_submit(
         &mut self,
         root_bank: &Bank,
-        working_bank: &Bank,
+        highest_frozen_bank: &Bank,
         cluster_info: &ClusterInfo,
         cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
     ) {
@@ -126,7 +126,12 @@ impl RetransmitStats {
             return;
         }
         cluster_nodes_cache
-            .get(root_bank.slot(), root_bank, working_bank, cluster_info)
+            .get(
+                root_bank.slot(),
+                root_bank,
+                highest_frozen_bank,
+                cluster_info,
+            )
             .submit_metrics("cluster_nodes_retransmit", timestamp());
         datapoint_info!(
             "retransmit-stage",
@@ -282,9 +287,9 @@ fn retransmit(
     stats.total_batches += 1;
 
     let mut epoch_fetch = Measure::start("retransmit_epoch_fetch");
-    let (working_bank, root_bank) = {
+    let (root_bank, highest_frozen_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.highest_frozen_bank(), bank_forks.root_bank())
+        (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
     };
     epoch_fetch.stop();
     stats.epoch_fetch += epoch_fetch.as_us();
@@ -311,13 +316,14 @@ fn retransmit(
             // and if the leader is unknown they should fail signature check.
             // So here we should expect to know the slot leader and otherwise
             // skip the shred.
-            let Some(slot_leader) = leader_schedule_cache.slot_leader_at(slot, Some(&working_bank))
+            let Some(slot_leader) =
+                leader_schedule_cache.slot_leader_at(slot, Some(&highest_frozen_bank))
             else {
                 stats.unknown_shred_slot_leader += num_shreds;
                 return None;
             };
             let cluster_nodes =
-                cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
+                cluster_nodes_cache.get(slot, &root_bank, &highest_frozen_bank, cluster_info);
             Some((slot, (slot_leader, cluster_nodes)))
         })
         .collect();
@@ -383,7 +389,12 @@ fn retransmit(
     );
     timer_start.stop();
     stats.total_time += timer_start.as_us();
-    stats.maybe_submit(&root_bank, &working_bank, cluster_info, cluster_nodes_cache);
+    stats.maybe_submit(
+        &root_bank,
+        &highest_frozen_bank,
+        cluster_info,
+        cluster_nodes_cache,
+    );
     Ok(())
 }
 
@@ -517,9 +528,9 @@ fn cache_retransmit_addrs(
     if shreds.is_empty() {
         return false;
     }
-    let (working_bank, root_bank) = {
+    let (root_bank, highest_frozen_bank) = {
         let bank_forks = bank_forks.read().unwrap();
-        (bank_forks.highest_frozen_bank(), bank_forks.root_bank())
+        (bank_forks.root_bank(), bank_forks.highest_frozen_bank())
     };
     let cache: HashMap<Slot, _> = shreds
         .iter()
@@ -527,9 +538,10 @@ fn cache_retransmit_addrs(
         .collect::<HashSet<Slot>>()
         .into_iter()
         .filter_map(|slot: Slot| {
-            let slot_leader = leader_schedule_cache.slot_leader_at(slot, Some(&working_bank))?;
+            let slot_leader =
+                leader_schedule_cache.slot_leader_at(slot, Some(&highest_frozen_bank))?;
             let cluster_nodes =
-                cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
+                cluster_nodes_cache.get(slot, &root_bank, &highest_frozen_bank, cluster_info);
             Some((slot, (slot_leader, cluster_nodes)))
         })
         .collect();

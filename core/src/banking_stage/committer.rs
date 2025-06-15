@@ -131,7 +131,7 @@ impl Committer {
             // done to send over the status sender.
             let txs = sanitized_transactions
                 .iter()
-                .map(|tx| tx.as_sanitized_transaction().into_owned())
+                .map(|tx| tx.as_resolved_transaction().into_owned())
                 .collect_vec();
             let mut transaction_index = Saturating(starting_transaction_index.unwrap_or_default());
             let (batch_transaction_indexes, tx_costs): (Vec<_>, Vec<_>) = commit_results

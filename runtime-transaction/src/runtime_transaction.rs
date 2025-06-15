@@ -59,7 +59,7 @@ impl<T> StaticMeta for RuntimeTransaction<T> {
     }
 }
 
-impl<T: SVMMessage> DynamicMeta for RuntimeTransaction<T> {}
+impl<T: DynamicMeta> DynamicMeta for RuntimeTransaction<T> {}
 
 impl<T> Deref for RuntimeTransaction<T> {
     type Target = T;

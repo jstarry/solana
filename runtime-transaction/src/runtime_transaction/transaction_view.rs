@@ -2,6 +2,7 @@ use {
     super::{ComputeBudgetInstructionDetails, RuntimeTransaction},
     crate::{
         instruction_meta::InstructionMeta,
+        resolved_transaction::ResolvedTransaction,
         transaction_meta::{StaticMeta, TransactionMeta},
         transaction_with_meta::TransactionWithMeta,
     },
@@ -18,8 +19,7 @@ use {
     solana_pubkey::Pubkey,
     solana_svm_transaction::svm_message::SVMMessage,
     solana_transaction::{
-        sanitized::{MessageHash, SanitizedTransaction},
-        simple_vote_transaction_checker::is_simple_vote_transaction_impl,
+        sanitized::MessageHash, simple_vote_transaction_checker::is_simple_vote_transaction_impl,
         versioned::VersionedTransaction,
     },
     solana_transaction_error::{TransactionError, TransactionResult as Result},
@@ -95,19 +95,12 @@ impl<D: TransactionData> RuntimeTransaction<ResolvedTransactionView<D>> {
         let transaction =
             ResolvedTransactionView::try_new(transaction, loaded_addresses, reserved_account_keys)
                 .map_err(|_| TransactionError::SanitizeFailure)?;
-        let mut tx = Self { transaction, meta };
-        tx.load_dynamic_metadata()?;
-
-        Ok(tx)
-    }
-
-    fn load_dynamic_metadata(&mut self) -> Result<()> {
-        Ok(())
+        Ok(Self { transaction, meta })
     }
 }
 
 impl<D: TransactionData> TransactionWithMeta for RuntimeTransaction<ResolvedTransactionView<D>> {
-    fn as_sanitized_transaction(&self) -> Cow<SanitizedTransaction> {
+    fn as_resolved_transaction(&self) -> Cow<ResolvedTransaction> {
         let VersionedTransaction {
             signatures,
             message,
@@ -129,18 +122,12 @@ impl<D: TransactionData> TransactionWithMeta for RuntimeTransaction<ResolvedTran
             }),
         };
 
-        // SAFETY:
-        // - Simple conversion between different formats
-        // - `ResolvedTransactionView` has undergone sanitization checks
-        Cow::Owned(
-            SanitizedTransaction::try_new_from_fields(
-                message,
-                *self.message_hash(),
-                self.is_simple_vote_transaction(),
-                signatures,
-            )
-            .expect("transaction view is sanitized"),
-        )
+        Cow::Owned(ResolvedTransaction {
+            message,
+            message_hash: *self.message_hash(),
+            is_simple_vote_tx: self.is_simple_vote_transaction(),
+            signatures,
+        })
     }
 
     fn to_versioned_transaction(&self) -> VersionedTransaction {
@@ -310,9 +297,9 @@ mod tests {
     }
 
     #[test]
-    fn test_as_sanitized_transaction() {
+    fn test_as_resolved_transaction() {
         fn assert_translation(
-            original_transaction: SanitizedTransaction,
+            original_transaction: ResolvedTransaction,
             loaded_addresses: Option<LoadedAddresses>,
             reserved_account_keys: &HashSet<Pubkey>,
         ) {
@@ -332,9 +319,9 @@ mod tests {
             )
             .unwrap();
 
-            let sanitized_transaction = runtime_transaction.as_sanitized_transaction();
+            let resolved_transaction = runtime_transaction.as_resolved_transaction();
             assert_eq!(
-                sanitized_transaction.message_hash(),
+                resolved_transaction.message_hash(),
                 original_transaction.message_hash()
             );
         }
@@ -348,7 +335,7 @@ mod tests {
             1,
             Hash::new_unique(),
         ));
-        let sanitized_transaction = SanitizedTransaction::try_create(
+        let resolved_transaction = ResolvedTransaction::try_create(
             original_transaction,
             MessageHash::Compute,
             None,
@@ -356,7 +343,7 @@ mod tests {
             &reserved_key_set,
         )
         .unwrap();
-        assert_translation(sanitized_transaction, None, &reserved_key_set);
+        assert_translation(resolved_transaction, None, &reserved_key_set);
 
         // Simple transfer with loaded addresses.
         let payer = Pubkey::new_unique();
@@ -380,7 +367,7 @@ mod tests {
             writable: vec![to],
             readonly: vec![],
         };
-        let sanitized_transaction = SanitizedTransaction::try_create(
+        let resolved_transaction = ResolvedTransaction::try_create(
             original_transaction,
             MessageHash::Compute,
             None,
@@ -389,7 +376,7 @@ mod tests {
         )
         .unwrap();
         assert_translation(
-            sanitized_transaction,
+            resolved_transaction,
             Some(loaded_addresses),
             &reserved_key_set,
         );

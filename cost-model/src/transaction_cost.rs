@@ -287,10 +287,10 @@ impl solana_runtime_transaction::transaction_with_meta::TransactionWithMeta
     for WritableKeysTransaction
 {
     #[allow(refining_impl_trait)]
-    fn as_sanitized_transaction(
+    fn as_resolved_transaction(
         &self,
-    ) -> std::borrow::Cow<solana_transaction::sanitized::SanitizedTransaction> {
-        unimplemented!("WritableKeysTransaction::as_sanitized_transaction");
+    ) -> std::borrow::Cow<solana_runtime_transaction::ResolvedTransaction> {
+        unimplemented!("WritableKeysTransaction::as_resolved_transaction");
     }
 
     fn to_versioned_transaction(&self) -> solana_transaction::versioned::VersionedTransaction {

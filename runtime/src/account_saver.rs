@@ -2,6 +2,7 @@ use {
     core::borrow::Borrow,
     solana_account::AccountSharedData,
     solana_pubkey::Pubkey,
+    solana_runtime_transaction::resolved_transaction::ResolvedTransaction,
     solana_svm::{
         rollback_accounts::RollbackAccounts,
         transaction_processing_result::{
@@ -10,7 +11,6 @@ use {
         },
     },
     solana_svm_transaction::svm_message::SVMMessage,
-    solana_transaction::sanitized::SanitizedTransaction,
     solana_transaction_context::TransactionAccount,
 };
 
@@ -42,19 +42,19 @@ fn max_number_of_accounts_to_collect(
 }
 
 // Due to the current geyser interface, we are forced to collect references to
-// `SanitizedTransaction` - even if that's not the type that we have.
+// `ResolvedTransaction` - even if that's not the type that we have.
 // Until that interface changes, this function takes in an additional
-// `txs_refs` parameter that collects references to `SanitizedTransaction`
+// `txs_refs` parameter that collects references to `ResolvedTransaction`
 // if it's provided.
 // If geyser is not used, `txs_refs` should be `None`, since the work would
 // be useless.
 pub fn collect_accounts_to_store<'a, T: SVMMessage>(
     txs: &'a [T],
-    txs_refs: &'a Option<Vec<impl Borrow<SanitizedTransaction>>>,
+    txs_refs: &'a Option<Vec<impl Borrow<ResolvedTransaction>>>,
     processing_results: &'a [TransactionProcessingResult],
 ) -> (
     Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    Option<Vec<&'a SanitizedTransaction>>,
+    Option<Vec<&'a ResolvedTransaction>>,
 ) {
     let collect_capacity = max_number_of_accounts_to_collect(txs, processing_results);
     let mut accounts = Vec::with_capacity(collect_capacity);
@@ -103,9 +103,9 @@ pub fn collect_accounts_to_store<'a, T: SVMMessage>(
 
 fn collect_accounts_for_successful_tx<'a, T: SVMMessage>(
     collected_accounts: &mut Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    collected_account_transactions: &mut Option<Vec<&'a SanitizedTransaction>>,
+    collected_account_transactions: &mut Option<Vec<&'a ResolvedTransaction>>,
     transaction: &'a T,
-    transaction_ref: Option<&'a SanitizedTransaction>,
+    transaction_ref: Option<&'a ResolvedTransaction>,
     transaction_accounts: &'a [TransactionAccount],
 ) {
     for (i, (address, account)) in (0..transaction.account_keys().len()).zip(transaction_accounts) {
@@ -131,8 +131,8 @@ fn collect_accounts_for_successful_tx<'a, T: SVMMessage>(
 
 fn collect_accounts_for_failed_tx<'a>(
     collected_accounts: &mut Vec<(&'a Pubkey, &'a AccountSharedData)>,
-    collected_account_transactions: &mut Option<Vec<&'a SanitizedTransaction>>,
-    transaction_ref: Option<&'a SanitizedTransaction>,
+    collected_account_transactions: &mut Option<Vec<&'a ResolvedTransaction>>,
+    transaction_ref: Option<&'a ResolvedTransaction>,
     rollback_accounts: &'a RollbackAccounts,
 ) {
     for (address, account) in rollback_accounts {

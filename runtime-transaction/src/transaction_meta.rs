@@ -27,7 +27,7 @@ pub trait StaticMeta {
 }
 
 /// Statically loaded meta is a supertrait of Dynamically loaded meta, when
-/// transaction transited successfully into dynamically loaded, it should
+/// transaction transitioned successfully into dynamically loaded, it should
 /// have both meta data populated and available.
 /// Dynamic metadata available after accounts addresses are loaded from
 /// on-chain ALT, examples are: transaction usage costs, nonce account.

@@ -23,7 +23,6 @@ use {
     solana_svm_transaction::{
         message_address_table_lookup::SVMMessageAddressTableLookup, svm_message::SVMMessage,
     },
-    solana_transaction::sanitized::SanitizedTransaction,
     solana_transaction_context::TransactionAccount,
     solana_transaction_error::TransactionResult as Result,
     std::{
@@ -550,7 +549,7 @@ impl Accounts {
     pub fn store_cached<'a>(
         &self,
         accounts: impl StorableAccounts<'a>,
-        transactions: Option<&'a [&'a SanitizedTransaction]>,
+        transactions: Option<&'a [&'a ResolvedTransaction]>,
     ) {
         self.accounts_db
             .store_cached_inline_update_index(accounts, transactions);

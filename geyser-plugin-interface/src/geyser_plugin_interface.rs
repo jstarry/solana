@@ -118,6 +118,7 @@ pub enum ReplicaAccountUpdater<'a> {
     Transaction {
         message_hash: &'a Hash,
         signature: &'a Signature,
+        is_simple_vote: bool,
     },
 }
 

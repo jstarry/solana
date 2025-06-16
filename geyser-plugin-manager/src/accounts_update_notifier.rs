@@ -134,6 +134,7 @@ impl AccountsUpdateNotifierImpl {
                 Some(txn) => ReplicaAccountUpdater::Transaction {
                     signature: txn.signature(),
                     message_hash: txn.message_hash(),
+                    is_simple_vote: txn.is_simple_vote_transaction(),
                 },
                 None => ReplicaAccountUpdater::Runtime,
             },

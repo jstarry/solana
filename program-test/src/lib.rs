@@ -23,7 +23,6 @@ use {
     solana_keypair::Keypair,
     solana_log_collector::ic_msg,
     solana_native_token::sol_to_lamports,
-    solana_poh_config::PohConfig,
     solana_program_entrypoint::{deserialize, SUCCESS},
     solana_program_error::{ProgramError, ProgramResult},
     solana_program_runtime::{
@@ -56,14 +55,9 @@ use {
         mem::transmute,
         panic::AssertUnwindSafe,
         path::{Path, PathBuf},
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
-        time::Duration,
+        sync::{Arc, RwLock},
     },
     thiserror::Error,
-    tokio::task::JoinHandle,
 };
 // Export types so test clients can limit their solana crate dependencies
 pub use {
@@ -830,8 +824,6 @@ impl ProgramTest {
             }
         }
 
-        let target_tick_duration = Duration::from_micros(100);
-        genesis_config.poh_config = PohConfig::new_sleep(target_tick_duration);
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
@@ -909,23 +901,6 @@ impl ProgramTest {
     pub async fn start(mut self) -> (Arc<Bank>, Keypair) {
         let (bank_forks, gci) = self.setup();
         let bank = bank_forks.read().unwrap().working_bank();
-        let target_tick_duration = gci.genesis_config.poh_config.target_tick_duration;
-        let target_slot_duration = target_tick_duration * gci.genesis_config.ticks_per_slot as u32;
-
-        // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
-        // are required when sending multiple otherwise identical transactions in series from a
-        // test
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(target_slot_duration).await;
-                bank_forks
-                    .read()
-                    .unwrap()
-                    .working_bank()
-                    .register_unique_recent_blockhash_for_test();
-            }
-        });
-
         (bank, gci.mint_keypair)
     }
 
@@ -939,64 +914,18 @@ impl ProgramTest {
     }
 }
 
-struct DroppableTask<T>(Arc<AtomicBool>, JoinHandle<T>);
-
-impl<T> Drop for DroppableTask<T> {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-        trace!(
-            "stopping task, which is currently {}",
-            if self.1.is_finished() {
-                "finished"
-            } else {
-                "running"
-            }
-        );
-    }
-}
-
 pub struct ProgramTestContext {
     pub payer: Keypair,
     genesis_config: GenesisConfig,
     bank_forks: Arc<RwLock<BankForks>>,
-    _bank_task: DroppableTask<()>,
 }
 
 impl ProgramTestContext {
     fn new(bank_forks: Arc<RwLock<BankForks>>, genesis_config_info: GenesisConfigInfo) -> Self {
-        // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
-        // are required when sending multiple otherwise identical transactions in series from a
-        // test
-        let running_bank_forks = bank_forks.clone();
-        let target_tick_duration = genesis_config_info
-            .genesis_config
-            .poh_config
-            .target_tick_duration;
-        let target_slot_duration =
-            target_tick_duration * genesis_config_info.genesis_config.ticks_per_slot as u32;
-        let exit = Arc::new(AtomicBool::new(false));
-        let bank_task = DroppableTask(
-            exit.clone(),
-            tokio::spawn(async move {
-                loop {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
-                    }
-                    tokio::time::sleep(target_slot_duration).await;
-                    running_bank_forks
-                        .read()
-                        .unwrap()
-                        .working_bank()
-                        .register_unique_recent_blockhash_for_test();
-                }
-            }),
-        );
-
         Self {
             payer: genesis_config_info.mint_keypair,
             genesis_config: genesis_config_info.genesis_config,
             bank_forks,
-            _bank_task: bank_task,
         }
     }
 

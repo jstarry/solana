@@ -69,8 +69,14 @@ async fn test_extend_program() {
         recent_blockhash,
     );
 
-    assert_matches!(context.working_bank().process_transaction(&transaction), Ok(()));
-    let updated_program_data_account = context.working_bank().get_account(&programdata_address).unwrap();
+    assert_matches!(
+        context.working_bank().process_transaction(&transaction),
+        Ok(())
+    );
+    let updated_program_data_account = context
+        .working_bank()
+        .get_account(&programdata_address)
+        .unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
         program_data_len + ADDITIONAL_BYTES as usize
@@ -125,8 +131,14 @@ async fn test_failed_extend_twice_in_same_slot() {
         recent_blockhash,
     );
 
-    assert_matches!(context.working_bank().process_transaction(&transaction), Ok(()));
-    let updated_program_data_account = context.working_bank().get_account(&programdata_address).unwrap();
+    assert_matches!(
+        context.working_bank().process_transaction(&transaction),
+        Ok(())
+    );
+    let updated_program_data_account = context
+        .working_bank()
+        .get_account(&programdata_address)
+        .unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
         program_data_len + ADDITIONAL_BYTES as usize
@@ -147,7 +159,10 @@ async fn test_failed_extend_twice_in_same_slot() {
     );
 
     assert_matches!(
-        context.working_bank().process_transaction(&transaction).unwrap_err(),
+        context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
     );
 }
@@ -201,7 +216,10 @@ async fn test_failed_extend_upgrade_authority_did_not_sign() {
     );
 
     assert_matches!(
-        context.working_bank().process_transaction(&transaction).unwrap_err(),
+        context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::IncorrectAuthority)
     );
 
@@ -220,7 +238,10 @@ async fn test_failed_extend_upgrade_authority_did_not_sign() {
     );
 
     assert_matches!(
-        context.working_bank().process_transaction(&transaction).unwrap_err(),
+        context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
     );
 }
@@ -528,8 +549,14 @@ async fn test_extend_program_without_payer() {
         recent_blockhash,
     );
 
-    assert_matches!(context.working_bank().process_transaction(&transaction), Ok(()));
-    let updated_program_data_account = context.working_bank().get_account(&programdata_address).unwrap();
+    assert_matches!(
+        context.working_bank().process_transaction(&transaction),
+        Ok(())
+    );
+    let updated_program_data_account = context
+        .working_bank()
+        .get_account(&programdata_address)
+        .unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
         program_data_len + ADDITIONAL_BYTES as usize

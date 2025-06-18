@@ -45,5 +45,8 @@ async fn test_add_core_bpf_program_manually() {
         &[&context.payer],
         context.working_bank().last_blockhash(),
     );
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }

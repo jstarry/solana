@@ -76,7 +76,10 @@ async fn return_data() {
         context.working_bank().last_blockhash(),
     );
 
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 // Process instruction to echo input back to another program
@@ -113,7 +116,10 @@ async fn simulation_return_data() {
         context.working_bank().last_blockhash(),
     );
 
-    let _error = context.working_bank().process_transaction(&transaction).unwrap_err();
+    let _error = context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap_err();
     // For now, we can't directly access return data from failed transactions in the Bank API
     // This test would need to be refactored to use a different approach or removed
     // as the return data is primarily available through the RPC/simulation interface

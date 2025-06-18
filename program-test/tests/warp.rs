@@ -77,7 +77,10 @@ async fn clock_sysvar_updated_from_warp() {
         context.working_bank().last_blockhash(),
     );
     assert_eq!(
-        context.working_bank().process_transaction(&transaction).unwrap_err(),
+        context
+            .working_bank()
+            .process_transaction(&transaction)
+            .unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::Custom(WRONG_SLOT_ERROR))
     );
 
@@ -94,7 +97,10 @@ async fn clock_sysvar_updated_from_warp() {
         &[&context.payer],
         context.working_bank().last_blockhash(),
     );
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // Try warping ahead one slot (corner case in warp logic)
     expected_slot += 1;
@@ -110,7 +116,10 @@ async fn clock_sysvar_updated_from_warp() {
         &[&context.payer],
         context.working_bank().last_blockhash(),
     );
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 
     // Try warping again to the same slot
     assert_eq!(
@@ -154,7 +163,10 @@ async fn stake_rewards_from_warp() {
     assert!(account.lamports() > stake_lamports);
 
     // check that stake is fully active
-    let stake_history_account = context.working_bank().get_account(&stake_history::id()).unwrap();
+    let stake_history_account = context
+        .working_bank()
+        .get_account(&stake_history::id())
+        .unwrap();
 
     let clock_account = context.working_bank().get_account(&clock::id()).unwrap();
 
@@ -240,7 +252,10 @@ async fn stake_rewards_filter_bench_core(num_stake_accounts: u64) {
     }
 
     // check that stake is fully active
-    let stake_history_account = context.working_bank().get_account(&stake_history::id()).unwrap();
+    let stake_history_account = context
+        .working_bank()
+        .get_account(&stake_history::id())
+        .unwrap();
 
     let clock_account = context.working_bank().get_account(&clock::id()).unwrap();
 
@@ -315,13 +330,19 @@ async fn stake_merge_immediately_after_activation() {
     context.warp_forward_force_reward_interval_end().unwrap();
 
     // check that base stake has earned rewards and credits moved forward
-    let stake_account = context.working_bank().get_account(&base_stake_address).unwrap();
+    let stake_account = context
+        .working_bank()
+        .get_account(&base_stake_address)
+        .unwrap();
     let stake_state: StakeStateV2 = deserialize(stake_account.data()).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert!(stake_account.lamports() > stake_lamports);
 
     // check that new stake hasn't earned rewards, but that credits_observed have been advanced
-    let stake_account = context.working_bank().get_account(&absorbed_stake_address).unwrap();
+    let stake_account = context
+        .working_bank()
+        .get_account(&absorbed_stake_address)
+        .unwrap();
     let stake_state: StakeStateV2 = deserialize(stake_account.data()).unwrap();
     assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
     assert_eq!(stake_account.lamports(), stake_lamports);
@@ -345,7 +366,10 @@ async fn stake_merge_immediately_after_activation() {
         &vec![&context.payer, &user_keypair],
         context.working_bank().last_blockhash(),
     );
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 #[tokio::test]

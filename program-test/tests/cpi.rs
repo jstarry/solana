@@ -141,7 +141,10 @@ async fn cpi() {
         context.working_bank().last_blockhash(),
     );
 
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 #[tokio::test]
@@ -178,7 +181,10 @@ async fn cpi_dupes() {
         context.working_bank().last_blockhash(),
     );
 
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 #[tokio::test]
@@ -209,7 +215,10 @@ async fn cpi_create_account() {
         context.working_bank().last_blockhash(),
     );
 
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }
 
 // Process instruction to invoke into another program
@@ -274,5 +283,8 @@ async fn stack_height() {
         context.working_bank().last_blockhash(),
     );
 
-    context.working_bank().process_transaction(&transaction).unwrap();
+    context
+        .working_bank()
+        .process_transaction(&transaction)
+        .unwrap();
 }

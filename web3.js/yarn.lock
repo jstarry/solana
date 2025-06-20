@@ -6430,8 +6430,8 @@ mocha@^11.0.1:
     yargs-unparser "^2.0.0"
 
 mockttp@^4.0.0:
-  version "4.0.0"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-4.0.0.tgz#5d4e6128f4707b688cbdf1127616de23d0114c8d"
+  version "4.0.1"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-4.0.1.tgz#d012e179c7f3ab238bdd0baa65bc163a67833c20"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"

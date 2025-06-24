@@ -102,7 +102,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use {super::*, solana_account::Account, solana_native_token::sol_to_lamports};
+    use {super::*, solana_account::AccountSharedData, solana_native_token::sol_to_lamports};
 
     #[test]
     fn test_calculate_stake_weighted_timestamp_uses_median() {
@@ -117,34 +117,34 @@ pub mod tests {
         let max_allowable_drift = MaxAllowableDrift { fast: 25, slow: 25 };
 
         // Test low-staked outlier(s)
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
+        let stakes: HashMap<Pubkey, (u64, AccountSharedData)> = [
             (
                 pubkey0,
-                (sol_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
+                (sol_to_lamports(1.0), AccountSharedData::new(1, 0, &Pubkey::default())),
             ),
             (
                 pubkey1,
-                (sol_to_lamports(1.0), Account::new(1, 0, &Pubkey::default())),
+                (sol_to_lamports(1.0), AccountSharedData::new(1, 0, &Pubkey::default())),
             ),
             (
                 pubkey2,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey3,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey4,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
         ]
@@ -224,26 +224,26 @@ pub mod tests {
         assert_eq!(bounded, recent_timestamp); // multiple low-staked outliers cannot affect bounded timestamp if they don't shift the median
 
         // Test higher-staked outlier(s)
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
+        let stakes: HashMap<Pubkey, (u64, AccountSharedData)> = [
             (
                 pubkey0,
                 (
                     sol_to_lamports(1_000_000.0), // 1/3 stake
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
         ]
@@ -272,19 +272,19 @@ pub mod tests {
         .unwrap();
         assert_eq!(bounded, recent_timestamp); // outlier(s) cannot affect bounded timestamp if they don't shift the median
 
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
+        let stakes: HashMap<Pubkey, (u64, AccountSharedData)> = [
             (
                 pubkey0,
                 (
                     sol_to_lamports(1_000_001.0), // 1/3 stake
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
         ]
@@ -328,26 +328,26 @@ pub mod tests {
         let pubkey1 = solana_pubkey::new_rand();
         let pubkey2 = solana_pubkey::new_rand();
 
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
+        let stakes: HashMap<Pubkey, (u64, AccountSharedData)> = [
             (
                 pubkey0,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
         ]
@@ -469,26 +469,26 @@ pub mod tests {
         let pubkey1 = solana_pubkey::new_rand();
         let pubkey2 = solana_pubkey::new_rand();
 
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
+        let stakes: HashMap<Pubkey, (u64, AccountSharedData)> = [
             (
                 pubkey0,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
         ]
@@ -605,26 +605,26 @@ pub mod tests {
         let pubkey1 = solana_pubkey::new_rand();
         let pubkey2 = solana_pubkey::new_rand();
 
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
+        let stakes: HashMap<Pubkey, (u64, AccountSharedData)> = [
             (
                 pubkey0,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
         ]
@@ -743,26 +743,26 @@ pub mod tests {
         let pubkey1 = solana_pubkey::new_rand();
         let pubkey2 = solana_pubkey::new_rand();
 
-        let stakes: HashMap<Pubkey, (u64, Account)> = [
+        let stakes: HashMap<Pubkey, (u64, AccountSharedData)> = [
             (
                 pubkey0,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey1,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
             (
                 pubkey2,
                 (
                     sol_to_lamports(1_000_000.0),
-                    Account::new(1, 0, &Pubkey::default()),
+                    AccountSharedData::new(1, 0, &Pubkey::default()),
                 ),
             ),
         ]

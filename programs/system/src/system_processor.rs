@@ -554,7 +554,7 @@ mod tests {
     #[allow(deprecated)]
     use {
         solana_account::{
-            self as account, create_account_shared_data_with_fields, to_account, Account,
+            self as account, create_account_shared_data_with_fields, to_account,
             AccountSharedData, ReadableAccount, DUMMY_INHERITABLE_ACCOUNT_FIELDS,
         },
         solana_fee_calculator::FeeCalculator,
@@ -1142,10 +1142,8 @@ mod tests {
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let populated_key = Pubkey::new_unique();
-        let populated_account = AccountSharedData::from(Account {
-            data: vec![0, 1, 2, 3],
-            ..Account::default()
-        });
+        let mut populated_account = AccountSharedData::new(0, 4, &Pubkey::default());
+        populated_account.set_data_from_slice(&[0, 1, 2, 3]);
 
         process_instruction(
             &bincode::serialize(&SystemInstruction::CreateAccount {

@@ -234,7 +234,7 @@ mod tests {
         },
         bincode::serialize,
         solana_account::{
-            self as account, state_traits::StateMut, Account, AccountSharedData, ReadableAccount,
+            self as account, state_traits::StateMut, AccountSharedData, ReadableAccount,
         },
         solana_clock::Clock,
         solana_epoch_schedule::EpochSchedule,
@@ -312,15 +312,9 @@ mod tests {
                     } else if sysvar::rent::check_id(pubkey) {
                         account::create_account_shared_data_for_test(&Rent::free())
                     } else if *pubkey == invalid_vote_state_pubkey() {
-                        AccountSharedData::from(Account {
-                            owner: invalid_vote_state_pubkey(),
-                            ..Account::default()
-                        })
+                        AccountSharedData::new(0, 0, &invalid_vote_state_pubkey())
                     } else {
-                        AccountSharedData::from(Account {
-                            owner: id(),
-                            ..Account::default()
-                        })
+                        AccountSharedData::new(0, 0, &id())
                     },
                 )
             })

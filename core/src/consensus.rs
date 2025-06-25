@@ -1784,7 +1784,7 @@ pub mod test {
             vote_simulator::VoteSimulator,
         },
         itertools::Itertools,
-        solana_account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        solana_account::{AccountSharedData, ReadableAccount, WritableAccount},
         solana_clock::Slot,
         solana_hash::Hash,
         solana_ledger::{blockstore::make_slot_entries, get_tmp_ledger_path_auto_delete},
@@ -1811,12 +1811,12 @@ pub mod test {
         stake_votes
             .iter()
             .map(|(lamports, votes)| {
-                let mut account = AccountSharedData::from(Account {
-                    data: vec![0; VoteState::size_of()],
-                    lamports: *lamports,
-                    owner: solana_vote_program::id(),
-                    ..Account::default()
-                });
+                let mut account = AccountSharedData::new(
+                    *lamports,
+                    VoteState::size_of(),
+                    &solana_vote_program::id(),
+                );
+                account.set_data(vec![0; VoteState::size_of()]);
                 let mut vote_state = VoteState::default();
                 for slot in *votes {
                     process_slot_vote_unchecked(&mut vote_state, *slot);
@@ -2791,10 +2791,7 @@ pub mod test {
     #[test]
     fn test_stake_is_updated_for_entire_branch() {
         let mut voted_stakes = HashMap::new();
-        let account = AccountSharedData::from(Account {
-            lamports: 1,
-            ..Account::default()
-        });
+        let account = AccountSharedData::new(1, 0, &Pubkey::default());
         let set: HashSet<u64> = vec![0u64, 1u64].into_iter().collect();
         let ancestors: HashMap<u64, HashSet<u64>> = [(2u64, set)].iter().cloned().collect();
         Tower::update_ancestor_voted_stakes(&mut voted_stakes, 2, account.lamports(), &ancestors);

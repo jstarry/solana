@@ -1,6 +1,6 @@
 use {
     rand::{rngs::SmallRng, SeedableRng},
-    solana_account::{Account, AccountSharedData},
+    solana_account::{AccountSharedData, WritableAccount},
     solana_accounts_db::read_only_accounts_cache::{ReadOnlyAccountsCache, CACHE_ENTRY_SIZE},
     solana_pubkey::Pubkey,
     std::{collections::HashSet, sync::atomic::Ordering},
@@ -33,13 +33,9 @@ fn test_read_only_accounts_cache_eviction(num_accounts: (usize, usize), evict_sa
     let mut newer_half = HashSet::new();
     for i in 0..num_accounts_hi {
         let pubkey = Pubkey::new_unique();
-        let account = AccountSharedData::from(Account {
-            lamports: 100,
-            data: data.clone(),
-            executable: false,
-            rent_epoch: 0,
-            owner: pubkey,
-        });
+        let mut account = AccountSharedData::new(100, DATA_SIZE, &pubkey);
+        account.set_data_from_slice(&data);
+        account.set_rent_epoch(0);
         let slot = 0;
         cache.store(pubkey, slot, account.clone());
         if i >= num_accounts_hi / 2 {

@@ -1,6 +1,6 @@
 use {
     criterion::{criterion_group, criterion_main, Criterion},
-    solana_account::{Account, AccountSharedData},
+    solana_account::AccountSharedData,
     solana_program_runtime::serialization::serialize_parameters,
     solana_pubkey::Pubkey,
     solana_rent::Rent,
@@ -8,78 +8,44 @@ use {
     solana_transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
 };
 
+fn create_account(lamports: u64, data: Vec<u8>, owner: &Pubkey, executable: bool, rent_epoch: u64) -> AccountSharedData {
+    let mut account = AccountSharedData::new(lamports, data.len(), owner);
+    account.set_data_from_slice(&data);
+    account.set_executable(executable);
+    account.set_rent_epoch(rent_epoch);
+    account
+}
+
 fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionContext {
     let program_id = solana_pubkey::new_rand();
     let transaction_accounts = vec![
         (
             program_id,
-            AccountSharedData::from(Account {
-                lamports: 0,
-                data: vec![],
-                owner,
-                executable: true,
-                rent_epoch: 0,
-            }),
+            create_account(0, vec![], &owner, true, 0),
         ),
         (
             solana_pubkey::new_rand(),
-            AccountSharedData::from(Account {
-                lamports: 1,
-                data: vec![1u8; 100000],
-                owner,
-                executable: false,
-                rent_epoch: 100,
-            }),
+            create_account(1, vec![1u8; 100000], &owner, false, 100),
         ),
         (
             solana_pubkey::new_rand(),
-            AccountSharedData::from(Account {
-                lamports: 2,
-                data: vec![11u8; 100000],
-                owner,
-                executable: true,
-                rent_epoch: 200,
-            }),
+            create_account(2, vec![11u8; 100000], &owner, true, 200),
         ),
         (
             solana_pubkey::new_rand(),
-            AccountSharedData::from(Account {
-                lamports: 3,
-                data: vec![],
-                owner,
-                executable: false,
-                rent_epoch: 3100,
-            }),
+            create_account(3, vec![], &owner, false, 3100),
         ),
         (
             solana_pubkey::new_rand(),
-            AccountSharedData::from(Account {
-                lamports: 4,
-                data: vec![1u8; 100000],
-                owner,
-                executable: false,
-                rent_epoch: 100,
-            }),
+            create_account(4, vec![1u8; 100000], &owner, false, 100),
         ),
         (
             solana_pubkey::new_rand(),
-            AccountSharedData::from(Account {
-                lamports: 5,
-                data: vec![11u8; 10000],
-                owner,
-                executable: true,
-                rent_epoch: 200,
-            }),
+            create_account(5, vec![11u8; 10000], &owner, true, 200),
         ),
         (
             solana_pubkey::new_rand(),
-            AccountSharedData::from(Account {
-                lamports: 6,
-                data: vec![],
-                owner,
-                executable: false,
-                rent_epoch: 3100,
-            }),
+            create_account(6, vec![], &owner, false, 3100),
         ),
     ];
     let mut instruction_accounts: Vec<InstructionAccount> = Vec::new();

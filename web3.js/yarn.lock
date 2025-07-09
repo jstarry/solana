@@ -2053,8 +2053,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@^24.0.0":
-  version "24.0.10"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.0.10.tgz#f65a169779bf0d70203183a1890be7bee8ca2ddb"
+  version "24.0.12"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.0.12.tgz#3cf8719572145cfecf4cf9d180d8e7f74a61af00"
   dependencies:
     undici-types "~7.8.0"
 

@@ -7576,9 +7576,9 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@24.12.0:
-  version "24.12.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.12.0.tgz#34606d9764380892d75af6db02c3d7eecd22d8f5"
+puppeteer-core@24.12.1:
+  version "24.12.1"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.12.1.tgz#66338926570ae904ce8ea0acb68b1bda361f5884"
   dependencies:
     "@puppeteer/browsers" "2.10.5"
     chromium-bidi "5.1.0"
@@ -7588,14 +7588,14 @@ puppeteer-core@24.12.0:
     ws "^8.18.3"
 
 puppeteer@^24.0.0:
-  version "24.12.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.12.0.tgz#73e2a86f9616303c5830dca34acc389ac5cea27c"
+  version "24.12.1"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.12.1.tgz#04f23bc65d592277fef5a306c671f464e8ec9042"
   dependencies:
     "@puppeteer/browsers" "2.10.5"
     chromium-bidi "5.1.0"
     cosmiconfig "^9.0.0"
     devtools-protocol "0.0.1464554"
-    puppeteer-core "24.12.0"
+    puppeteer-core "24.12.1"
     typed-query-selector "^2.12.0"
 
 pvtsutils@^1.3.6:

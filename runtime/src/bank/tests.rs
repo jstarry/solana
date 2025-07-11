@@ -968,7 +968,7 @@ fn test_purge_empty_accounts() {
             let blockhash = bank.last_blockhash();
             let pubkey = solana_pubkey::new_rand();
             let tx = system_transaction::transfer(&mint_keypair, &pubkey, 0, blockhash);
-            bank.process_transaction(&tx).unwrap();
+            bank.process_transaction(tx).unwrap();
             bank.freeze();
             bank.squash();
             bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
@@ -985,13 +985,13 @@ fn test_purge_empty_accounts() {
         let blockhash = bank.last_blockhash();
         let keypair = Keypair::new();
         let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), amount, blockhash);
-        bank0.process_transaction(&tx).unwrap();
+        bank0.process_transaction(tx).unwrap();
 
         let bank1 = new_from_parent_with_fork_next_slot(bank0.clone(), bank_forks.as_ref());
         let pubkey = solana_pubkey::new_rand();
         let blockhash = bank.last_blockhash();
         let tx = system_transaction::transfer(&keypair, &pubkey, amount, blockhash);
-        bank1.process_transaction(&tx).unwrap();
+        bank1.process_transaction(tx).unwrap();
 
         assert_eq!(
             bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
@@ -1095,7 +1095,7 @@ fn test_one_source_two_tx_one_batch() {
     let t1 = system_transaction::transfer(&mint_keypair, &key1, amount, genesis_config.hash());
     let t2 = system_transaction::transfer(&mint_keypair, &key2, amount, genesis_config.hash());
     let txs = vec![t1.clone(), t2.clone()];
-    let res = bank.process_transactions(txs.iter());
+    let res = bank.process_transactions(txs.into_iter());
 
     assert_eq!(res.len(), 2);
     assert_eq!(res[0], Ok(()));
@@ -1126,7 +1126,7 @@ fn test_one_tx_two_out_atomic_fail() {
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
     let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
     assert_eq!(
-        bank.process_transaction(&tx).unwrap_err(),
+        bank.process_transaction(tx).unwrap_err(),
         TransactionError::InstructionError(1, SystemError::ResultWithNegativeLamports.into())
     );
     assert_eq!(bank.get_balance(&mint_keypair.pubkey()), amount);
@@ -1147,7 +1147,7 @@ fn test_one_tx_two_out_atomic_pass() {
     );
     let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
     let tx = Transaction::new(&[&mint_keypair], message, genesis_config.hash());
-    bank.process_transaction(&tx).unwrap();
+    bank.process_transaction(tx).unwrap();
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
         sol_to_lamports(1.) - (2 * amount)
@@ -1172,7 +1172,7 @@ fn test_detect_failed_duplicate_transactions() {
     assert!(!bank.has_signature(&signature));
 
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx),
         Err(TransactionError::InstructionError(
             0,
             SystemError::ResultWithNegativeLamports.into(),
@@ -1406,7 +1406,7 @@ fn test_bank_tx_fee() {
     );
 
     let initial_balance = bank.get_balance(&leader);
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
+    assert_eq!(bank.process_transaction(tx), Ok(()));
     assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount);
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -1447,8 +1447,7 @@ fn test_bank_tx_fee() {
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
 
-    bank.process_transaction(&tx)
-        .expect_err("instruction error");
+    bank.process_transaction(tx).expect_err("instruction error");
     assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount); // no change
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -1516,7 +1515,7 @@ fn test_bank_tx_compute_unit_fee() {
     );
 
     let initial_balance = bank.get_balance(&leader);
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
+    assert_eq!(bank.process_transaction(tx), Ok(()));
     assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount);
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -1557,8 +1556,7 @@ fn test_bank_tx_compute_unit_fee() {
     // Create a bogus instruction to system_program to cause an instruction error
     tx.message.instructions[0].data[0] = 40;
 
-    bank.process_transaction(&tx)
-        .expect_err("instruction error");
+    bank.process_transaction(tx).expect_err("instruction error");
     assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount); // no change
     assert_eq!(
         bank.get_balance(&mint_keypair.pubkey()),
@@ -1620,7 +1618,7 @@ fn test_bank_blockhash_fee_structure() {
     let key = solana_pubkey::new_rand();
     let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
     let tx = system_transaction::transfer(&mint_keypair, &key, 1, cheap_blockhash);
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
+    assert_eq!(bank.process_transaction(tx), Ok(()));
     assert_eq!(bank.get_balance(&key), 1);
     let cheap_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
@@ -1636,7 +1634,7 @@ fn test_bank_blockhash_fee_structure() {
     let key = solana_pubkey::new_rand();
     let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
     let tx = system_transaction::transfer(&mint_keypair, &key, 1, expensive_blockhash);
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
+    assert_eq!(bank.process_transaction(tx), Ok(()));
     assert_eq!(bank.get_balance(&key), 1);
     let expensive_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
@@ -1682,7 +1680,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     let key = solana_pubkey::new_rand();
     let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
     let tx = system_transaction::transfer(&mint_keypair, &key, 1, cheap_blockhash);
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
+    assert_eq!(bank.process_transaction(tx), Ok(()));
     assert_eq!(bank.get_balance(&key), 1);
     let cheap_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
@@ -1698,7 +1696,7 @@ fn test_bank_blockhash_compute_unit_fee_structure() {
     let key = solana_pubkey::new_rand();
     let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
     let tx = system_transaction::transfer(&mint_keypair, &key, 1, expensive_blockhash);
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
+    assert_eq!(bank.process_transaction(tx), Ok(()));
     assert_eq!(bank.get_balance(&key), 1);
     let expensive_fee = calculate_test_fee(
         &new_sanitized_message(Message::new(&[], Some(&Pubkey::new_unique()))),
@@ -1730,7 +1728,7 @@ fn test_debits_before_credits() {
         genesis_config.hash(),
     );
     let txs = vec![tx0, tx1];
-    let results = bank.process_transactions(txs.iter());
+    let results = bank.process_transactions(txs.into_iter());
     assert!(results[0].is_err());
 
     // Assert bad transactions aren't counted.
@@ -1810,7 +1808,7 @@ fn test_readonly_accounts(relax_intrabatch_account_locks: bool) {
         bank.last_blockhash(),
     );
     let txs = vec![tx0, tx1];
-    let results = bank.process_transactions(txs.iter());
+    let results = bank.process_transactions(txs.into_iter());
 
     // If multiple transactions attempt to read the same account, they should succeed.
     // Vote authorized_voter and sysvar accounts are given read-only handling
@@ -1831,7 +1829,7 @@ fn test_readonly_accounts(relax_intrabatch_account_locks: bool) {
         bank.last_blockhash(),
     );
     let txs = vec![tx0, tx1];
-    let results = bank.process_transactions(txs.iter());
+    let results = bank.process_transactions(txs.into_iter());
     // Whether an account can be locked as read-only and writable at the same time depends on features.
     assert_eq!(results[0], Ok(()));
     assert_eq!(
@@ -2046,14 +2044,14 @@ fn test_bank_invalid_account_index() {
     let mut tx_invalid_program_index = tx.clone();
     tx_invalid_program_index.message.instructions[0].program_id_index = 42;
     assert_eq!(
-        bank.process_transaction(&tx_invalid_program_index),
+        bank.process_transaction(tx_invalid_program_index),
         Err(TransactionError::SanitizeFailure)
     );
 
     let mut tx_invalid_account_index = tx;
     tx_invalid_account_index.message.instructions[0].accounts[0] = 42;
     assert_eq!(
-        bank.process_transaction(&tx_invalid_account_index),
+        bank.process_transaction(tx_invalid_account_index),
         Err(TransactionError::SanitizeFailure)
     );
 }
@@ -2069,12 +2067,11 @@ fn test_bank_pay_to_self() {
         .unwrap();
     assert_eq!(bank.get_balance(&key1.pubkey()), amount);
     let tx = system_transaction::transfer(&key1, &key1.pubkey(), amount, genesis_config.hash());
-    let _res = bank.process_transaction(&tx);
+    let signature = tx.signatures[0];
+    let _res = bank.process_transaction(tx);
 
     assert_eq!(bank.get_balance(&key1.pubkey()), amount);
-    bank.get_signature_status(&tx.signatures[0])
-        .unwrap()
-        .unwrap();
+    bank.get_signature_status(&signature).unwrap().unwrap();
 }
 
 fn new_from_parent(parent: Arc<Bank>) -> Bank {
@@ -2113,11 +2110,11 @@ fn test_tx_already_processed() {
     );
 
     // First process `tx` so that the status cache is updated
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
+    assert_eq!(bank.process_transaction(tx.clone()), Ok(()));
 
     // Ensure that signature check works
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx.clone()),
         Err(TransactionError::AlreadyProcessed)
     );
 
@@ -2127,7 +2124,7 @@ fn test_tx_already_processed() {
 
     // Ensure that message hash check works
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx),
         Err(TransactionError::AlreadyProcessed)
     );
 }
@@ -2142,10 +2139,10 @@ fn test_bank_parent_already_processed() {
 
     let tx =
         system_transaction::transfer(&mint_keypair, &key1.pubkey(), amount, genesis_config.hash());
-    assert_eq!(parent.process_transaction(&tx), Ok(()));
+    assert_eq!(parent.process_transaction(tx.clone()), Ok(()));
     let bank = new_from_parent_with_fork_next_slot(parent, bank_forks.as_ref());
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx),
         Err(TransactionError::AlreadyProcessed)
     );
 }
@@ -2161,11 +2158,12 @@ fn test_bank_parent_account_spend() {
 
     let tx =
         system_transaction::transfer(&mint_keypair, &key1.pubkey(), amount, genesis_config.hash());
-    assert_eq!(parent.process_transaction(&tx), Ok(()));
+    assert_eq!(parent.process_transaction(tx), Ok(()));
     let bank = new_from_parent_with_fork_next_slot(parent.clone(), bank_forks.as_ref());
     let tx = system_transaction::transfer(&key1, &key2.pubkey(), amount, genesis_config.hash());
-    assert_eq!(bank.process_transaction(&tx), Ok(()));
-    assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
+    let signature = tx.signatures[0];
+    assert_eq!(bank.process_transaction(tx), Ok(()));
+    assert_eq!(parent.get_signature_status(&signature), None);
 }
 
 #[test_case(false; "accounts lt hash disabled")]
@@ -2478,7 +2476,10 @@ fn test_bank_squash() {
     let tx_transfer_mint_to_1 =
         system_transaction::transfer(&mint_keypair, &key1.pubkey(), amount, genesis_config.hash());
     trace!("parent process tx ");
-    assert_eq!(parent.process_transaction(&tx_transfer_mint_to_1), Ok(()));
+    assert_eq!(
+        parent.process_transaction(tx_transfer_mint_to_1.clone()),
+        Ok(())
+    );
     trace!("done parent process tx ");
     assert_eq!(parent.transaction_count(), 1);
     assert_eq!(parent.non_vote_transaction_count_since_restart(), 1);
@@ -2502,7 +2503,7 @@ fn test_bank_squash() {
     );
     let tx_transfer_1_to_2 =
         system_transaction::transfer(&key1, &key2.pubkey(), amount, genesis_config.hash());
-    assert_eq!(bank.process_transaction(&tx_transfer_1_to_2), Ok(()));
+    assert_eq!(bank.process_transaction(tx_transfer_1_to_2.clone()), Ok(()));
     assert_eq!(bank.transaction_count(), 2);
     assert_eq!(bank.non_vote_transaction_count_since_restart(), 2);
     assert_eq!(parent.transaction_count(), 1);
@@ -2955,7 +2956,7 @@ fn test_zero_signatures() {
     let tx = Transaction::new(&Vec::<&Keypair>::new(), message, bank.last_blockhash());
 
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx),
         Err(TransactionError::SanitizeFailure)
     );
     assert_eq!(bank.get_balance(&key), 0);
@@ -2986,7 +2987,7 @@ fn test_is_delta_true() {
         genesis_config.rent.minimum_balance(0),
         genesis_config.hash(),
     );
-    assert_eq!(bank.process_transaction(&tx_transfer_mint_to_1), Ok(()));
+    assert_eq!(bank.process_transaction(tx_transfer_mint_to_1), Ok(()));
     assert!(bank.is_delta.load(Relaxed));
 
     let bank1 = new_from_parent(bank.clone());
@@ -3015,7 +3016,7 @@ fn test_is_empty() {
         genesis_config.rent.minimum_balance(0),
         genesis_config.hash(),
     );
-    assert_eq!(bank0.process_transaction(&tx_transfer_mint_to_1), Ok(()));
+    assert_eq!(bank0.process_transaction(tx_transfer_mint_to_1), Ok(()));
     assert!(!bank0.is_empty());
 }
 
@@ -3041,7 +3042,7 @@ fn test_bank_inherit_tx_count() {
 
     // transfer a token
     assert_eq!(
-        bank1.process_transaction(&system_transaction::transfer(
+        bank1.process_transaction(system_transaction::transfer(
             &mint_keypair,
             &Keypair::new().pubkey(),
             genesis_config.rent.minimum_balance(0),
@@ -3137,7 +3138,7 @@ fn test_bank_vote_accounts() {
         bank.last_blockhash(),
     );
 
-    bank.process_transaction(&transaction).unwrap();
+    bank.process_transaction(transaction).unwrap();
 
     let vote_accounts = bank.vote_accounts();
 
@@ -3218,7 +3219,7 @@ fn test_bank_cloned_stake_delegations() {
         bank.last_blockhash(),
     );
 
-    bank.process_transaction(&transaction).unwrap();
+    bank.process_transaction(transaction).unwrap();
 
     let stake_delegations = bank.stakes_cache.stakes().stake_delegations().clone();
     assert_eq!(stake_delegations.len(), 2);
@@ -3240,7 +3241,7 @@ fn test_is_delta_with_no_committables() {
     // the account which this tx operated on will not be committed. Thus
     // the bank is_delta should still be false
     assert_eq!(
-        bank.process_transaction(&fail_tx),
+        bank.process_transaction(fail_tx),
         Err(TransactionError::AccountNotFound)
     );
 
@@ -3516,7 +3517,7 @@ fn test_add_builtin() {
 
     let (bank, _bank_forks) = bank.wrap_with_bank_forks_for_tests();
     assert_eq!(
-        bank.process_transaction(&transaction),
+        bank.process_transaction(transaction),
         Err(TransactionError::InstructionError(
             1,
             InstructionError::Custom(42)
@@ -3574,7 +3575,7 @@ fn test_add_duplicate_static_program() {
     // Vote loader account should not be updated since it was included in the genesis config.
     assert_eq!(vote_loader_account.data(), new_vote_loader_account.data());
     assert_eq!(
-        bank.process_transaction(&transaction),
+        bank.process_transaction(transaction),
         Err(TransactionError::InstructionError(
             1,
             InstructionError::Custom(42)
@@ -3853,7 +3854,7 @@ fn nonce_setup(
         message,
         bank.last_blockhash(),
     );
-    bank.process_transaction(&setup_tx)?;
+    bank.process_transaction(setup_tx)?;
     Ok((custodian_keypair, nonce_keypair))
 }
 
@@ -3937,7 +3938,7 @@ fn test_assign_from_nonce_account_fail() {
         0,
         InstructionError::ModifiedProgramId,
     ));
-    assert_eq!(bank.process_transaction(&tx), expect);
+    assert_eq!(bank.process_transaction(tx), expect);
 }
 
 #[test]
@@ -3963,7 +3964,7 @@ fn test_nonce_must_be_advanceable() {
     let message = Message::new(&[ix], Some(&nonce_keypair.pubkey()));
     let tx = Transaction::new(&[&nonce_keypair], message, *durable_nonce.as_hash());
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx),
         Err(TransactionError::BlockhashNotFound)
     );
 }
@@ -3999,7 +4000,7 @@ fn test_nonce_transaction() {
 
     /* Expect a non-Nonce transfer to fail */
     assert_eq!(
-        bank.process_transaction(&system_transaction::transfer(
+        bank.process_transaction(system_transaction::transfer(
             &custodian_keypair,
             &alice_pubkey,
             100_000,
@@ -4020,7 +4021,7 @@ fn test_nonce_transaction() {
         &[&custodian_keypair, &nonce_keypair],
         nonce_hash,
     );
-    assert_eq!(bank.process_transaction(&nonce_tx), Ok(()));
+    assert_eq!(bank.process_transaction(nonce_tx.clone()), Ok(()));
 
     /* Check balances */
     let mut recent_message = nonce_tx.message;
@@ -4048,7 +4049,7 @@ fn test_nonce_transaction() {
         nonce_hash,
     );
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx),
         Err(TransactionError::BlockhashNotFound)
     );
     /* Check fee not charged and nonce not advanced */
@@ -4076,7 +4077,7 @@ fn test_nonce_transaction() {
         nonce_hash,
     );
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx.clone()),
         Err(TransactionError::InstructionError(
             1,
             solana_system_interface::error::SystemError::ResultWithNegativeLamports.into(),
@@ -4097,7 +4098,7 @@ fn test_nonce_transaction() {
      * fails with TransactionError::BlockhashNotFound
      */
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx),
         Err(TransactionError::BlockhashNotFound),
     );
 }
@@ -4126,7 +4127,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
 
     /* Expect a non-Nonce transfer to fail */
     assert_eq!(
-        bank.process_transaction(&system_transaction::transfer(
+        bank.process_transaction(system_transaction::transfer(
             &custodian_keypair,
             &alice_pubkey,
             100_000,
@@ -4147,7 +4148,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
         &[&custodian_keypair, &nonce_keypair],
         nonce_hash,
     );
-    assert_eq!(bank.process_transaction(&nonce_tx), Ok(()));
+    assert_eq!(bank.process_transaction(nonce_tx.clone()), Ok(()));
 
     /* Check balances */
     let mut recent_message = nonce_tx.message;
@@ -4175,7 +4176,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
         nonce_hash,
     );
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx.clone()),
         Err(TransactionError::BlockhashNotFound)
     );
     /* Check fee not charged and nonce not advanced */
@@ -4203,7 +4204,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
         nonce_hash,
     );
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx.clone()),
         Err(TransactionError::InstructionError(
             1,
             solana_system_interface::error::SystemError::ResultWithNegativeLamports.into(),
@@ -4224,7 +4225,7 @@ fn test_nonce_transaction_with_tx_wide_caps() {
      * fails with TransactionError::BlockhashNotFound
      */
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx),
         Err(TransactionError::BlockhashNotFound),
     );
 }
@@ -4274,7 +4275,7 @@ fn test_nonce_authority() {
     debug!("{:?}", nonce_tx);
     let initial_custodian_balance = custodian_account.lamports();
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx.clone()),
         Err(TransactionError::BlockhashNotFound),
     );
     /* Check fee was *not* charged and nonce has *not* advanced */
@@ -4332,7 +4333,7 @@ fn test_nonce_payer() {
     );
     debug!("{:?}", nonce_tx);
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx.clone()),
         Err(TransactionError::InstructionError(
             1,
             solana_system_interface::error::SystemError::ResultWithNegativeLamports.into(),
@@ -4399,7 +4400,7 @@ fn test_nonce_payer_tx_wide_cap() {
     debug!("{:?}", nonce_tx);
 
     assert_eq!(
-        bank.process_transaction(&nonce_tx),
+        bank.process_transaction(nonce_tx.clone()),
         Err(TransactionError::InstructionError(
             1,
             solana_system_interface::error::SystemError::ResultWithNegativeLamports.into(),
@@ -4465,7 +4466,7 @@ fn test_nonce_fee_calculator_updates() {
         &[&custodian_keypair, &nonce_keypair],
         stored_nonce_hash,
     );
-    bank.process_transaction(&nonce_tx).unwrap();
+    bank.process_transaction(nonce_tx).unwrap();
 
     // Grab the new hash and fee_calculator; both should be updated
     let (nonce_hash, fee_calculator) = bank
@@ -4529,7 +4530,7 @@ fn test_nonce_fee_calculator_updates_tx_wide_cap() {
         &[&custodian_keypair, &nonce_keypair],
         stored_nonce_hash,
     );
-    bank.process_transaction(&nonce_tx).unwrap();
+    bank.process_transaction(nonce_tx).unwrap();
 
     // Grab the new hash and fee_calculator; both should be updated
     let (nonce_hash, fee_calculator) = bank
@@ -4587,7 +4588,7 @@ fn test_check_ro_durable_nonce_fails() {
     // separate, so the recent_blockhash (== durable nonce) in the
     // transaction is not found in the hash queue.
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx.clone()),
         Err(TransactionError::BlockhashNotFound),
     );
     // Kick nonce hash off the blockhash_queue
@@ -4597,7 +4598,7 @@ fn test_check_ro_durable_nonce_fails() {
     }
     // Caught by the runtime because it is a nonce transaction
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx.clone()),
         Err(TransactionError::BlockhashNotFound)
     );
     let (_, lamports_per_signature) = bank.last_blockhash_and_lamports_per_signature();
@@ -4790,7 +4791,7 @@ fn test_transaction_with_duplicate_accounts_in_instruction() {
         bank.last_blockhash(),
     );
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(result, Ok(()));
     assert_eq!(bank.get_balance(&from_pubkey), sol_to_lamports(80.));
     assert_eq!(bank.get_balance(&to_pubkey), sol_to_lamports(20.));
@@ -4826,7 +4827,7 @@ fn test_transaction_with_program_ids_passed_to_programs() {
         bank.last_blockhash(),
     );
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(result, Ok(()));
 }
 
@@ -4863,7 +4864,7 @@ fn test_account_ids_after_program_ids() {
         .insert(bank)
         .clone_without_scheduler();
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(result, Ok(()));
     let account = bank.get_account(&solana_vote_program::id()).unwrap();
     info!("account: {:?}", account);
@@ -4926,7 +4927,7 @@ fn test_duplicate_account_key() {
     );
     tx.message.account_keys.push(from_pubkey);
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(result, Err(TransactionError::AccountLoadedTwice));
 }
 
@@ -4961,7 +4962,7 @@ fn test_process_transaction_with_too_many_account_locks() {
         tx.message.account_keys.push(solana_pubkey::new_rand());
     }
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(result, Err(TransactionError::TooManyAccountLocks));
 }
 
@@ -5005,7 +5006,7 @@ fn test_program_id_as_payer() {
     tx.message.instructions[0].accounts.push(2);
     tx.message.instructions[0].accounts.push(3);
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(result, Err(TransactionError::SanitizeFailure));
 }
 
@@ -5044,7 +5045,7 @@ fn test_ref_account_key_after_program_id() {
     tx.message.instructions[0].accounts.remove(0);
     tx.message.instructions[0].accounts.push(4);
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(result, Ok(()));
 }
 
@@ -5192,7 +5193,7 @@ fn test_fuzz_instructions() {
             message,
         };
 
-        let result = bank.process_transaction(&tx);
+        let result = bank.process_transaction(tx);
         for (key, balance) in &keys {
             assert_eq!(bank.get_balance(key), *balance);
         }
@@ -5297,7 +5298,7 @@ fn test_same_program_id_uses_unique_executable_accounts() {
         &[&mint_keypair],
         bank.last_blockhash(),
     );
-    assert!(bank.process_transaction(&tx).is_ok());
+    assert!(bank.process_transaction(tx).is_ok());
     assert_eq!(6, bank.get_account(&program1_pubkey).unwrap().data().len());
     assert_eq!(1, bank.get_account(&program2_pubkey).unwrap().data().len());
 }
@@ -5911,7 +5912,7 @@ fn test_bank_load_program() {
         invocation_message.clone(),
         bank.last_blockhash(),
     );
-    assert!(bank.process_transaction(&transaction).is_ok());
+    assert!(bank.process_transaction(transaction).is_ok());
 
     {
         let program_cache = bank.transaction_processor.program_cache.read().unwrap();
@@ -5959,7 +5960,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len(formalize_loaded_transaction_
         bank.last_blockhash(),
     );
     assert_eq!(
-        bank.process_transaction(&transaction),
+        bank.process_transaction(transaction),
         Err(TransactionError::ProgramAccountNotFound),
     );
     {
@@ -6033,7 +6034,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len(formalize_loaded_transaction_
         bank.last_blockhash(),
     );
     assert_eq!(
-        bank.process_transaction(&transaction),
+        bank.process_transaction(transaction),
         Err(TransactionError::InstructionError(
             0,
             InstructionError::UnsupportedProgramId
@@ -6057,7 +6058,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len(formalize_loaded_transaction_
     let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
     let transaction = Transaction::new(&[&binding], message, bank.last_blockhash());
     assert_eq!(
-        bank.process_transaction(&transaction),
+        bank.process_transaction(transaction),
         Err(TransactionError::InstructionError(
             0,
             InstructionError::UnsupportedProgramId,
@@ -6164,7 +6165,7 @@ fn test_bpf_loader_upgradeable_deploy_with_max_len(formalize_loaded_transaction_
 
     // Invoke the deployed program
     let transaction = Transaction::new(&[&binding], invocation_message, bank.last_blockhash());
-    assert!(bank.process_transaction(&transaction).is_ok());
+    assert!(bank.process_transaction(transaction).is_ok());
     {
         let program_cache = bank.transaction_processor.program_cache.read().unwrap();
         let slot_versions = program_cache.get_slot_versions_for_tests(&program_keypair.pubkey());
@@ -7130,7 +7131,7 @@ fn test_program_is_native_loader(formalize_loaded_transaction_data_size: bool) {
         bank.last_blockhash(),
     );
 
-    let err = bank.process_transaction(&tx).unwrap_err();
+    let err = bank.process_transaction(tx).unwrap_err();
     if formalize_loaded_transaction_data_size {
         assert_eq!(err, TransactionError::ProgramAccountNotFound);
     } else {
@@ -7183,7 +7184,7 @@ fn test_invoke_non_program_account_owned_by_a_builtin(
     } else {
         TransactionError::InstructionError(0, InstructionError::UnsupportedProgramId)
     };
-    assert_eq!(bank.process_transaction(&tx), Err(expected_error),);
+    assert_eq!(bank.process_transaction(tx), Err(expected_error),);
 }
 
 #[test]
@@ -8159,7 +8160,7 @@ fn test_vote_epoch_panic() {
         1_000_000_000,
     ));
 
-    let result = bank.process_transaction(&Transaction::new(
+    let result = bank.process_transaction(Transaction::new(
         &[&mint_keypair, &vote_keypair, &stake_keypair],
         Message::new(&setup_ixs, Some(&mint_keypair.pubkey())),
         bank.last_blockhash(),
@@ -8499,7 +8500,7 @@ fn test_transfer_sysvar() {
     let orig_lamports = bank.get_account(&sysvar::clock::id()).unwrap().lamports();
     let tx = system_transaction::transfer(&mint_keypair, &blockhash_sysvar, 10, blockhash);
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx),
         Err(TransactionError::InstructionError(
             0,
             InstructionError::ReadonlyLamportChange
@@ -8518,7 +8519,7 @@ fn test_transfer_sysvar() {
     let message = Message::new(&[ix], Some(&mint_keypair.pubkey()));
     let tx = Transaction::new(&[&mint_keypair], message, blockhash);
     assert_eq!(
-        bank.process_transaction(&tx),
+        bank.process_transaction(tx),
         Err(TransactionError::InstructionError(
             0,
             InstructionError::ReadonlyDataModified
@@ -8707,7 +8708,7 @@ fn test_compute_budget_program_noop() {
         Some(&mint_keypair.pubkey()),
     );
     let tx = Transaction::new(&[&mint_keypair], message, bank.last_blockhash());
-    bank.process_transaction(&tx).unwrap();
+    bank.process_transaction(tx).unwrap();
 }
 
 #[test]
@@ -8755,7 +8756,7 @@ fn test_compute_request_instruction() {
         Some(&mint_keypair.pubkey()),
     );
     let tx = Transaction::new(&[&mint_keypair], message, bank.last_blockhash());
-    bank.process_transaction(&tx).unwrap();
+    bank.process_transaction(tx).unwrap();
 }
 
 #[test]
@@ -8820,7 +8821,7 @@ fn test_failed_compute_request_instruction() {
         Transaction::new(&[&payer0_keypair], message0, bank.last_blockhash()),
         Transaction::new(&[&payer1_keypair], message1, bank.last_blockhash()),
     ];
-    let results = bank.process_transactions(txs.iter());
+    let results = bank.process_transactions(txs.into_iter());
 
     assert_eq!(
         results[0],
@@ -9012,7 +9013,7 @@ fn test_call_precomiled_program() {
     );
     // calling the program should be successful when called from the bank
     // even if the program itself is not called
-    bank.process_transaction(&tx).unwrap();
+    bank.process_transaction(tx).unwrap();
 
     // ed25519
     // Since ed25519_dalek is still using the old version of rand, this test
@@ -9045,7 +9046,7 @@ fn test_call_precomiled_program() {
     );
     // calling the program should be successful when called from the bank
     // even if the program itself is not called
-    bank.process_transaction(&tx).unwrap();
+    bank.process_transaction(tx).unwrap();
 }
 
 fn calculate_test_fee(
@@ -9273,7 +9274,7 @@ fn test_an_empty_instruction_without_program(formalize_loaded_transaction_data_s
     }
     let (bank, _bank_forks) = bank.wrap_with_bank_forks_for_tests();
 
-    let err = bank.process_transaction(&tx).unwrap_err();
+    let err = bank.process_transaction(tx).unwrap_err();
     if formalize_loaded_transaction_data_size {
         assert_eq!(err, TransactionError::ProgramAccountNotFound);
     } else {
@@ -9320,7 +9321,7 @@ fn test_accounts_data_size_with_good_transaction() {
     let accounts_data_size_before = bank.load_accounts_data_size();
     let accounts_data_size_delta_before = bank.load_accounts_data_size_delta();
     let accounts_data_size_delta_on_chain_before = bank.load_accounts_data_size_delta_on_chain();
-    let result = bank.process_transaction(&transaction);
+    let result = bank.process_transaction(transaction);
     let accounts_data_size_after = bank.load_accounts_data_size();
     let accounts_data_size_delta_after = bank.load_accounts_data_size_delta();
     let accounts_data_size_delta_on_chain_after = bank.load_accounts_data_size_delta_on_chain();
@@ -9359,7 +9360,7 @@ fn test_accounts_data_size_with_bad_transaction() {
     let accounts_data_size_before = bank.load_accounts_data_size();
     let accounts_data_size_delta_before = bank.load_accounts_data_size_delta();
     let accounts_data_size_delta_on_chain_before = bank.load_accounts_data_size_delta_on_chain();
-    let result = bank.process_transaction(&transaction);
+    let result = bank.process_transaction(transaction);
     let accounts_data_size_after = bank.load_accounts_data_size();
     let accounts_data_size_delta_after = bank.load_accounts_data_size_delta();
     let accounts_data_size_delta_on_chain_after = bank.load_accounts_data_size_delta_on_chain();
@@ -9484,7 +9485,7 @@ fn test_invalid_rent_state_changes_existing_accounts() {
         mock_program_id,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert!(!check_account_is_rent_exempt(&rent_paying_account.pubkey()));
     let tx = create_mock_transfer(
@@ -9495,7 +9496,7 @@ fn test_invalid_rent_state_changes_existing_accounts() {
         mock_program_id,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert!(bank.get_account(&rent_paying_account.pubkey()).is_none());
 
@@ -9517,7 +9518,7 @@ fn test_invalid_rent_state_changes_existing_accounts() {
         mock_program_id,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_err());
     assert!(check_account_is_rent_exempt(&rent_exempt_account.pubkey()));
     let result = bank.transfer(1, &mint_keypair, &rent_exempt_account.pubkey());
@@ -9531,7 +9532,7 @@ fn test_invalid_rent_state_changes_existing_accounts() {
         mock_program_id,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert!(bank.get_account(&rent_exempt_account.pubkey()).is_none());
 }
@@ -9571,7 +9572,7 @@ fn test_invalid_rent_state_changes_new_accounts() {
         account_data_size as u64,
         &mock_program_id,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_err());
     assert!(bank.get_account(&rent_paying_account.pubkey()).is_none());
 
@@ -9585,7 +9586,7 @@ fn test_invalid_rent_state_changes_new_accounts() {
         account_data_size as u64,
         &mock_program_id,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert!(check_account_is_rent_exempt(&rent_exempt_account.pubkey()));
 }
@@ -9643,7 +9644,7 @@ fn test_drained_created_account() {
         recent_blockhash,
     );
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     // account data is not stored because of zero balance even though its
     // data wasn't cleared
@@ -9674,7 +9675,7 @@ fn test_drained_created_account() {
         recent_blockhash,
     );
 
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     // account data is not stored because of zero balance
     assert!(bank.get_account(&created_keypair.pubkey()).is_none());
@@ -9738,7 +9739,7 @@ fn test_rent_state_changes_sysvars() {
         &[&mint_keypair, &validator_staking_keypair],
         bank.last_blockhash(),
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
 }
 
@@ -9811,7 +9812,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert!(!check_account_is_rent_exempt(
         &rent_paying_fee_payer.pubkey()
@@ -9832,7 +9833,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(
         result.unwrap_err(),
         TransactionError::InstructionError(0, InstructionError::Custom(1))
@@ -9858,7 +9859,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(0, bank.get_balance(&rent_paying_fee_payer.pubkey()));
 
@@ -9875,7 +9876,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(
         result.unwrap_err(),
         TransactionError::InsufficientFundsForRent { account_index: 0 }
@@ -9897,7 +9898,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(
         result.unwrap_err(),
         TransactionError::InsufficientFundsForRent { account_index: 0 }
@@ -9924,7 +9925,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(
         result.unwrap_err(),
         TransactionError::InsufficientFundsForRent { account_index: 0 }
@@ -9953,7 +9954,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(0, bank.get_balance(&rent_exempt_fee_payer.pubkey()));
 
@@ -9977,7 +9978,7 @@ fn test_invalid_rent_state_changes_fee_payer() {
         ),
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert_eq!(
         result.unwrap_err(),
         TransactionError::InsufficientFundsForRent { account_index: 0 }
@@ -10184,7 +10185,7 @@ fn test_resize_and_rent() {
             .unwrap() as u8;
         TransactionError::InsufficientFundsForRent { account_index }
     };
-    assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
+    assert_eq!(bank.process_transaction(tx).unwrap_err(), expected_err);
     assert_eq!(
         rent_exempt_minimum_small - 1,
         bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -10200,7 +10201,7 @@ fn test_resize_and_rent() {
         mock_program_id,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(
         rent_exempt_minimum_large,
@@ -10226,7 +10227,7 @@ fn test_resize_and_rent() {
             .unwrap() as u8;
         TransactionError::InsufficientFundsForRent { account_index }
     };
-    assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
+    assert_eq!(bank.process_transaction(tx).unwrap_err(), expected_err);
     assert_eq!(
         rent_exempt_minimum_large,
         bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -10242,7 +10243,7 @@ fn test_resize_and_rent() {
         mock_program_id,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(
         rent_exempt_minimum_small,
@@ -10268,7 +10269,7 @@ fn test_resize_and_rent() {
             .unwrap() as u8;
         TransactionError::InsufficientFundsForRent { account_index }
     };
-    assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
+    assert_eq!(bank.process_transaction(tx).unwrap_err(), expected_err);
     assert_eq!(
         rent_exempt_minimum_small,
         bank.get_account(&rent_paying_pubkey).unwrap().lamports()
@@ -10284,7 +10285,7 @@ fn test_resize_and_rent() {
         mock_program_id,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(
         rent_exempt_minimum_large,
@@ -10311,7 +10312,7 @@ fn test_resize_and_rent() {
             .unwrap() as u8;
         TransactionError::InsufficientFundsForRent { account_index }
     };
-    assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
+    assert_eq!(bank.process_transaction(tx).unwrap_err(), expected_err);
 
     // create account, rent exempt
     let tx = system_transaction::create_account(
@@ -10322,7 +10323,7 @@ fn test_resize_and_rent() {
         account_data_size_small as u64,
         &system_program::id(),
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(
         rent_exempt_minimum_small,
@@ -10341,7 +10342,7 @@ fn test_resize_and_rent() {
         0,
         &system_program::id(),
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(
         rent_exempt_minimum_small - 1,
@@ -10366,7 +10367,7 @@ fn test_resize_and_rent() {
             .unwrap() as u8;
         TransactionError::InsufficientFundsForRent { account_index }
     };
-    assert_eq!(bank.process_transaction(&tx).unwrap_err(), expected_err);
+    assert_eq!(bank.process_transaction(tx).unwrap_err(), expected_err);
 
     // bring balance of account up to rent exemption
     let tx = system_transaction::transfer(
@@ -10375,7 +10376,7 @@ fn test_resize_and_rent() {
         1,
         recent_blockhash,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(
         rent_exempt_minimum_small,
@@ -10391,7 +10392,7 @@ fn test_resize_and_rent() {
         recent_blockhash,
         account_data_size_small as u64,
     );
-    let result = bank.process_transaction(&tx);
+    let result = bank.process_transaction(tx);
     assert!(result.is_ok());
     assert_eq!(
         rent_exempt_minimum_small,
@@ -10446,7 +10447,7 @@ fn test_accounts_data_size_and_resize_transactions() {
             mock_program_id,
             recent_blockhash,
         );
-        let result = bank.process_transaction(&transaction);
+        let result = bank.process_transaction(transaction);
         assert!(result.is_ok());
         let accounts_data_size_after = bank.load_accounts_data_size();
         assert_eq!(
@@ -10475,7 +10476,7 @@ fn test_accounts_data_size_and_resize_transactions() {
             mock_program_id,
             recent_blockhash,
         );
-        let result = bank.process_transaction(&transaction);
+        let result = bank.process_transaction(transaction);
         assert!(result.is_ok());
         let accounts_data_size_after = bank.load_accounts_data_size();
         assert_eq!(
@@ -10534,7 +10535,7 @@ fn test_accounts_data_size_from_genesis() {
             data_size as u64,
             &solana_system_interface::program::id(),
         );
-        bank.process_transaction(&transaction).unwrap();
+        bank.process_transaction(transaction).unwrap();
         bank.fill_bank_with_ticks_for_tests();
 
         assert_eq!(
@@ -10577,7 +10578,7 @@ fn test_cap_accounts_data_allocations_per_transaction() {
     let transaction = Transaction::new(&signers, message, bank.last_blockhash());
 
     let accounts_data_size_before = bank.load_accounts_data_size();
-    let result = bank.process_transaction(&transaction);
+    let result = bank.process_transaction(transaction);
     let accounts_data_size_after = bank.load_accounts_data_size();
 
     assert_eq!(accounts_data_size_before, accounts_data_size_after);
@@ -10715,7 +10716,7 @@ fn test_feature_activation_loaded_programs_cache_preparation_phase(
 
     // Load the program with the old environment.
     let transaction = Transaction::new(&signers, message.clone(), bank.last_blockhash());
-    let result_without_feature_enabled = bank.process_transaction(&transaction);
+    let result_without_feature_enabled = bank.process_transaction(transaction);
     assert_eq!(result_without_feature_enabled, Ok(()));
 
     // Schedule feature activation to trigger a change of environment at the epoch boundary.
@@ -10776,7 +10777,7 @@ fn test_feature_activation_loaded_programs_cache_preparation_phase(
 
     // Load the program with the new environment.
     let transaction = Transaction::new(&signers, message, bank.last_blockhash());
-    let result_with_feature_enabled = bank.process_transaction(&transaction);
+    let result_with_feature_enabled = bank.process_transaction(transaction);
     assert_eq!(
         result_with_feature_enabled,
         Err(TransactionError::InstructionError(
@@ -10824,7 +10825,7 @@ fn test_feature_activation_loaded_programs_epoch_transition() {
 
     // Load the program with the old environment.
     let transaction = Transaction::new(&signers, message.clone(), bank.last_blockhash());
-    assert!(bank.process_transaction(&transaction).is_ok());
+    assert!(bank.process_transaction(transaction).is_ok());
 
     // Schedule feature activation to trigger a change of environment at the epoch boundary.
     let feature_account_balance =
@@ -10840,7 +10841,7 @@ fn test_feature_activation_loaded_programs_epoch_transition() {
 
     // Load the program with the new environment.
     let transaction = Transaction::new(&signers, message.clone(), bank.last_blockhash());
-    assert!(bank.process_transaction(&transaction).is_ok());
+    assert!(bank.process_transaction(transaction).is_ok());
 
     {
         // Prune for rerooting and thus finishing the recompilation phase.
@@ -10855,7 +10856,7 @@ fn test_feature_activation_loaded_programs_epoch_transition() {
     goto_end_of_slot(bank.clone());
     let bank = new_from_parent_with_fork_next_slot(bank, bank_forks.as_ref());
     let transaction = Transaction::new(&signers, message, bank.last_blockhash());
-    assert!(bank.process_transaction(&transaction).is_ok());
+    assert!(bank.process_transaction(transaction).is_ok());
 }
 
 #[test]
@@ -11565,7 +11566,7 @@ fn test_deploy_last_epoch_slot() {
     );
     let signers = &[&payer_keypair, &upgrade_authority_keypair];
     let transaction = Transaction::new(signers, message.clone(), bank.last_blockhash());
-    let ret = bank.process_transaction(&transaction);
+    let ret = bank.process_transaction(transaction);
     assert!(ret.is_ok(), "ret: {:?}", ret);
     goto_end_of_slot(bank.clone());
 
@@ -11579,7 +11580,7 @@ fn test_deploy_last_epoch_slot() {
     let binding = mint_keypair.insecure_clone();
     let signers = vec![&binding];
     let transaction = Transaction::new(&signers, message, bank.last_blockhash());
-    let result_with_feature_enabled = bank.process_transaction(&transaction);
+    let result_with_feature_enabled = bank.process_transaction(transaction);
     assert_eq!(result_with_feature_enabled, Ok(()));
 }
 
@@ -11729,7 +11730,7 @@ fn test_loader_v3_to_v4_migration(formalize_loaded_transaction_data_size: bool) 
     );
     let signers = &[&payer_keypair];
     let transaction = Transaction::new(signers, message.clone(), bank.last_blockhash());
-    let error = bank.process_transaction(&transaction).unwrap_err();
+    let error = bank.process_transaction(transaction).unwrap_err();
     assert_eq!(
         error,
         TransactionError::InstructionError(0, InstructionError::InvalidArgument)
@@ -11832,7 +11833,7 @@ fn test_loader_v3_to_v4_migration(formalize_loaded_transaction_data_size: bool) 
             message.clone(),
             bank.last_blockhash(),
         );
-        let error = bank.process_transaction(&transaction).unwrap_err();
+        let error = bank.process_transaction(transaction).unwrap_err();
         assert_eq!(error, TransactionError::InstructionError(0, expected_error));
     }
 
@@ -11882,7 +11883,7 @@ fn test_loader_v3_to_v4_migration(formalize_loaded_transaction_data_size: bool) 
         let payer_account = AccountSharedData::new(payer_balance, 0, &system_program::id());
         bank.store_account(&programdata_address, &programdata_account);
         bank.store_account(&payer_keypair.pubkey(), &payer_account);
-        let result = bank.process_transaction(&transaction);
+        let result = bank.process_transaction(transaction);
         assert!(result.is_ok(), "result: {:?}", result);
 
         goto_end_of_slot(bank.clone());
@@ -11894,7 +11895,7 @@ fn test_loader_v3_to_v4_migration(formalize_loaded_transaction_data_size: bool) 
         let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
         let binding = mint_keypair.insecure_clone();
         let transaction = Transaction::new(&[&binding], message, bank.last_blockhash());
-        let execution_result = bank.process_transaction(&transaction);
+        let execution_result = bank.process_transaction(transaction);
         assert_eq!(execution_result, expected_execution_result);
     }
 }

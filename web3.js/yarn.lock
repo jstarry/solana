@@ -1968,12 +1968,11 @@
   dependencies:
     "@types/node" "*"
 
-"@types/bs58@^4.0.1":
-  version "4.0.4"
-  resolved "https://registry.yarnpkg.com/@types/bs58/-/bs58-4.0.4.tgz#49fbcb0c7db5f7cea26f0e0f61dc4a41a2445aab"
+"@types/bs58@^5.0.0":
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/@types/bs58/-/bs58-5.0.0.tgz#a5f849d47263b2dfb09846306256c56610d40cb0"
   dependencies:
-    "@types/node" "*"
-    base-x "^3.0.6"
+    bs58 "*"
 
 "@types/chai-as-promised@^8.0.0":
   version "8.0.2"
@@ -2592,7 +2591,7 @@ bare-stream@^2.0.0:
   dependencies:
     streamx "^2.21.0"
 
-base-x@^3.0.2, base-x@^3.0.6:
+base-x@^3.0.2:
   version "3.0.9"
   resolved "https://registry.npmjs.org/base-x/-/base-x-3.0.9.tgz"
   dependencies:
@@ -2746,17 +2745,17 @@ browserslist@^4.25.0:
     node-releases "^2.0.19"
     update-browserslist-db "^1.1.3"
 
+bs58@*, bs58@^6.0.0:
+  version "6.0.0"
+  resolved "https://registry.yarnpkg.com/bs58/-/bs58-6.0.0.tgz#a2cda0130558535dd281a2f8697df79caaf425d8"
+  dependencies:
+    base-x "^5.0.0"
+
 bs58@^4.0.0, bs58@^4.0.1:
   version "4.0.1"
   resolved "https://registry.npmjs.org/bs58/-/bs58-4.0.1.tgz"
   dependencies:
     base-x "^3.0.2"
-
-bs58@^6.0.0:
-  version "6.0.0"
-  resolved "https://registry.yarnpkg.com/bs58/-/bs58-6.0.0.tgz#a2cda0130558535dd281a2f8697df79caaf425d8"
-  dependencies:
-    base-x "^5.0.0"
 
 buffer-crc32@~0.2.3:
   version "0.2.13"

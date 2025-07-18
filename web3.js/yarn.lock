@@ -6204,11 +6204,7 @@ loupe@^3.1.0:
   dependencies:
     get-func-name "^2.0.1"
 
-lru-cache@^10.0.1, lru-cache@^10.2.0:
-  version "10.2.2"
-  resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-10.2.2.tgz#48206bc114c1252940c41b25b41af5b545aca878"
-
-lru-cache@^10.2.2:
+lru-cache@^10.0.1, lru-cache@^10.2.0, lru-cache@^10.2.2:
   version "10.4.3"
   resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-10.4.3.tgz#410fc8a17b70e598013df257c2446b7f3383f119"
 
@@ -6543,8 +6539,8 @@ mocha@^11.0.1:
     yargs-unparser "^2.0.0"
 
 mockttp@^4.0.0:
-  version "4.0.1"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-4.0.1.tgz#d012e179c7f3ab238bdd0baa65bc163a67833c20"
+  version "4.0.2"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-4.0.2.tgz#86f181e9419006ff578ac586345ab422730ba86e"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
@@ -9613,17 +9609,13 @@ write-file-atomic@^6.0.0:
     imurmurhash "^0.1.4"
     signal-exit "^4.0.1"
 
-ws@*, ws@^8.5.0, ws@^8.8.0:
-  version "8.18.2"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.2.tgz#42738b2be57ced85f46154320aabb51ab003705a"
+ws@*, ws@^8.18.3, ws@^8.5.0, ws@^8.8.0:
+  version "8.18.3"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.3.tgz#b56b88abffde62791c639170400c93dcb0c95472"
 
 ws@^7.4.5, ws@^7.5.10:
   version "7.5.10"
   resolved "https://registry.yarnpkg.com/ws/-/ws-7.5.10.tgz#58b5c20dc281633f6c19113f39b349bd8bd558d9"
-
-ws@^8.18.3:
-  version "8.18.3"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.18.3.tgz#b56b88abffde62791c639170400c93dcb0c95472"
 
 xtend@^4.0.0, xtend@~4.0.1:
   version "4.0.2"

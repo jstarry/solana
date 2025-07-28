@@ -42,7 +42,7 @@
     "cross-fetch": "^4.1.0",
     "humanize-duration-ts": "^2.1.1",
     "prettier": "^3.6.2",
-    "react": "^19.1.0",
+    "react": "^19.1.1",
     "react-chartjs-2": "^5.3.0",
     "react-content-loader": "^7.1.1",
     "react-countup": "^6.5.3",

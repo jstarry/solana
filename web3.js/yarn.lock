@@ -2911,10 +2911,10 @@ caniuse-lite@^1.0.30001726:
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001726.tgz#a15bd87d5a4bf01f6b6f70ae7c97fdfd28b5ae47"
 
 chai-as-promised@^8.0.0:
-  version "8.0.1"
-  resolved "https://registry.yarnpkg.com/chai-as-promised/-/chai-as-promised-8.0.1.tgz#8913b2fd685b3f5637d25f627518e3ac9614d8e1"
+  version "8.0.2"
+  resolved "https://registry.yarnpkg.com/chai-as-promised/-/chai-as-promised-8.0.2.tgz#cd9b77afaa976383eb4cbef9463ac5230f7a1cba"
   dependencies:
-    check-error "^2.0.0"
+    check-error "^2.1.1"
 
 chai@^5.1.1:
   version "5.3.3"
@@ -2953,7 +2953,7 @@ char-regex@^1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/char-regex/-/char-regex-1.0.2.tgz#d744358226217f981ed58f479b1d6bcc29545dcf"
 
-check-error@^2.0.0, check-error@^2.1.1:
+check-error@^2.1.1:
   version "2.1.1"
   resolved "https://registry.yarnpkg.com/check-error/-/check-error-2.1.1.tgz#87eb876ae71ee388fa0471fe423f494be1d96ccc"
 

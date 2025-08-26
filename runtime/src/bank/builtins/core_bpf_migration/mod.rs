@@ -1452,7 +1452,7 @@ pub(crate) mod tests {
             .write()
             .unwrap()
             .clear();
-        bank.finish_init(false);
+        bank.update_transaction_processor();
 
         // Assert the feature is active and the bank still added the builtin.
         assert!(bank.feature_set.is_active(feature_id));
@@ -1621,7 +1621,7 @@ pub(crate) mod tests {
             .write()
             .unwrap()
             .clear();
-        bank.finish_init(false);
+        bank.update_transaction_processor();
 
         check_builtin_is_bpf(&bank);
     }

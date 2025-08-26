@@ -314,6 +314,7 @@ name = "agave-reserved-account-keys"
 version = "3.1.0"
 dependencies = [
  "agave-feature-set",
+ "ahash 0.8.11",
  "solana-frozen-abi",
  "solana-frozen-abi-macro",
  "solana-message",

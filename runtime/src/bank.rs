@@ -1154,6 +1154,7 @@ impl Bank {
 
         bank.finish_init(
             genesis_config,
+            ApplyFeatureActivationsCaller::NewWithPaths,
             additional_builtins,
             debug_do_not_add_builtins,
         );
@@ -1840,6 +1841,7 @@ impl Bank {
 
         bank.finish_init(
             genesis_config,
+            ApplyFeatureActivationsCaller::NewFromFields,
             additional_builtins,
             debug_do_not_add_builtins,
         );
@@ -4082,6 +4084,7 @@ impl Bank {
     fn finish_init(
         &mut self,
         genesis_config: &GenesisConfig,
+        caller: ApplyFeatureActivationsCaller,
         additional_builtins: Option<&[BuiltinPrototype]>,
         debug_do_not_add_builtins: bool,
     ) {
@@ -4093,10 +4096,7 @@ impl Bank {
         self.rewards_pool_pubkeys =
             Arc::new(genesis_config.rewards_pools.keys().cloned().collect());
 
-        self.apply_feature_activations(
-            ApplyFeatureActivationsCaller::FinishInit,
-            debug_do_not_add_builtins,
-        );
+        self.apply_feature_activations(caller, debug_do_not_add_builtins);
 
         // Cost-Tracker is not serialized in snapshot or any configs.
         // We must apply previously activated features related to limits here
@@ -5350,7 +5350,8 @@ impl Bank {
     ) {
         use ApplyFeatureActivationsCaller as Caller;
         let allow_new_activations = match caller {
-            Caller::FinishInit => false,
+            Caller::NewWithPaths => true,
+            Caller::NewFromFields => false,
             Caller::NewFromParent => true,
             Caller::WarpFromParent => false,
         };
@@ -6066,7 +6067,8 @@ fn calculate_data_size_delta(old_data_size: usize, new_data_size: usize) -> i64 
 /// those callers explicitly.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ApplyFeatureActivationsCaller {
-    FinishInit,
+    NewWithPaths,
+    NewFromFields,
     NewFromParent,
     WarpFromParent,
 }

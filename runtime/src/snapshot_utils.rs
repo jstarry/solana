@@ -2,7 +2,7 @@
 use solana_accounts_db::utils::create_accounts_run_and_snapshot_dirs;
 use {
     crate::{
-        bank::{BankFieldsToDeserialize, BankFieldsToSerialize, BankHashStats, BankSlotDelta},
+        bank::{BankFieldsToDeserialize, BankFieldsToSerialize, BankSlotDelta},
         serde_snapshot::{
             self, AccountsDbFields, ExtraFieldsToSerialize, SerializableAccountStorageEntry,
             SnapshotAccountsDbFields, SnapshotBankFields, SnapshotStreams,
@@ -847,7 +847,6 @@ pub fn serialize_and_archive_snapshot_package(
         mut snapshot_storages,
         status_cache_slot_deltas,
         bank_fields_to_serialize,
-        bank_hash_stats,
         write_version,
         enqueued: _,
     } = snapshot_package;
@@ -858,7 +857,6 @@ pub fn serialize_and_archive_snapshot_package(
         snapshot_storages.as_slice(),
         status_cache_slot_deltas.as_slice(),
         bank_fields_to_serialize,
-        bank_hash_stats,
         write_version,
         should_flush_and_hard_link_storages,
     )?;
@@ -918,7 +916,6 @@ fn serialize_snapshot(
     snapshot_storages: &[Arc<AccountStorageEntry>],
     slot_deltas: &[BankSlotDelta],
     mut bank_fields: BankFieldsToSerialize,
-    bank_hash_stats: BankHashStats,
     write_version: u64,
     should_flush_and_hard_link_storages: bool,
 ) -> Result<BankSnapshotInfo> {
@@ -979,7 +976,6 @@ fn serialize_snapshot(
             serde_snapshot::serialize_bank_snapshot_into(
                 stream,
                 bank_fields,
-                bank_hash_stats,
                 &get_storages_to_serialize(snapshot_storages),
                 extra_fields,
                 write_version,

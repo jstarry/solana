@@ -1045,6 +1045,7 @@ mod tests {
                     account_indexes: Some(config.account_indexes),
                     ..ACCOUNTS_DB_CONFIG_FOR_TESTING
                 },
+                ..BankTestConfig::default()
             });
             let vote_account = vote_keypair.pubkey();
             let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));

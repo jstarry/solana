@@ -2,7 +2,7 @@
 use solana_hash::Hash;
 use {
     crate::{
-        bank::{Bank, BankFieldsToSerialize, BankHashStats, BankSlotDelta},
+        bank::{Bank, BankFieldsToSerialize, BankSlotDelta},
         snapshot_hash::SnapshotHash,
     },
     solana_accounts_db::accounts_db::AccountStorageEntry,
@@ -25,7 +25,6 @@ pub struct SnapshotPackage {
     pub snapshot_storages: Vec<Arc<AccountStorageEntry>>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
     pub bank_fields_to_serialize: BankFieldsToSerialize,
-    pub bank_hash_stats: BankHashStats,
     pub write_version: u64,
 
     /// The instant this snapshot package was sent to the queue.
@@ -57,7 +56,6 @@ impl SnapshotPackage {
             snapshot_storages,
             status_cache_slot_deltas,
             bank_fields_to_serialize,
-            bank_hash_stats: bank.get_bank_hash_stats(),
             write_version: bank
                 .rc
                 .accounts
@@ -82,7 +80,6 @@ impl SnapshotPackage {
             snapshot_storages: Vec::default(),
             status_cache_slot_deltas: Vec::default(),
             bank_fields_to_serialize: BankFieldsToSerialize::default_for_tests(),
-            bank_hash_stats: BankHashStats::default(),
             write_version: u64::default(),
             enqueued: Instant::now(),
         }

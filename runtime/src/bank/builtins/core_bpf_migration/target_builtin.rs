@@ -71,12 +71,8 @@ impl TargetBuiltin {
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
-        crate::bank::{tests::create_simple_test_bank, ApplyFeatureActivationsCaller},
-        agave_feature_set as feature_set,
-        assert_matches::assert_matches,
-        solana_account::Account,
-        solana_feature_gate_interface as feature,
+        super::*, crate::bank::tests::create_simple_test_bank, agave_feature_set as feature_set,
+        assert_matches::assert_matches, solana_account::Account,
         solana_loader_v3_interface::state::UpgradeableLoaderState,
         solana_sdk_ids::bpf_loader_upgradeable::ID as BPF_LOADER_UPGRADEABLE_ID,
         test_case::test_case,
@@ -125,15 +121,8 @@ mod tests {
         let mut bank = create_simple_test_bank(0);
 
         if let Some(feature_id) = activation_feature {
-            // Activate the feature to enable the built-in program
-            bank.store_account(
-                &feature_id,
-                &feature::create_account(
-                    &feature::Feature { activated_at: None },
-                    bank.get_minimum_balance_for_rent_exemption(feature::Feature::size_of()),
-                ),
-            );
-            bank.apply_feature_activations(ApplyFeatureActivationsCaller::NewFromParent, false);
+            bank.activate_feature(&feature_id);
+            bank.apply_new_feature_activations();
         }
 
         let program_account = bank.get_account_with_fixed_root(&program_address).unwrap();

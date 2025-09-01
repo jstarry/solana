@@ -4,7 +4,7 @@
 #![cfg_attr(feature = "frozen-abi", feature(min_specialization))]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 use {
-    agave_feature_set::{self as feature_set, FeatureSet},
+    agave_feature_set::{self as feature_set},
     solana_pubkey::Pubkey,
     solana_sdk_ids::{
         address_lookup_table, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
@@ -82,9 +82,9 @@ impl ReservedAccountKeys {
 
     /// Move inactive reserved account keys to the active set if their feature
     /// is active.
-    pub fn update_active_set(&mut self, feature_set: &FeatureSet) {
+    pub fn update_active_set(&mut self, is_feature_active: impl Fn(&Pubkey) -> bool) {
         self.inactive.retain(|reserved_key, feature_id| {
-            if feature_set.is_active(feature_id) {
+            if is_feature_active(feature_id) {
                 self.active.insert(*reserved_key);
                 false
             } else {
@@ -185,7 +185,7 @@ static RESERVED_ACCOUNTS: std::sync::LazyLock<Vec<ReservedAccount>> =
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, agave_feature_set::FeatureSet};
 
     #[test]
     fn test_is_reserved() {
@@ -225,13 +225,13 @@ mod tests {
         // Updating the active set with a default feature set should be a no-op
         let previous_reserved_account_keys = reserved_account_keys.clone();
         let mut feature_set = FeatureSet::default();
-        reserved_account_keys.update_active_set(&feature_set);
+        reserved_account_keys.update_active_set(|feature_id| feature_set.is_active(feature_id));
         assert_eq!(reserved_account_keys, previous_reserved_account_keys);
 
         // Updating the active set with an activated feature should also activate
         // the corresponding reserved key from inactive to active
-        feature_set.active_mut().insert(feature_ids[0], 0);
-        reserved_account_keys.update_active_set(&feature_set);
+        feature_set.activate(&feature_ids[0], 0);
+        reserved_account_keys.update_active_set(|feature_id| feature_set.is_active(feature_id));
 
         assert!(reserved_account_keys.is_reserved(&active_reserved_key));
         assert!(reserved_account_keys.is_reserved(&pending_reserved_keys[0]));
@@ -239,8 +239,8 @@ mod tests {
 
         // Update the active set again to ensure that the inactive map is
         // properly retained
-        feature_set.active_mut().insert(feature_ids[1], 0);
-        reserved_account_keys.update_active_set(&feature_set);
+        feature_set.activate(&feature_ids[1], 0);
+        reserved_account_keys.update_active_set(|feature_id| feature_set.is_active(feature_id));
 
         assert!(reserved_account_keys.is_reserved(&active_reserved_key));
         assert!(reserved_account_keys.is_reserved(&pending_reserved_keys[0]));

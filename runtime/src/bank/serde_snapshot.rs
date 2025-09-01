@@ -122,7 +122,6 @@ mod tests {
             serde_snapshot::serialize_bank_snapshot_into(
                 &mut writer,
                 bank_fields,
-                bank2.get_bank_hash_stats(),
                 &get_storages_to_serialize(&bank2.get_snapshot_storages(None)),
                 ExtraFieldsToSerialize {
                     lamports_per_signature: bank2.fee_rate_governor.lamports_per_signature,

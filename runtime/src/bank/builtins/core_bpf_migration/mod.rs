@@ -10,6 +10,7 @@ use {
     solana_account::{AccountSharedData, ReadableAccount, WritableAccount},
     solana_builtins::core_bpf_migration::CoreBpfMigrationConfig,
     solana_compute_budget::compute_budget::ComputeBudget,
+    solana_epoch_schedule::EpochSchedule,
     solana_hash::Hash,
     solana_instruction::error::InstructionError,
     solana_loader_v3_interface::state::UpgradeableLoaderState,
@@ -21,6 +22,7 @@ use {
     solana_pubkey::Pubkey,
     solana_sdk_ids::bpf_loader_upgradeable,
     solana_svm_callback::InvokeContextCallback,
+    solana_sysvar_id::SysvarId,
     solana_transaction_context::TransactionContext,
     source_buffer::SourceBuffer,
     std::{cmp::Ordering, sync::atomic::Ordering::Relaxed},
@@ -157,6 +159,12 @@ impl Bank {
             sysvar_cache.fill_missing_entries(|pubkey, set_sysvar| {
                 if let Some(account) = self.get_account(pubkey) {
                     set_sysvar(account.data());
+                } else if pubkey == &EpochSchedule::id() {
+                    // Genesis feature activations are applied before storing sysvar
+                    // accounts so fallback to serializing the epoch schedule if the
+                    // sysvar account doesn't exist yet.
+                    let mut data = bincode::serialize(self.epoch_schedule()).unwrap();
+                    set_sysvar(&mut data);
                 }
             });
 
@@ -398,18 +406,22 @@ impl Bank {
 pub(crate) mod tests {
     use {
         super::*,
-        crate::bank::{
-            test_utils::goto_end_of_slot,
-            tests::{
-                create_genesis_config, create_simple_test_bank,
-                new_bank_from_parent_with_bank_forks,
+        crate::{
+            bank::{
+                test_utils::goto_end_of_slot,
+                tests::{
+                    create_genesis_config, create_simple_test_bank,
+                    new_bank_from_parent_with_bank_forks,
+                },
+                Bank, BankTestConfig,
             },
-            Bank,
+            genesis_utils::activate_feature,
         },
         agave_feature_set::FeatureSet,
+        ahash::AHashSet,
         assert_matches::assert_matches,
         solana_account::{
-            state_traits::StateMut, AccountSharedData, ReadableAccount, WritableAccount,
+            state_traits::StateMut, Account, AccountSharedData, ReadableAccount, WritableAccount,
         },
         solana_builtins::{
             core_bpf_migration::{CoreBpfMigrationConfig, CoreBpfMigrationTargetType},
@@ -646,25 +658,9 @@ pub(crate) mod tests {
         let mut bank = create_simple_test_bank(0);
 
         let builtin_id = Pubkey::new_unique();
+        bank.add_builtin(builtin_id, "test_builtin", ProgramCacheEntry::default());
+
         let source_buffer_address = Pubkey::new_unique();
-
-        // This will be checked by `TargetBuiltinProgram::new_checked`, but set
-        // up the mock builtin and ensure it exists as configured.
-        let builtin_account = {
-            let builtin_name = String::from("test_builtin");
-            let account =
-                AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
-            bank.store_account_and_update_capitalization(&builtin_id, &account);
-            bank.transaction_processor.add_builtin(
-                &bank,
-                builtin_id,
-                builtin_name.as_str(),
-                ProgramCacheEntry::default(),
-            );
-            account
-        };
-        assert_eq!(&bank.get_account(&builtin_id).unwrap(), &builtin_account);
-
         let test_context = TestContext::new(
             &bank,
             &builtin_id,
@@ -783,24 +779,10 @@ pub(crate) mod tests {
         let mut bank = create_simple_test_bank(0);
 
         let builtin_id = Pubkey::new_unique();
+        bank.add_builtin(builtin_id, "test_builtin", ProgramCacheEntry::default());
+
         let source_buffer_address = Pubkey::new_unique();
-
         let upgrade_authority_address = Some(Pubkey::new_unique());
-
-        {
-            let builtin_name = String::from("test_builtin");
-            let account =
-                AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
-            bank.store_account_and_update_capitalization(&builtin_id, &account);
-            bank.transaction_processor.add_builtin(
-                &bank,
-                builtin_id,
-                builtin_name.as_str(),
-                ProgramCacheEntry::default(),
-            );
-            account
-        };
-
         let test_context = TestContext::new(
             &bank,
             &builtin_id,
@@ -833,24 +815,16 @@ pub(crate) mod tests {
     fn test_migrate_fail_verified_build_mismatch() {
         let mut bank = create_simple_test_bank(0);
 
+        let builtin_name = String::from("test_builtin");
         let builtin_id = Pubkey::new_unique();
         let source_buffer_address = Pubkey::new_unique();
-
         let upgrade_authority_address = Some(Pubkey::new_unique());
 
-        {
-            let builtin_name = String::from("test_builtin");
-            let account =
-                AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
-            bank.store_account_and_update_capitalization(&builtin_id, &account);
-            bank.transaction_processor.add_builtin(
-                &bank,
-                builtin_id,
-                builtin_name.as_str(),
-                ProgramCacheEntry::default(),
-            );
-            account
-        };
+        bank.add_builtin(
+            builtin_id,
+            builtin_name.as_str(),
+            ProgramCacheEntry::default(),
+        );
 
         let test_context = TestContext::new(
             &bank,
@@ -884,24 +858,16 @@ pub(crate) mod tests {
     fn test_migrate_none_authority_with_some_buffer_authority() {
         let mut bank = create_simple_test_bank(0);
 
+        let builtin_name = String::from("test_builtin");
         let builtin_id = Pubkey::new_unique();
         let source_buffer_address = Pubkey::new_unique();
-
         let upgrade_authority_address = Some(Pubkey::new_unique());
 
-        {
-            let builtin_name = String::from("test_builtin");
-            let account =
-                AccountSharedData::new_data(1, &builtin_name, &native_loader::id()).unwrap();
-            bank.store_account_and_update_capitalization(&builtin_id, &account);
-            bank.transaction_processor.add_builtin(
-                &bank,
-                builtin_id,
-                builtin_name.as_str(),
-                ProgramCacheEntry::default(),
-            );
-            account
-        };
+        bank.add_builtin(
+            builtin_id,
+            builtin_name.as_str(),
+            ProgramCacheEntry::default(),
+        );
 
         // Set up the source buffer with a valid authority, but the migration
         // config will define the upgrade authority to be `None`.
@@ -1184,8 +1150,7 @@ pub(crate) mod tests {
         // Set up the CPI mockup to test CPI'ing to the migrated program.
         let cpi_program_id = Pubkey::new_unique();
         let cpi_program_name = "mock_cpi_program";
-        root_bank.transaction_processor.add_builtin(
-            &root_bank,
+        root_bank.add_builtin(
             cpi_program_id,
             cpi_program_name,
             ProgramCacheEntry::new_builtin(0, cpi_program_name.len(), cpi_mockup::Entrypoint::vm),
@@ -1452,7 +1417,7 @@ pub(crate) mod tests {
             .write()
             .unwrap()
             .clear();
-        bank.finish_init(false);
+        bank.update_transaction_processor();
 
         // Assert the feature is active and the bank still added the builtin.
         assert!(bank.feature_set.is_active(feature_id));
@@ -1496,41 +1461,31 @@ pub(crate) mod tests {
 
         let test_prototype = TestPrototype::Builtin(&BUILTINS[0]); // System program
         let (builtin_id, config) = test_prototype.deconstruct();
-        let feature_id = &config.feature_id;
+        let test_features = AHashSet::from_iter([config.feature_id]);
 
-        let upgrade_authority_address = Some(Pubkey::new_unique());
+        let upgrade_authority_address = config.upgrade_authority_address;
         let elf = test_elf();
-        let program_data_metadata_size = UpgradeableLoaderState::size_of_programdata_metadata();
-        let program_data_size = program_data_metadata_size + elf.len();
+        let buffer_metadata_size = UpgradeableLoaderState::size_of_buffer_metadata();
+        let buffer_size = buffer_metadata_size + elf.len();
 
-        // Set up a post-migration builtin.
-        let builtin_program_data_address = get_program_data_address(builtin_id);
-        let builtin_program_account = AccountSharedData::new_data(
+        // Set up a builtin buffer.
+        let mut builtin_program_buffer_account = AccountSharedData::new_data_with_space(
             100_000,
-            &UpgradeableLoaderState::Program {
-                programdata_address: builtin_program_data_address,
+            &UpgradeableLoaderState::Buffer {
+                authority_address: upgrade_authority_address,
             },
+            buffer_size,
             &bpf_loader_upgradeable::id(),
         )
         .unwrap();
-        let mut builtin_program_data_account = AccountSharedData::new_data_with_space(
-            100_000,
-            &UpgradeableLoaderState::ProgramData {
-                slot: 0,
-                upgrade_authority_address,
-            },
-            program_data_size,
-            &bpf_loader_upgradeable::id(),
-        )
-        .unwrap();
-        builtin_program_data_account.data_as_mut_slice()[program_data_metadata_size..]
+        builtin_program_buffer_account.data_as_mut_slice()[buffer_metadata_size..]
             .copy_from_slice(&elf);
-        genesis_config
-            .accounts
-            .insert(*builtin_id, builtin_program_account.into());
+        for feature in &test_features {
+            activate_feature(&mut genesis_config, *feature);
+        }
         genesis_config.accounts.insert(
-            builtin_program_data_address,
-            builtin_program_data_account.into(),
+            config.source_buffer_address,
+            Account::from(builtin_program_buffer_account),
         );
 
         // Use this closure to run checks on the builtin.
@@ -1550,6 +1505,7 @@ pub(crate) mod tests {
                 fetched_builtin_program_account.owner(),
                 &bpf_loader_upgradeable::id()
             );
+            let builtin_program_data_address = get_program_data_address(builtin_id);
             assert_eq!(
                 bincode::deserialize::<UpgradeableLoaderState>(
                     fetched_builtin_program_account.data()
@@ -1567,6 +1523,7 @@ pub(crate) mod tests {
                 fetched_builtin_program_data_account.owner(),
                 &bpf_loader_upgradeable::id()
             );
+            let program_data_metadata_size = UpgradeableLoaderState::size_of_programdata_metadata();
             assert_eq!(
                 bincode::deserialize::<UpgradeableLoaderState>(
                     &fetched_builtin_program_data_account.data()[..program_data_metadata_size]
@@ -1583,45 +1540,19 @@ pub(crate) mod tests {
             );
         };
 
-        // Create a new bank.
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        check_builtin_is_bpf(&bank);
-
-        // Now, add the feature ID as active, and run `finish_init` again to
-        // make sure the feature is idempotent.
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.active_mut().insert(*feature_id, 0);
-        bank.feature_set = Arc::new(feature_set);
-        bank.store_account_and_update_capitalization(
-            feature_id,
-            &feature::create_account(
-                &Feature {
-                    activated_at: Some(0),
-                },
-                42,
-            ),
+        // Create a new bank from genesis
+        let bank = Bank::new_with_config_for_tests(
+            &genesis_config,
+            BankTestConfig {
+                genesis_inactive_features: Some(test_features.clone()),
+                ..BankTestConfig::default()
+            },
         );
 
-        // Run `finish_init` to simulate starting up from a snapshot.
-        // Clear all builtins to simulate a fresh bank init.
-        bank.transaction_processor
-            .global_program_cache
-            .write()
-            .unwrap()
-            .remove_programs(
-                bank.transaction_processor
-                    .builtin_program_ids
-                    .read()
-                    .unwrap()
-                    .clone()
-                    .into_iter(),
-            );
-        bank.transaction_processor
-            .builtin_program_ids
-            .write()
-            .unwrap()
-            .clear();
-        bank.finish_init(false);
+        check_builtin_is_bpf(&bank);
+
+        // Create a new bank from snapshot
+        let bank = Bank::new_from_snapshot_for_tests(&bank, Some(test_features));
 
         check_builtin_is_bpf(&bank);
     }

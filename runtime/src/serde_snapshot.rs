@@ -603,7 +603,6 @@ where
 pub fn serialize_bank_snapshot_into<W>(
     stream: &mut BufWriter<W>,
     bank_fields: BankFieldsToSerialize,
-    bank_hash_stats: BankHashStats,
     account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
     extra_fields: ExtraFieldsToSerialize,
     write_version: u64,
@@ -618,7 +617,6 @@ where
     serialize_bank_snapshot_with(
         &mut serializer,
         bank_fields,
-        bank_hash_stats,
         account_storage_entries,
         extra_fields,
         write_version,
@@ -629,7 +627,6 @@ where
 pub fn serialize_bank_snapshot_with<S>(
     serializer: S,
     bank_fields: BankFieldsToSerialize,
-    bank_hash_stats: BankHashStats,
     account_storage_entries: &[Vec<Arc<AccountStorageEntry>>],
     extra_fields: ExtraFieldsToSerialize,
     write_version: u64,
@@ -638,6 +635,7 @@ where
     S: serde::Serializer,
 {
     let slot = bank_fields.slot;
+    let bank_hash_stats = bank_fields.bank_hash_stats.clone();
     let serializable_bank = SerializableVersionedBank::from(bank_fields);
     let serializable_accounts_db = SerializableAccountsDb::<'_> {
         slot,
@@ -831,15 +829,14 @@ where
     let runtime_config = Arc::new(runtime_config.clone());
 
     // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call
-    let debug_do_not_add_builtins = limit_load_slot_count_from_snapshot.is_some();
     let bank = Bank::new_from_fields(
         bank_rc,
         genesis_config,
         runtime_config,
         bank_fields,
         debug_keys,
-        debug_do_not_add_builtins,
         reconstructed_accounts_db_info.accounts_data_len,
+        None,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());

@@ -8493,8 +8493,8 @@ ssri@^12.0.0:
     minipass "^7.0.3"
 
 start-server-and-test@^2.0.0:
-  version "2.0.13"
-  resolved "https://registry.yarnpkg.com/start-server-and-test/-/start-server-and-test-2.0.13.tgz#d8eec8d690172205e39495e41fd523c692d82996"
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/start-server-and-test/-/start-server-and-test-2.1.0.tgz#e16790fbd540a6db4431c77ab5ae0eff7bd7c671"
   dependencies:
     arg "^5.0.2"
     bluebird "3.7.2"

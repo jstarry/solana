@@ -4075,34 +4075,6 @@ impl Bank {
             self.apply_simd_0306_cost_tracker_changes();
         }
 
-        if !debug_do_not_add_builtins {
-            for builtin in BUILTINS {
-                // The builtin should be added if it has no enable feature ID
-                // and it has not been migrated to Core BPF.
-                //
-                // If a program was previously migrated to Core BPF, accountsDB
-                // from snapshot should contain the BPF program accounts.
-                let builtin_is_bpf = |program_id: &Pubkey| {
-                    self.get_account(program_id)
-                        .map(|a| a.owner() == &bpf_loader_upgradeable::id())
-                        .unwrap_or(false)
-                };
-                if builtin.enable_feature_id.is_none() && !builtin_is_bpf(&builtin.program_id) {
-                    self.transaction_processor.add_builtin(
-                        self,
-                        builtin.program_id,
-                        builtin.name,
-                        ProgramCacheEntry::new_builtin(0, builtin.name.len(), builtin.entrypoint),
-                    );
-                }
-            }
-            for precompile in get_precompiles() {
-                if precompile.feature.is_none() {
-                    self.add_precompile(&precompile.program_id);
-                }
-            }
-        }
-
         let simd_0268_active = self
             .feature_set
             .is_active(&raise_cpi_nesting_limit_to_8::id());
@@ -5419,29 +5391,37 @@ impl Bank {
                 continue;
             }
 
-            if let Some(feature_id) = builtin.enable_feature_id {
-                if self.feature_set.is_active(&feature_id) {
-                    self.transaction_processor.add_builtin(
-                        self,
-                        builtin.program_id,
-                        builtin.name,
-                        ProgramCacheEntry::new_builtin(
-                            self.feature_set.activated_slot(&feature_id).unwrap_or(0),
-                            builtin.name.len(),
-                            builtin.entrypoint,
-                        ),
-                    );
-                }
+            let builtin_is_active = builtin
+                .enable_feature_id
+                .map(|feature_id| self.feature_set.is_active(&feature_id))
+                .unwrap_or(true);
+
+            if builtin_is_active {
+                let activation_slot = builtin
+                    .enable_feature_id
+                    .and_then(|feature_id| self.feature_set.activated_slot(&feature_id))
+                    .unwrap_or(0);
+                self.transaction_processor.add_builtin(
+                    self,
+                    builtin.program_id,
+                    builtin.name,
+                    ProgramCacheEntry::new_builtin(
+                        activation_slot,
+                        builtin.name.len(),
+                        builtin.entrypoint,
+                    ),
+                );
             }
         }
 
         for precompile in get_precompiles() {
-            let should_add_precompile = precompile
+            let precompile_is_active = precompile
                 .feature
                 .as_ref()
                 .map(|feature_id| self.feature_set.is_active(feature_id))
-                .unwrap_or(false);
-            if should_add_precompile {
+                .unwrap_or(true);
+
+            if precompile_is_active {
                 self.add_precompile(&precompile.program_id);
             }
         }

@@ -4780,6 +4780,7 @@ pub mod tests {
                         account_indexes: Some(config.account_indexes.clone()),
                         ..ACCOUNTS_DB_CONFIG_FOR_TESTING
                     },
+                    ..BankTestConfig::default()
                 });
 
             let ledger_path = get_tmp_ledger_path!();

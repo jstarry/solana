@@ -911,6 +911,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         exit,
         None,
         None,
+        None,
     );
     let bank0_slot = bank0.slot();
     let bank_forks = BankForks::new_rw_arc(bank0);

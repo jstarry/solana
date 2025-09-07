@@ -959,6 +959,7 @@ mod tests {
                 mark_obsolete_accounts: MarkObsoleteAccounts::Enabled,
                 ..ACCOUNTS_DB_CONFIG_FOR_TESTING
             },
+            ..BankTestConfig::default()
         };
 
         let bank = Bank::new_with_config_for_tests(&genesis_config, bank_test_config);
@@ -1809,6 +1810,7 @@ mod tests {
                 storage_access,
                 ..ACCOUNTS_DB_CONFIG_FOR_TESTING
             },
+            ..BankTestConfig::default()
         };
 
         let bank0 = Bank::new_with_config_for_tests(&genesis_config, bank_test_config);

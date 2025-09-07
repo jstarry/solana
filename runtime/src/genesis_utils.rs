@@ -258,9 +258,7 @@ pub fn activate_feature(genesis_config: &mut GenesisConfig, feature_id: Pubkey) 
     genesis_config.accounts.insert(
         feature_id,
         Account::from(feature::create_account(
-            &Feature {
-                activated_at: Some(0),
-            },
+            &Feature::default(),
             std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1),
         )),
     );

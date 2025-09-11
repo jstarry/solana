@@ -1628,9 +1628,9 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@2.10.8":
-  version "2.10.8"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.10.8.tgz#80e983ca0365478b39c4c0f559785345393f8fa2"
+"@puppeteer/browsers@2.10.9":
+  version "2.10.9"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.10.9.tgz#7d96549e83a49534e94c23eeaf81142be40ce039"
   dependencies:
     debug "^4.4.1"
     extract-zip "^2.0.1"
@@ -7551,26 +7551,27 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@24.19.0:
-  version "24.19.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.19.0.tgz#038f5229b9910f5daf717d5aaff3b63228afbf6c"
+puppeteer-core@24.20.0:
+  version "24.20.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.20.0.tgz#405b0f3dc0db8a33a4d8fdbf82bd99689517b121"
   dependencies:
-    "@puppeteer/browsers" "2.10.8"
+    "@puppeteer/browsers" "2.10.9"
     chromium-bidi "8.0.0"
     debug "^4.4.1"
     devtools-protocol "0.0.1495869"
     typed-query-selector "^2.12.0"
+    webdriver-bidi-protocol "0.2.8"
     ws "^8.18.3"
 
 puppeteer@^24.0.0:
-  version "24.19.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.19.0.tgz#86cef2d1cc45066c9f5ed9edabf93b2d3b206eb3"
+  version "24.20.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.20.0.tgz#33137972aac5d10ee63037833bc15150f02cbdf9"
   dependencies:
-    "@puppeteer/browsers" "2.10.8"
+    "@puppeteer/browsers" "2.10.9"
     chromium-bidi "8.0.0"
     cosmiconfig "^9.0.0"
     devtools-protocol "0.0.1495869"
-    puppeteer-core "24.19.0"
+    puppeteer-core "24.20.0"
     typed-query-selector "^2.12.0"
 
 pvtsutils@^1.3.6:
@@ -9394,6 +9395,10 @@ wait-on@8.0.4:
 walk-up-path@^3.0.1:
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/walk-up-path/-/walk-up-path-3.0.1.tgz#c8d78d5375b4966c717eb17ada73dbd41490e886"
+
+webdriver-bidi-protocol@0.2.8:
+  version "0.2.8"
+  resolved "https://registry.yarnpkg.com/webdriver-bidi-protocol/-/webdriver-bidi-protocol-0.2.8.tgz#a5dfe45137db4e8e1dc2c44c342095d52059dc8f"
 
 webidl-conversions@^3.0.0:
   version "3.0.1"

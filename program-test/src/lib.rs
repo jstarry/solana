@@ -858,6 +858,7 @@ impl ProgramTest {
             Arc::default(),
             None,
             None,
+            None,
         );
 
         // Add commonly-used SPL programs as a convenience to the user

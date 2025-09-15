@@ -17,7 +17,7 @@ use {
         stakes::InvalidCacheEntryReason,
         status_cache::MAX_CACHE_ENTRIES,
     },
-    agave_feature_set::{self as feature_set, FeatureSet},
+    agave_feature_set::{self as feature_set, FeatureSet, FEATURE_NAMES},
     agave_reserved_account_keys::ReservedAccount,
     agave_transaction_view::static_account_keys_frame::MAX_STATIC_ACCOUNTS_PER_PACKET,
     ahash::AHashMap,
@@ -3431,6 +3431,7 @@ fn test_get_filtered_indexed_accounts_limit_exceeded() {
             account_indexes: Some(account_indexes),
             ..ACCOUNTS_DB_CONFIG_FOR_TESTING
         },
+        ..BankTestConfig::default()
     };
     let bank = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
@@ -3463,6 +3464,7 @@ fn test_get_filtered_indexed_accounts() {
             account_indexes: Some(account_indexes),
             ..ACCOUNTS_DB_CONFIG_FOR_TESTING
         },
+        ..BankTestConfig::default()
     };
     let bank = Arc::new(Bank::new_with_config_for_tests(
         &genesis_config,
@@ -5309,7 +5311,7 @@ fn test_bank_hash_consistency() {
 
     // Set the feature set to all enabled so that we detect any inconsistencies
     // in the hash computation that may arise from feature set changes
-    let feature_set = FeatureSet::all_enabled();
+    let genesis_pending_features = AHashSet::from_iter((*FEATURE_NAMES).keys().copied());
 
     let mut bank = Arc::new(Bank::new_from_genesis(
         &genesis_config,
@@ -5321,8 +5323,10 @@ fn test_bank_hash_consistency() {
         Some(Pubkey::from([42; 32])),
         Arc::default(),
         None,
-        Some(feature_set),
+        Some(genesis_pending_features),
+        None,
     ));
+
     loop {
         goto_end_of_slot(Arc::clone(&bank));
         if bank.slot == 0 {
@@ -6815,13 +6819,13 @@ fn test_compute_active_feature_set() {
     feature_set.inactive_mut().insert(test_feature);
     bank.feature_set = Arc::new(feature_set.clone());
 
-    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
+    let (feature_set, new_activations) = bank.get_active_and_pending_features();
     assert!(new_activations.is_empty());
     assert!(!feature_set.is_active(&test_feature));
 
     // Depositing into the `test_feature` account should do nothing
     test_utils::deposit(&bank, &test_feature, 42).unwrap();
-    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
+    let (feature_set, new_activations) = bank.get_active_and_pending_features();
     assert!(new_activations.is_empty());
     assert!(!feature_set.is_active(&test_feature));
 
@@ -6834,12 +6838,11 @@ fn test_compute_active_feature_set() {
     assert_eq!(feature.activated_at, None);
 
     // Run `compute_active_feature_set` excluding pending activation
-    let (feature_set, new_activations) = bank.compute_active_feature_set(false);
-    assert!(new_activations.is_empty());
+    let feature_set = bank.compute_active_feature_set();
     assert!(!feature_set.is_active(&test_feature));
 
     // Run `compute_active_feature_set` including pending activation
-    let (_feature_set, new_activations) = bank.compute_active_feature_set(true);
+    let (_feature_set, new_activations) = bank.get_active_and_pending_features();
     assert_eq!(new_activations.len(), 1);
     assert!(new_activations.contains(&test_feature));
 
@@ -6849,7 +6852,7 @@ fn test_compute_active_feature_set() {
         .expect("from_account");
     assert_eq!(feature.activated_at, Some(1));
 
-    let (feature_set, new_activations) = bank.compute_active_feature_set(true);
+    let (feature_set, new_activations) = bank.get_active_and_pending_features();
     assert!(new_activations.is_empty());
     assert!(feature_set.is_active(&test_feature));
 }
@@ -6917,13 +6920,6 @@ fn test_block_limits() {
         &feature_set::raise_block_limits_to_100m::id(),
         &feature::create_account(&Feature::default(), 42),
     );
-    // compute_and_apply_features_after_snapshot_restore will not cause the block limit to be updated
-    bank.compute_and_apply_features_after_snapshot_restore();
-    assert_eq!(
-        bank.read_cost_tracker().unwrap().get_block_limit(),
-        MAX_BLOCK_UNITS,
-        "before activating the feature, bank should have old/default limit"
-    );
 
     // compute_and_apply_new_feature_activations will cause feature to be activated
     bank.compute_and_apply_new_feature_activations();
@@ -6952,14 +6948,6 @@ fn test_block_limits() {
         &feature::create_account(&Feature::default(), 42),
     );
 
-    // compute_and_apply_features_after_snapshot_restore will not cause the block limit to be updated
-    bank.compute_and_apply_features_after_snapshot_restore();
-    assert_eq!(
-        bank.read_cost_tracker().unwrap().get_account_limit(),
-        MAX_WRITABLE_ACCOUNT_UNITS,
-        "before activating the feature, bank should have old/default limit"
-    );
-
     // compute_and_apply_new_feature_activations will cause feature to be activated
     bank.compute_and_apply_new_feature_activations();
     assert_eq!(
@@ -6976,13 +6964,6 @@ fn test_block_limits() {
     bank.store_account(
         &feature_set::raise_account_cu_limit::id(),
         &feature::create_account(&Feature::default(), 42),
-    );
-    // compute_and_apply_features_after_snapshot_restore will not cause the block limit to be updated
-    bank.compute_and_apply_features_after_snapshot_restore();
-    assert_eq!(
-        bank.read_cost_tracker().unwrap().get_account_limit(),
-        MAX_WRITABLE_ACCOUNT_UNITS,
-        "before activating the feature, bank should have old/default limit"
     );
 
     // compute_and_apply_new_feature_activations will cause feature to be activated
@@ -7002,13 +6983,6 @@ fn test_block_limits() {
     bank.store_account(
         &feature_set::raise_block_limits_to_100m::id(),
         &feature::create_account(&Feature::default(), 42),
-    );
-    // compute_and_apply_features_after_snapshot_restore will not cause the block limit to be updated
-    bank.compute_and_apply_features_after_snapshot_restore();
-    assert_eq!(
-        bank.read_cost_tracker().unwrap().get_block_limit(),
-        MAX_BLOCK_UNITS,
-        "before activating the feature, bank should have old/default limit"
     );
 
     // compute_and_apply_new_feature_activations will cause feature to be activated
@@ -7982,14 +7956,9 @@ fn test_get_inflation_start_slot_devnet_testnet() {
     // Request `pico_inflation` activation
     bank.store_account(
         &feature_set::pico_inflation::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(1),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_start_slot(), 1);
 
     // Advance slot
@@ -8000,37 +7969,22 @@ fn test_get_inflation_start_slot_devnet_testnet() {
     // which takes priority over pico_inflation
     bank.store_account(
         &feature_set::full_inflation::devnet_and_testnet::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(2),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_start_slot(), 2);
 
     // Request `full_inflation::mainnet::certusone` activation,
     // which should have no effect on `get_inflation_start_slot`
     bank.store_account(
         &feature_set::full_inflation::mainnet::certusone::vote::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(3),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
     bank.store_account(
         &feature_set::full_inflation::mainnet::certusone::enable::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(3),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_start_slot(), 2);
 }
 
@@ -8063,14 +8017,9 @@ fn test_get_inflation_start_slot_mainnet() {
     // Request `pico_inflation` activation
     bank.store_account(
         &feature_set::pico_inflation::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(1),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_start_slot(), 1);
 
     // Advance slot
@@ -8081,23 +8030,13 @@ fn test_get_inflation_start_slot_mainnet() {
     // which takes priority over pico_inflation
     bank.store_account(
         &feature_set::full_inflation::mainnet::certusone::vote::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(2),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
     bank.store_account(
         &feature_set::full_inflation::mainnet::certusone::enable::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(2),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_start_slot(), 2);
 
     // Advance slot
@@ -8108,14 +8047,9 @@ fn test_get_inflation_start_slot_mainnet() {
     // which should have no effect on `get_inflation_start_slot`
     bank.store_account(
         &feature_set::full_inflation::devnet_and_testnet::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(bank.slot()),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_start_slot(), 2);
 }
 
@@ -8147,17 +8081,11 @@ fn test_get_inflation_num_slots_with_activations() {
     assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
 
     // Activate pico_inflation
-    let pico_inflation_activation_slot = bank.slot();
     bank.store_account(
         &feature_set::pico_inflation::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(pico_inflation_activation_slot),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
     for _ in 0..slots_per_epoch {
         bank = new_from_parent(Arc::new(bank));
@@ -8165,17 +8093,11 @@ fn test_get_inflation_num_slots_with_activations() {
     assert_eq!(bank.get_inflation_num_slots(), 2 * slots_per_epoch);
 
     // Activate full_inflation::devnet_and_testnet
-    let full_inflation_activation_slot = bank.slot();
     bank.store_account(
         &feature_set::full_inflation::devnet_and_testnet::id(),
-        &feature::create_account(
-            &Feature {
-                activated_at: Some(full_inflation_activation_slot),
-            },
-            42,
-        ),
+        &feature::create_account(&Feature::default(), 42),
     );
-    bank.feature_set = Arc::new(bank.compute_active_feature_set(true).0);
+    bank.compute_and_apply_new_feature_activations();
     assert_eq!(bank.get_inflation_num_slots(), slots_per_epoch);
     for _ in 0..slots_per_epoch {
         bank = new_from_parent(Arc::new(bank));
@@ -8240,6 +8162,7 @@ fn test_epoch_schedule_from_genesis_config() {
         Arc::default(),
         None,
         None,
+        None,
     ));
 
     assert_eq!(bank.epoch_schedule(), &genesis_config.epoch_schedule);
@@ -8266,6 +8189,7 @@ where
         None,
         None,
         Arc::default(),
+        None,
         None,
         None,
     ));
@@ -10905,7 +10829,7 @@ fn test_feature_activation_loaded_programs_cache_preparation_phase(
         std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
     bank.store_account(
         &feature_set::disable_sbpf_v0_execution::id(),
-        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+        &feature::create_account(&Feature::default(), feature_account_balance),
     );
 
     // Advance the bank to middle of epoch to start the recompilation phase.
@@ -11021,7 +10945,7 @@ fn test_feature_activation_loaded_programs_epoch_transition() {
         std::cmp::max(genesis_config.rent.minimum_balance(Feature::size_of()), 1);
     bank.store_account(
         &feature_set::disable_fees_sysvar::id(),
-        &feature::create_account(&Feature { activated_at: None }, feature_account_balance),
+        &feature::create_account(&Feature::default(), feature_account_balance),
     );
 
     // Advance the bank to cross the epoch boundary and activate the feature.
@@ -12368,7 +12292,7 @@ fn test_apply_builtin_program_feature_transitions_for_new_epoch() {
 
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    bank.compute_and_apply_genesis_features();
+    bank.apply_genesis_features(None, None);
 
     // Overwrite precompile accounts to simulate a cluster which already added precompiles.
     for precompile in get_precompiles() {
@@ -12399,7 +12323,7 @@ fn test_startup_from_snapshot_after_precompile_transition() {
 
     let mut bank = Bank::new_for_tests(&genesis_config);
     bank.feature_set = Arc::new(FeatureSet::all_enabled());
-    bank.compute_and_apply_genesis_features();
+    bank.apply_genesis_features(None, None);
 
     // Overwrite precompile accounts to simulate a cluster which already added precompiles.
     for precompile in get_precompiles() {
@@ -12410,7 +12334,7 @@ fn test_startup_from_snapshot_after_precompile_transition() {
     bank.freeze();
 
     // Simulate starting up from snapshot finishing the initialization for a frozen bank
-    bank.compute_and_apply_features_after_snapshot_restore();
+    bank.finish_snapshot_init();
 }
 
 #[test]

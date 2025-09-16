@@ -1628,11 +1628,11 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@2.10.9":
-  version "2.10.9"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.10.9.tgz#7d96549e83a49534e94c23eeaf81142be40ce039"
+"@puppeteer/browsers@2.10.10":
+  version "2.10.10"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.10.10.tgz#f806f92d966918c931fb9c48052eba2db848beaa"
   dependencies:
-    debug "^4.4.1"
+    debug "^4.4.3"
     extract-zip "^2.0.1"
     progress "^2.0.3"
     proxy-agent "^6.5.0"
@@ -3369,6 +3369,12 @@ debug@^3.2.7:
   resolved "https://registry.npmjs.org/debug/-/debug-3.2.7.tgz"
   dependencies:
     ms "^2.1.1"
+
+debug@^4.4.3:
+  version "4.4.3"
+  resolved "https://registry.yarnpkg.com/debug/-/debug-4.4.3.tgz#c6ae432d9bd9662582fce08709b038c58e9e3d6a"
+  dependencies:
+    ms "^2.1.3"
 
 decamelize@^1.2.0:
   version "1.2.0"
@@ -7551,27 +7557,27 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@24.20.0:
-  version "24.20.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.20.0.tgz#405b0f3dc0db8a33a4d8fdbf82bd99689517b121"
+puppeteer-core@24.21.0:
+  version "24.21.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.21.0.tgz#527cd84c7b1c3244dbe1dc7610eebaaef8d3340b"
   dependencies:
-    "@puppeteer/browsers" "2.10.9"
+    "@puppeteer/browsers" "2.10.10"
     chromium-bidi "8.0.0"
-    debug "^4.4.1"
+    debug "^4.4.3"
     devtools-protocol "0.0.1495869"
     typed-query-selector "^2.12.0"
-    webdriver-bidi-protocol "0.2.8"
+    webdriver-bidi-protocol "0.2.11"
     ws "^8.18.3"
 
 puppeteer@^24.0.0:
-  version "24.20.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.20.0.tgz#33137972aac5d10ee63037833bc15150f02cbdf9"
+  version "24.21.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.21.0.tgz#170e101b9957e81fe65d5b28613b5188d1c407d6"
   dependencies:
-    "@puppeteer/browsers" "2.10.9"
+    "@puppeteer/browsers" "2.10.10"
     chromium-bidi "8.0.0"
     cosmiconfig "^9.0.0"
     devtools-protocol "0.0.1495869"
-    puppeteer-core "24.20.0"
+    puppeteer-core "24.21.0"
     typed-query-selector "^2.12.0"
 
 pvtsutils@^1.3.6:
@@ -9396,9 +9402,9 @@ walk-up-path@^3.0.1:
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/walk-up-path/-/walk-up-path-3.0.1.tgz#c8d78d5375b4966c717eb17ada73dbd41490e886"
 
-webdriver-bidi-protocol@0.2.8:
-  version "0.2.8"
-  resolved "https://registry.yarnpkg.com/webdriver-bidi-protocol/-/webdriver-bidi-protocol-0.2.8.tgz#a5dfe45137db4e8e1dc2c44c342095d52059dc8f"
+webdriver-bidi-protocol@0.2.11:
+  version "0.2.11"
+  resolved "https://registry.yarnpkg.com/webdriver-bidi-protocol/-/webdriver-bidi-protocol-0.2.11.tgz#dba18d9b0a33aed33fab272dbd6e42411ac753cc"
 
 webidl-conversions@^3.0.0:
   version "3.0.1"

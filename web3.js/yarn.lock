@@ -1122,9 +1122,9 @@
     symbol-observable "^1.0.4"
     ws "^8.8.0"
 
-"@httptoolkit/util@^0.1.6":
-  version "0.1.6"
-  resolved "https://registry.yarnpkg.com/@httptoolkit/util/-/util-0.1.6.tgz#b945855013d6b2e4115d2c7d470cca5e72a81cdc"
+"@httptoolkit/util@^0.1.7":
+  version "0.1.7"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/util/-/util-0.1.7.tgz#bff6c1a172060165a85957896fc0d58301bd599b"
 
 "@httptoolkit/websocket-stream@^6.0.1":
   version "6.0.1"
@@ -6529,14 +6529,14 @@ mocha@^11.0.1:
     yargs-unparser "^2.0.0"
 
 mockttp@^4.0.0:
-  version "4.1.0"
-  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-4.1.0.tgz#58be9ba41371ed0c8fd19b15c593d6e7b9ad06ae"
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-4.2.0.tgz#69adb4ef89ff8fa7335a2c580779e86e3e3c643d"
   dependencies:
     "@graphql-tools/schema" "^8.5.0"
     "@graphql-tools/utils" "^8.8.0"
     "@httptoolkit/httpolyglot" "^3.0.0"
     "@httptoolkit/subscriptions-transport-ws" "^0.11.2"
-    "@httptoolkit/util" "^0.1.6"
+    "@httptoolkit/util" "^0.1.7"
     "@httptoolkit/websocket-stream" "^6.0.1"
     "@peculiar/asn1-schema" "^2.3.15"
     "@peculiar/asn1-x509" "^2.3.15"

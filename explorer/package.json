@@ -54,7 +54,7 @@
     "react-select": "^5.10.2",
     "sass": "^1.93.2",
     "superstruct": "^2.0.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   },
   "scripts": {
     "start": "react-scripts start",

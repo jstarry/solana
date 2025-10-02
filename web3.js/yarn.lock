@@ -5490,6 +5490,10 @@ is-obj@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/is-obj/-/is-obj-2.0.0.tgz"
 
+is-path-inside@^3.0.3:
+  version "3.0.3"
+  resolved "https://registry.yarnpkg.com/is-path-inside/-/is-path-inside-3.0.3.tgz#d231362e53a07ff2b0e0ea7fed049161ffd16283"
+
 is-plain-obj@^2.1.0:
   version "2.1.0"
   resolved "https://registry.npmjs.org/is-plain-obj/-/is-plain-obj-2.1.0.tgz"
@@ -6504,8 +6508,8 @@ mkdirp@^3.0.1:
   resolved "https://registry.yarnpkg.com/mkdirp/-/mkdirp-3.0.1.tgz#e44e4c5607fb279c168241713cc6e0fea9adcb50"
 
 mocha@^11.0.1:
-  version "11.7.3"
-  resolved "https://registry.yarnpkg.com/mocha/-/mocha-11.7.3.tgz#68ce010241557414a63137a32ca952613e1731a7"
+  version "11.7.4"
+  resolved "https://registry.yarnpkg.com/mocha/-/mocha-11.7.4.tgz#f161b17aeccb0762484b33bdb3f7ab9410ba5c82"
   dependencies:
     browser-stdout "^1.3.1"
     chokidar "^4.0.1"
@@ -6515,6 +6519,7 @@ mocha@^11.0.1:
     find-up "^5.0.0"
     glob "^10.4.5"
     he "^1.2.0"
+    is-path-inside "^3.0.3"
     js-yaml "^4.1.0"
     log-symbols "^4.1.0"
     minimatch "^9.0.5"

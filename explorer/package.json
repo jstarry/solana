@@ -27,7 +27,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^24.7.0",
     "@types/react": "^19.1.16",
-    "@types/react-dom": "^19.2.0",
+    "@types/react-dom": "^19.2.1",
     "@types/react-router-dom": "^5.3.3",
     "@types/react-select": "^5.0.0",
     "@types/socket.io-client": "^3.0.0",

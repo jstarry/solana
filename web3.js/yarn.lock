@@ -2061,8 +2061,8 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@^24.0.0":
-  version "24.7.0"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.7.0.tgz#a34c9f0d3401db396782e440317dd5d8373c286f"
+  version "24.7.1"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.7.1.tgz#3f0b17eddcd965c9e337af22459b04bafbf96e5e"
   dependencies:
     undici-types "~7.14.0"
 

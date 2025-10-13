@@ -889,7 +889,7 @@ impl ProgramTest {
             }
             bank.store_account(address, account);
         }
-        bank.set_capitalization_for_tests(bank.calculate_capitalization_for_tests());
+        bank.set_capitalization(bank.calculate_capitalization());
         // Advance beyond slot 0 for a slightly more realistic test environment
         let bank = {
             let bank = Arc::new(bank);

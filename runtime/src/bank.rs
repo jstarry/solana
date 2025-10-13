@@ -4676,30 +4676,6 @@ impl Bank {
         Ok(())
     }
 
-    /// Calculates and returns the capitalization.
-    ///
-    /// Panics if capitalization overflows a u64.
-    ///
-    /// Note, this is *very* expensive!  It walks the whole accounts index,
-    /// account-by-account, summing each account's balance.
-    ///
-    /// Only intended to be called at startup by ledger-tool or tests.
-    /// (cannot be made DCOU due to solana-program-test)
-    pub fn calculate_capitalization_for_tests(&self) -> u64 {
-        self.rc
-            .accounts
-            .accounts_db
-            .calculate_capitalization_at_startup_from_index(&self.ancestors, self.slot())
-    }
-
-    /// Sets the capitalization.
-    ///
-    /// Only intended to be called by ledger-tool or tests.
-    /// (cannot be made DCOU due to solana-program-test)
-    pub fn set_capitalization_for_tests(&self, capitalization: u64) {
-        self.capitalization.store(capitalization, Relaxed);
-    }
-
     /// Returns the `SnapshotHash` for this bank's slot
     ///
     /// This fn is used at startup to verify the bank was rebuilt correctly.
@@ -5977,6 +5953,28 @@ impl Bank {
             .for_each(|(pubkey, _)| {
                 minimized_account_set.insert(*pubkey);
             });
+    }
+
+    /// Calculates and returns the capitalization.
+    ///
+    /// Panics if capitalization overflows a u64.
+    ///
+    /// Note, this is *very* expensive!  It walks the whole accounts index,
+    /// account-by-account, summing each account's balance.
+    ///
+    /// Only intended to be called at startup by ledger-tool or tests.
+    pub fn calculate_capitalization(&self) -> u64 {
+        self.rc
+            .accounts
+            .accounts_db
+            .calculate_capitalization_at_startup_from_index(&self.ancestors, self.slot())
+    }
+
+    /// Sets the capitalization.
+    ///
+    /// Only intended to be called by ledger-tool or tests.
+    pub fn set_capitalization(&self, capitalization: u64) {
+        self.capitalization.store(capitalization, Relaxed);
     }
 }
 

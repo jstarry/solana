@@ -1,4 +1,5 @@
 use {
+    ahash::RandomState as AHashRandomState,
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
     log::*,
     solana_pubkey::Pubkey,
@@ -40,7 +41,7 @@ pub struct AccountSecondaryIndexesIncludeExclude {
     pub keys: HashSet<Pubkey>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum AccountIndex {
     ProgramId,
     SplTokenMint,
@@ -111,7 +112,7 @@ impl SecondaryIndexEntry for DashMapSecondaryIndexEntry {
 
 #[derive(Debug, Default)]
 pub struct RwLockSecondaryIndexEntry {
-    account_keys: RwLock<HashSet<Pubkey>>,
+    account_keys: RwLock<HashSet<Pubkey, AHashRandomState>>,
 }
 
 impl SecondaryIndexEntry for RwLockSecondaryIndexEntry {

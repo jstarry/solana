@@ -143,6 +143,76 @@ impl SnapshotVersion {
     }
 }
 
+/// Info for unarchived full snapshot
+pub struct FullSnapshotInfo {
+    /// Slot of the bank
+    pub slot: Slot,
+    /// Path to the bank snapshot directory
+    pub bank_snapshot_dir: PathBuf,
+    /// Path to version file
+    pub version_path: PathBuf,
+    /// Path to status cache file
+    pub status_cache_path: PathBuf,
+    /// Path to the accounts directory
+    pub accounts_path: PathBuf,
+}
+
+impl FullSnapshotInfo {
+    pub fn new_from_dir(
+        full_snapshot_dir: impl AsRef<Path>,
+    ) -> std::result::Result<FullSnapshotInfo, SnapshotNewFromDirError> {
+        let bank_snapshots_dir = full_snapshot_dir.as_ref().join(BANK_SNAPSHOTS_DIR);
+        let Some((bank_snapshot_dir, slot)) = get_highest_bank_snapshot_path(&bank_snapshots_dir)
+        else {
+            return Err(SnapshotNewFromDirError::InvalidBankSnapshotDir(
+                bank_snapshots_dir,
+            ));
+        };
+
+        /*
+         * accounts (hardlink all to accounts/snapshot/372732559)
+         * snapshots
+         * - 372732559
+         *   - 372732559
+         * - status_cache
+         * version (1.2.0)
+         */
+
+        // check that the bank snapshots dir has status cache file
+        let status_cache_path = bank_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        if !status_cache_path.is_file() {
+            return Err(SnapshotNewFromDirError::MissingStatusCacheFile(
+                status_cache_path,
+            ));
+        }
+
+        // check that the full snapshot dir has version file
+        let version_path = full_snapshot_dir.as_ref().join(SNAPSHOT_VERSION_FILENAME);
+        if !version_path.is_file() {
+            return Err(SnapshotNewFromDirError::MissingVersionFile(version_path));
+        }
+
+        // check that the accounts directory exists
+        let accounts_path = full_snapshot_dir.as_ref().join("accounts");
+        if !accounts_path.is_dir() {
+            return Err(SnapshotNewFromDirError::MissingAccountsDir(accounts_path));
+        }
+
+        Ok(FullSnapshotInfo {
+            slot,
+            bank_snapshot_dir,
+            version_path,
+            status_cache_path,
+            accounts_path,
+        })
+    }
+
+    pub fn bank_snapshot_path(&self) -> PathBuf {
+        self.bank_snapshot_dir
+            .join(get_snapshot_file_name(self.slot))
+    }
+}
+
 /// Information about a bank snapshot. Namely the slot of the bank, the path to the snapshot, and
 /// the kind of the snapshot.
 #[derive(PartialEq, Eq, Debug)]
@@ -398,6 +468,9 @@ pub enum SnapshotNewFromDirError {
     #[error("missing version file '{0}'")]
     MissingVersionFile(PathBuf),
 
+    #[error("missing accounts dir '{0}'")]
+    MissingAccountsDir(PathBuf),
+
     #[error("invalid snapshot version '{0}'")]
     InvalidVersion(String),
 
@@ -583,6 +656,7 @@ pub fn clean_orphaned_account_snapshot_dirs(
     // This is used to clean up any hardlinks that are no longer referenced by the snapshot dirs.
     let mut account_snapshot_dirs_referenced = HashSet::new();
     let snapshots = get_bank_snapshots(bank_snapshots_dir);
+    dbg!(&snapshots);
     for snapshot in snapshots {
         let account_hardlinks_dir = snapshot.snapshot_dir.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
         // loop through entries in the snapshot_hardlink_dir, read the symlinks, add the target to the HashSet
@@ -590,7 +664,7 @@ pub fn clean_orphaned_account_snapshot_dirs(
             // The bank snapshot may not have a hard links dir with the storages.
             // This is fine, and happens for bank snapshots we do *not* fastboot from.
             // In this case, log it and go to the next bank snapshot.
-            debug!(
+            warn!(
                 "failed to read account hardlinks dir '{}'",
                 account_hardlinks_dir.display(),
             );
@@ -1226,9 +1300,29 @@ fn archive_snapshot(
     })
 }
 
-/// Get the bank snapshots in a directory
-pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnapshotInfo> {
-    let mut bank_snapshots = Vec::default();
+pub fn get_highest_bank_snapshot_path(
+    bank_snapshots_dir: impl AsRef<Path>,
+) -> Option<(PathBuf, Slot)> {
+    let mut bank_snapshots = vec![];
+    for slot in get_bank_snapshot_slots(&bank_snapshots_dir) {
+        let bank_snapshot_dir = get_bank_snapshot_dir(&bank_snapshots_dir, slot);
+        if !bank_snapshot_dir.is_dir() {
+            continue;
+        }
+
+        let bank_snapshot_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
+        if !bank_snapshot_path.is_file() {
+            continue;
+        }
+        bank_snapshots.push((bank_snapshot_dir, slot));
+    }
+
+    bank_snapshots.sort_unstable_by_key(|(_, slot)| *slot);
+    bank_snapshots.into_iter().next_back()
+}
+
+fn get_bank_snapshot_slots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<Slot> {
+    let mut bank_snapshot_slots = Vec::default();
     match fs::read_dir(&bank_snapshots_dir) {
         Err(err) => {
             info!(
@@ -1251,14 +1345,21 @@ pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnaps
                             .and_then(|file_name| file_name.parse::<Slot>().ok())
                     })
             })
-            .for_each(
-                |slot| match BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot) {
-                    Ok(snapshot_info) => bank_snapshots.push(snapshot_info),
-                    // Other threads may be modifying bank snapshots in parallel; only return
-                    // snapshots that are complete as deemed by BankSnapshotInfo::new_from_dir()
-                    Err(err) => debug!("Unable to read bank snapshot for slot {slot}: {err}"),
-                },
-            ),
+            .for_each(|path| bank_snapshot_slots.push(path)),
+    }
+    bank_snapshot_slots
+}
+
+/// Get the bank snapshots in a directory
+pub fn get_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) -> Vec<BankSnapshotInfo> {
+    let mut bank_snapshots = vec![];
+    for slot in get_bank_snapshot_slots(&bank_snapshots_dir) {
+        match BankSnapshotInfo::new_from_dir(&bank_snapshots_dir, slot) {
+            Ok(snapshot_info) => bank_snapshots.push(snapshot_info),
+            // Other threads may be modifying bank snapshots in parallel; only return
+            // snapshots that are complete as deemed by BankSnapshotInfo::new_from_dir()
+            Err(err) => debug!("Unable to read bank snapshot for slot {slot}: {err}"),
+        }
     }
     bank_snapshots
 }
@@ -2011,6 +2112,7 @@ pub fn rebuild_storages_from_snapshot_dir(
         file_receiver,
         num_rebuilder_threads,
         next_append_vec_id,
+        // SnapshotFrom::Archive,
         SnapshotFrom::Dir,
         storage_access,
         None,

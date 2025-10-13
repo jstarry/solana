@@ -22,7 +22,10 @@ use {
     log::*,
     serde_derive::Serialize,
     solana_account::{state_traits::StateMut, AccountSharedData, ReadableAccount, WritableAccount},
-    solana_accounts_db::accounts_index::{ScanConfig, ScanOrder},
+    solana_accounts_db::{
+        accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig, ScanOrder},
+        utils::create_accounts_run_and_snapshot_dirs,
+    },
     solana_clap_utils::{
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
@@ -65,7 +68,9 @@ use {
         snapshot_bank_utils,
         snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
-            ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
+            mark_bank_snapshot_as_loadable, ArchiveFormat, FullSnapshotInfo, SnapshotVersion,
+            BANK_SNAPSHOTS_DIR, DEFAULT_ARCHIVE_COMPRESSION, SNAPSHOT_ACCOUNTS_HARDLINKS,
+            SNAPSHOT_STATUS_CACHE_FILENAME, SNAPSHOT_VERSION_FILENAME,
             SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
@@ -85,7 +90,7 @@ use {
     std::{
         collections::{HashMap, HashSet},
         ffi::{OsStr, OsString},
-        fs::{read_dir, File},
+        fs::{self, read_dir, File},
         io::{self, Write},
         mem::swap,
         path::{Path, PathBuf},
@@ -1281,6 +1286,18 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("create-fastboot-snapshot")
+                .about("Create a new fastboot snapshot from full snapshot")
+                .arg(
+                    Arg::with_name("full_snapshot_path")
+                        .long("full-snapshot-path")
+                        .value_name("DIR")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Use DIR as full snapshot location"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("create-snapshot")
                 .about("Create a new ledger snapshot")
                 .arg(&os_memory_stats_reporting_arg)
@@ -1609,6 +1626,13 @@ fn main() {
                         .conflicts_with("account")
                         .help("Limit output to accounts owned by the provided program pubkey"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("accounts-program-scan")
+                .about("Scan the accounts program index after processing the ledger")
+                .arg(&load_genesis_config_arg)
+                .args(&accounts_db_config_args)
+                .args(&snapshot_config_args),
         )
         .subcommand(
             SubCommand::with_name("capitalization")
@@ -1960,6 +1984,93 @@ fn main() {
                         Ok(_) => println!("Wrote {output_file}"),
                         Err(err) => eprintln!("Unable to write {output_file}: {err}"),
                     }
+                }
+                ("create-fastboot-snapshot", Some(arg_matches)) => {
+                    let full_snapshot_path =
+                        value_t!(arg_matches, "full_snapshot_path", PathBuf).expect("required");
+
+                    let full_snapshot_info = FullSnapshotInfo::new_from_dir(full_snapshot_path)
+                        .unwrap_or_else(|err| {
+                            eprintln!("Failed to create full snapshot info: {err}");
+                            exit(1);
+                        });
+
+                    let FullSnapshotInfo {
+                        slot,
+                        version_path,
+                        status_cache_path,
+                        accounts_path,
+                        ..
+                    } = &full_snapshot_info;
+
+                    // fastboot dir is at ledger/snapshots/SLOT
+                    let fastboot_snapshot_path =
+                        ledger_path.join(BANK_SNAPSHOTS_DIR).join(slot.to_string());
+
+                    // if it exists stop process
+                    if fastboot_snapshot_path.exists() {
+                        eprintln!(
+                            "Fastboot snapshot already exists for slot {slot} in {}",
+                            fastboot_snapshot_path.display()
+                        );
+                        exit(1);
+                    }
+
+                    // make sure the directory exists
+                    fs::create_dir_all(&fastboot_snapshot_path).unwrap();
+
+                    // copy bank snapshot file to ledger/snapshots/SLOT/SLOT
+                    fs::copy(
+                        full_snapshot_info.bank_snapshot_path(),
+                        fastboot_snapshot_path.join(slot.to_string()),
+                    )
+                    .unwrap();
+
+                    // accounts path
+                    let (_accounts_run_dir, accounts_snapshot_dir) =
+                        create_accounts_run_and_snapshot_dirs(ledger_path.join("accounts"))
+                            .unwrap();
+
+                    let accounts_snapshot_path = accounts_snapshot_dir.join(slot.to_string());
+                    fs::create_dir_all(&accounts_snapshot_path).unwrap();
+
+                    // hard link all accounts files into accounts snapshots path
+                    for entry in fs::read_dir(accounts_path).unwrap() {
+                        let entry = entry.unwrap();
+                        let file_name = entry.file_name();
+                        let dest = accounts_snapshot_path.join(file_name);
+                        fs::hard_link(entry.path(), dest).unwrap();
+                    }
+
+                    // symlink accounts snapshot dir into fastboot dir
+                    let hardlinks_dir = fastboot_snapshot_path.join(SNAPSHOT_ACCOUNTS_HARDLINKS);
+                    fs::create_dir_all(&hardlinks_dir).unwrap();
+                    let symlink_path = hardlinks_dir.join(format!("account_path_0"));
+                    symlink::symlink_dir(&accounts_snapshot_path, &symlink_path).unwrap();
+
+                    // copy version file to fastboot dir
+                    fs::copy(
+                        version_path,
+                        fastboot_snapshot_path.join(SNAPSHOT_VERSION_FILENAME),
+                    )
+                    .unwrap();
+
+                    // copy status cache file to fastboot dir
+                    fs::copy(
+                        status_cache_path,
+                        fastboot_snapshot_path.join(SNAPSHOT_STATUS_CACHE_FILENAME),
+                    )
+                    .unwrap();
+
+                    mark_bank_snapshot_as_loadable(&fastboot_snapshot_path).unwrap_or_else(|err| {
+                        eprintln!("Failed to mark bank snapshot as loadable: {err}");
+                        exit(1);
+                    });
+
+                    println!(
+                        "Created fastboot snapshot for slot {slot} in {}",
+                        fastboot_snapshot_path.display()
+                    );
                 }
                 ("create-snapshot", Some(arg_matches)) => {
                     let exit_signal = Arc::new(AtomicBool::new(false));
@@ -2649,6 +2760,66 @@ fn main() {
                         "accounts scan"
                     );
                     info!("{scan_time}");
+                }
+                ("accounts-program-scan", Some(arg_matches)) => {
+                    let mut process_options = parse_process_options(&ledger_path, arg_matches);
+                    let mut account_indexes = AccountSecondaryIndexes::default();
+                    account_indexes.indexes.insert(AccountIndex::ProgramId);
+                    process_options.accounts_db_config.account_indexes = Some(account_indexes);
+                    let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
+                    let blockstore = open_blockstore(
+                        &ledger_path,
+                        arg_matches,
+                        get_access_type(&process_options),
+                    );
+                    let bank_forks = load_ledger(
+                        arg_matches,
+                        &genesis_config,
+                        Arc::new(blockstore),
+                        process_options,
+                    )
+                    .unwrap_or_else(|err| {
+                        eprintln!("Error: Failed to load ledger: {}", err);
+                        exit(1);
+                    });
+
+                    let bank = bank_forks.read().unwrap().working_bank();
+                    info!("Finished loading ledger, scanning accounts...");
+                    let vote_accounts = bank
+                        .get_filtered_indexed_accounts(
+                            &IndexKey::ProgramId(solana_vote_program::id()),
+                            |account| account.data().len() >= 4,
+                            &ScanConfig::default(),
+                            None,
+                        )
+                        .unwrap_or_else(|err| {
+                            eprintln!("Error: Failed to get program accounts: {}", err);
+                            exit(1);
+                        });
+                    info!(
+                        "Finished scanning accounts, found {} vote accounts:",
+                        vote_accounts.len()
+                    );
+
+                    for version in 0..3 {
+                        let mut uninit_count = 0;
+                        let mut init_count = 0;
+                        for (_vote_pubkey, vote_account) in &vote_accounts {
+                            if vote_account.data()[0..4] == [version, 0, 0, 0] {
+                                if let Some(vote_data) = vote_account.data().get(4..) {
+                                    if vote_data.iter().all(|b| *b == 0) {
+                                        uninit_count += 1;
+                                    } else {
+                                        init_count += 1;
+                                    }
+                                }
+                            }
+                        }
+                        info!(
+                            "V{version} Vote Accounts: (uninit: {uninit_count}, init: \
+                             {init_count})"
+                        );
+                    }
                 }
                 ("capitalization", Some(arg_matches)) => {
                     let process_options = parse_process_options(&ledger_path, arg_matches);

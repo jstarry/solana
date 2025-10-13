@@ -274,6 +274,7 @@ dependencies = [
  "solana-version",
  "solana-vote",
  "solana-vote-program",
+ "symlink",
  "thiserror 2.0.17",
  "tikv-jemallocator",
  "tokio",

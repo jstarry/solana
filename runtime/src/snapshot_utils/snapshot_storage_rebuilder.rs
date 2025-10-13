@@ -183,6 +183,7 @@ impl SnapshotStorageRebuilder {
                 match rebuilder.process_append_vec_file(path) {
                     Ok(_) => {}
                     Err(err) => {
+                        error!("error processing append vec file: {err}");
                         exit_sender
                             .send(Err(err))
                             .expect("sender should be connected");

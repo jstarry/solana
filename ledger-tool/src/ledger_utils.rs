@@ -122,6 +122,108 @@ pub fn load_and_process_ledger_or_exit(
     })
 }
 
+pub fn load_ledger(
+    arg_matches: &ArgMatches,
+    genesis_config: &GenesisConfig,
+    blockstore: Arc<Blockstore>,
+    process_options: ProcessOptions,
+) -> Result<Arc<RwLock<BankForks>>, LoadAndProcessLedgerError> {
+    let snapshot_config = {
+        let snapshots_dir = arg_matches
+            .value_of("snapshots")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
+        let bank_snapshots_dir = if blockstore.is_primary_access() {
+            snapshots_dir.join(BANK_SNAPSHOTS_DIR)
+        } else {
+            blockstore
+                .ledger_path()
+                .join(LEDGER_TOOL_DIRECTORY)
+                .join(BANK_SNAPSHOTS_DIR)
+        };
+        let full_snapshot_archives_dir = arg_matches
+            .value_of("full_snapshot_archive_path")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| snapshots_dir.clone());
+        let incremental_snapshot_archives_dir = arg_matches
+            .value_of("incremental_snapshot_archive_path")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| snapshots_dir.clone());
+        let usage = if arg_matches.is_present("no_snapshot") {
+            SnapshotUsage::Disabled
+        } else {
+            SnapshotUsage::LoadOnly
+        };
+
+        SnapshotConfig {
+            usage,
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+            bank_snapshots_dir,
+            ..SnapshotConfig::default()
+        }
+    };
+
+    let account_paths = if let Some(account_paths) = arg_matches.value_of("account_paths") {
+        // If this blockstore access is Primary, no other process (agave-validator) can hold
+        // Primary access. So, allow a custom accounts path without worry of wiping the accounts
+        // of agave-validator.
+        if !blockstore.is_primary_access() {
+            // Attempt to open the Blockstore in Primary access; if successful, no other process
+            // was holding Primary so allow things to proceed with custom accounts path. Release
+            // the Primary access instead of holding it to give priority to agave-validator over
+            // agave-ledger-tool should agave-validator start before we've finished.
+            info!(
+                "Checking if another process currently holding Primary access to {:?}",
+                blockstore.ledger_path()
+            );
+            Blockstore::open_with_options(
+                blockstore.ledger_path(),
+                BlockstoreOptions {
+                    access_type: AccessType::PrimaryForMaintenance,
+                    ..BlockstoreOptions::default()
+                },
+            )
+            // Couldn't get Primary access, error out to be defensive.
+            .map_err(LoadAndProcessLedgerError::CustomAccountsPathUnsupported)?;
+        }
+        account_paths.split(',').map(PathBuf::from).collect()
+    } else if blockstore.is_primary_access() {
+        vec![blockstore.ledger_path().join("accounts")]
+    } else {
+        let non_primary_accounts_path = blockstore
+            .ledger_path()
+            .join(LEDGER_TOOL_DIRECTORY)
+            .join("accounts");
+        info!(
+            "Default accounts path is switched aligning with Blockstore's secondary access: \
+             {non_primary_accounts_path:?}"
+        );
+        vec![non_primary_accounts_path]
+    };
+
+    let (account_run_paths, _account_snapshot_paths) =
+        create_all_accounts_run_and_snapshot_dirs(&account_paths)
+            .map_err(LoadAndProcessLedgerError::CreateAllAccountsRunAndSnapshotDirectories)?;
+    // From now on, use run/ paths in the same way as the previous account_paths.
+    let account_paths = account_run_paths;
+
+    let (bank_forks, ..) = bank_forks_utils::load_bank_forks(
+        genesis_config,
+        blockstore.as_ref(),
+        account_paths,
+        &snapshot_config,
+        &process_options,
+        None,
+        None,
+        None,
+        Arc::new(AtomicBool::new(true)), // exit
+    )
+    .map_err(LoadAndProcessLedgerError::LoadBankForks)?;
+
+    Ok(bank_forks)
+}
+
 pub fn load_and_process_ledger(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,

@@ -410,7 +410,7 @@ impl Bank {
     ) -> EpochRewardCalculateParamInfo<'a> {
         // Use `stakes` for stake-related info
         let stake_history = stakes.history().clone();
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let stake_delegations = stakes.iterable_stake_delegations();
         let stake_delegations = self.filter_stake_delegations(stake_delegations);
 
         // Use `EpochStakes` for vote accounts
@@ -1568,7 +1568,7 @@ mod tests {
 
         // First fork: should compute and cache
         let stakes = bank.stakes_cache.stakes();
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let stake_delegations = stakes.iterable_stake_delegations();
         let stake_delegations = bank.filter_stake_delegations(stake_delegations);
         let stake_history = stakes.history().clone();
         let vote_accounts = stakes.vote_accounts();

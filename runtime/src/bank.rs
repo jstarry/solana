@@ -1653,7 +1653,7 @@ impl Bank {
         thread_pool: &ThreadPool,
     ) -> NewEpochBundle {
         let stakes = self.stakes_cache.stakes();
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let stake_delegations: Vec<_> = stakes.iterable_stake_delegations();
 
         // Compute new stake history and vote accounts.
         let ((stake_history, vote_accounts), activate_epoch_time_us) = measure_us!(stakes

@@ -411,8 +411,35 @@ impl Stakes<StakeAccount> {
         }
     }
 
+    /// Returns a reference to the map of stake delegations.
+    ///
+    /// # Performance
+    ///
+    /// `[im::HashMap]` is a [hash array mapped trie (HAMT)][hamt], which means
+    /// that inserts, deletions and lookups are average-case O(1) and
+    /// worst-case O(log n). However, the performance of iterations is poor due
+    /// to depth-first traversal and jumps. Currently it's also impossible to
+    /// iterate over it with [`rayon`].
+    ///
+    /// [hamt]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
     pub(crate) fn stake_delegations(&self) -> &ImHashMap<Pubkey, StakeAccount> {
         &self.stake_delegations
+    }
+
+    /// Collects stake delegations into a vector, which then can be used for
+    /// parallel iteration with [`rayon`].
+    ///
+    /// # Performance
+    ///
+    /// The execution of this method takes ~200ms and it collects elements of
+    /// the [`im::HashMap`], which is a [hash array mapped trie (HAMT)][hamt],
+    /// so that operation involves a depth-first traversal with jumps. However,
+    /// it's still a reasonable tradeoff if the caller iterates over these
+    /// elements multiple times.
+    ///
+    /// [hamt]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
+    pub(crate) fn iterable_stake_delegations(&self) -> Vec<(&Pubkey, &StakeAccount)> {
+        self.stake_delegations.iter().collect()
     }
 
     pub(crate) fn highest_staked_node(&self) -> Option<&Pubkey> {
@@ -817,7 +844,7 @@ pub(crate) mod tests {
 
         {
             let stakes = stakes_cache.stakes();
-            let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+            let stake_delegations = stakes.iterable_stake_delegations();
             let vote_accounts = stakes.vote_accounts();
             assert_eq!(
                 vote_accounts.get_delegated_stake(&vote_pubkey),

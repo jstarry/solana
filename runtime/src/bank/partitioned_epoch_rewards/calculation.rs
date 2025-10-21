@@ -101,50 +101,51 @@ impl RewardsAccumulator {
 }
 
 impl Bank {
-    fn check_epoch_rewards_cache(&self) -> Option<Arc<PartitionedRewardsCalculation>> {
-        let epoch_rewards_calculation_cache = self.epoch_rewards_calculation_cache.lock().unwrap();
-        epoch_rewards_calculation_cache
-            .get(&self.parent_hash)
-            .cloned()
-    }
+    /// Saves computed rewards in the caches.
+    pub(in crate::bank) fn save_rewards(
+        &mut self,
+        rewards_result: CalculateRewardsAndDistributeVoteRewardsResult,
+        reward_metrics: &RewardsMetrics,
+        parent_slot: Slot,
+        parent_block_height: u64,
+    ) {
+        let CalculateRewardsAndDistributeVoteRewardsResult {
+            distributed_rewards,
+            point_value,
+            stake_rewards,
+            rewards_calculation,
+        } = rewards_result;
 
-    fn cache_epoch_rewards(&self, rewards_calculation: &PartitionedRewardsCalculation) {
-        // We hold the lock here for the epoch rewards calculation cache to prevent
-        // rewards computation across multiple forks simultaneously. This aligns with
-        // how banks are currently created- all banks are created sequentially.
-        // As such, this lock does not actually introduce contention because bank
-        // creation (and therefore reward calculation) is always done sequentially.
-        //
-        // However, if we plan to support creating banks in parallel in the future, this logic
-        // would need to change to allow rewards computation on multiple forks concurrently.
-        // That said, there's still a compelling reason to keep this lock even in a parallel
-        // bank creation model: we want to avoid calculating rewards multiple times for the same
-        // parent bank hash. This lock ensures that.
-        //
-        // Creating bank for multiple forks in parallel would also introduce contention for compute resources,
-        // potentially slowing down the performance of both forks. This, in turn, could delay
-        // vote propagation and consensus for the leading fork—the one most likely to become rooted.
-        //
-        // Therefore, it seems beneficial to continue processing forks sequentially at epoch
-        // boundaries: acquire the lock for the first fork, compute rewards, and let other forks
-        // wait until the computation is complete.
-        let mut epoch_rewards_calculation_cache =
-            self.epoch_rewards_calculation_cache.lock().unwrap();
-        epoch_rewards_calculation_cache
-            .entry(self.parent_hash)
-            .or_insert_with(|| Arc::new(rewards_calculation.clone()));
-    }
+        let PartitionedRewardsCalculation {
+            vote_account_rewards,
+            ..
+        } = &rewards_calculation;
+        self.store_vote_accounts_partitioned(vote_account_rewards, reward_metrics);
+        self.update_vote_rewards(vote_account_rewards);
 
-    fn extract_rewards_from_cache(
-        &self,
-        cached: &PartitionedRewardsCalculation,
-    ) -> CalculateRewardsAndDistributeVoteRewardsResult {
-        CalculateRewardsAndDistributeVoteRewardsResult {
-            distributed_rewards: cached.vote_account_rewards.total_vote_rewards_lamports,
-            point_value: cached.point_value.clone(),
-            stake_rewards: Arc::clone(&cached.stake_rewards.stake_rewards),
-            rewards_calculation: cached.clone(),
-        }
+        let slot = self.slot();
+        let distribution_starting_block_height =
+            self.block_height() + REWARD_CALCULATION_NUM_BLOCKS;
+
+        let num_partitions = self.get_reward_distribution_num_blocks(&stake_rewards);
+
+        self.set_epoch_reward_status_calculation(distribution_starting_block_height, stake_rewards);
+
+        self.create_epoch_rewards_sysvar(
+            distributed_rewards,
+            distribution_starting_block_height,
+            num_partitions,
+            point_value,
+        );
+
+        datapoint_info!(
+            "epoch-rewards-status-update",
+            ("start_slot", slot, i64),
+            ("calculation_block_height", self.block_height(), i64),
+            ("active", 1, i64),
+            ("parent_slot", parent_slot, i64),
+            ("parent_block_height", parent_block_height, i64),
+        );
     }
 
     // Calculate rewards from previous epoch and distribute vote rewards
@@ -246,51 +247,50 @@ impl Bank {
         }
     }
 
-    /// Saves computed rewards in the caches.
-    pub(in crate::bank) fn save_rewards(
-        &mut self,
-        rewards_result: CalculateRewardsAndDistributeVoteRewardsResult,
-        reward_metrics: &RewardsMetrics,
-        parent_slot: Slot,
-        parent_block_height: u64,
-    ) {
-        let CalculateRewardsAndDistributeVoteRewardsResult {
-            distributed_rewards,
-            point_value,
-            stake_rewards,
-            rewards_calculation,
-        } = rewards_result;
+    fn check_epoch_rewards_cache(&self) -> Option<Arc<PartitionedRewardsCalculation>> {
+        let epoch_rewards_calculation_cache = self.epoch_rewards_calculation_cache.lock().unwrap();
+        epoch_rewards_calculation_cache
+            .get(&self.parent_hash)
+            .cloned()
+    }
 
-        let PartitionedRewardsCalculation {
-            vote_account_rewards,
-            ..
-        } = &rewards_calculation;
-        self.store_vote_accounts_partitioned(vote_account_rewards, reward_metrics);
-        self.update_vote_rewards(vote_account_rewards);
+    fn cache_epoch_rewards(&self, rewards_calculation: &PartitionedRewardsCalculation) {
+        // We hold the lock here for the epoch rewards calculation cache to prevent
+        // rewards computation across multiple forks simultaneously. This aligns with
+        // how banks are currently created- all banks are created sequentially.
+        // As such, this lock does not actually introduce contention because bank
+        // creation (and therefore reward calculation) is always done sequentially.
+        //
+        // However, if we plan to support creating banks in parallel in the future, this logic
+        // would need to change to allow rewards computation on multiple forks concurrently.
+        // That said, there's still a compelling reason to keep this lock even in a parallel
+        // bank creation model: we want to avoid calculating rewards multiple times for the same
+        // parent bank hash. This lock ensures that.
+        //
+        // Creating bank for multiple forks in parallel would also introduce contention for compute resources,
+        // potentially slowing down the performance of both forks. This, in turn, could delay
+        // vote propagation and consensus for the leading fork—the one most likely to become rooted.
+        //
+        // Therefore, it seems beneficial to continue processing forks sequentially at epoch
+        // boundaries: acquire the lock for the first fork, compute rewards, and let other forks
+        // wait until the computation is complete.
+        let mut epoch_rewards_calculation_cache =
+            self.epoch_rewards_calculation_cache.lock().unwrap();
+        epoch_rewards_calculation_cache
+            .entry(self.parent_hash)
+            .or_insert_with(|| Arc::new(rewards_calculation.clone()));
+    }
 
-        let slot = self.slot();
-        let distribution_starting_block_height =
-            self.block_height() + REWARD_CALCULATION_NUM_BLOCKS;
-
-        let num_partitions = self.get_reward_distribution_num_blocks(&stake_rewards);
-
-        self.set_epoch_reward_status_calculation(distribution_starting_block_height, stake_rewards);
-
-        self.create_epoch_rewards_sysvar(
-            distributed_rewards,
-            distribution_starting_block_height,
-            num_partitions,
-            point_value,
-        );
-
-        datapoint_info!(
-            "epoch-rewards-status-update",
-            ("start_slot", slot, i64),
-            ("calculation_block_height", self.block_height(), i64),
-            ("active", 1, i64),
-            ("parent_slot", parent_slot, i64),
-            ("parent_block_height", parent_block_height, i64),
-        );
+    fn extract_rewards_from_cache(
+        &self,
+        cached: &PartitionedRewardsCalculation,
+    ) -> CalculateRewardsAndDistributeVoteRewardsResult {
+        CalculateRewardsAndDistributeVoteRewardsResult {
+            distributed_rewards: cached.vote_account_rewards.total_vote_rewards_lamports,
+            point_value: cached.point_value.clone(),
+            stake_rewards: Arc::clone(&cached.stake_rewards.stake_rewards),
+            rewards_calculation: cached.clone(),
+        }
     }
 
     fn store_vote_accounts_partitioned(

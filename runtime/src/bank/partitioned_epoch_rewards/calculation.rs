@@ -2,9 +2,9 @@ use {
     super::{
         epoch_rewards_hasher::hash_rewards_into_partitions, Bank,
         CalculateRewardsAndDistributeVoteRewardsResult, CalculateValidatorRewardsResult,
-        EpochRewardCalculateParamInfo, PartitionedRewardsCalculation, PartitionedStakeReward,
-        PartitionedStakeRewards, StakeRewardCalculation, VoteRewardsAccounts,
-        VoteRewardsAccountsStorable, REWARD_CALCULATION_NUM_BLOCKS,
+        EpochRewardCalculateParamInfo, FilteredStakeDelegations, PartitionedRewardsCalculation,
+        PartitionedStakeReward, PartitionedStakeRewards, StakeRewardCalculation,
+        VoteRewardsAccounts, VoteRewardsAccountsStorable, REWARD_CALCULATION_NUM_BLOCKS,
     },
     crate::{
         bank::{
@@ -16,20 +16,26 @@ use {
             redeem_rewards,
         },
         stake_account::StakeAccount,
+        stake_utils,
         stakes::Stakes,
     },
+    agave_feature_set as feature_set,
     log::{debug, info},
     rayon::{
-        iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator},
+        iter::{IndexedParallelIterator, ParallelIterator},
         ThreadPool,
     },
     solana_clock::{Epoch, Slot},
     solana_measure::{measure::Measure, measure_us},
+    solana_native_token::LAMPORTS_PER_SOL,
     solana_pubkey::Pubkey,
     solana_stake_interface::{stake_history::StakeHistory, state::Delegation},
     solana_sysvar::epoch_rewards::EpochRewards,
     solana_vote::vote_account::VoteAccounts,
-    std::sync::{atomic::Ordering::Relaxed, Arc},
+    std::{
+        borrow::Cow,
+        sync::{atomic::Ordering::Relaxed, Arc},
+    },
 };
 
 #[derive(Debug)]
@@ -352,6 +358,29 @@ impl Bank {
         })
     }
 
+    pub(in crate::bank) fn filter_stake_delegations<'a>(
+        &self,
+        stake_delegations: impl Into<Cow<'a, [(&'a Pubkey, &'a StakeAccount<Delegation>)]>>,
+    ) -> FilteredStakeDelegations<'a> {
+        let min_stake_delegation = if self
+            .feature_set
+            .is_active(&feature_set::stake_minimum_delegation_for_rewards::id())
+        {
+            let min_stake_delegation = stake_utils::get_minimum_delegation(
+                self.feature_set
+                    .is_active(&agave_feature_set::stake_raise_minimum_delegation_to_1_sol::id()),
+            )
+            .max(LAMPORTS_PER_SOL);
+            Some(min_stake_delegation)
+        } else {
+            None
+        };
+        FilteredStakeDelegations {
+            stake_delegations: stake_delegations.into(),
+            min_stake_delegation,
+        }
+    }
+
     /// calculate and return some reward calc info to avoid recalculation across functions
     fn get_epoch_reward_calculate_param_info<'a>(
         &'a self,
@@ -359,7 +388,8 @@ impl Bank {
     ) -> EpochRewardCalculateParamInfo<'a> {
         // Use `stakes` for stake-related info
         let stake_history = stakes.history().clone();
-        let stake_delegations = self.filter_stake_delegations(stakes);
+        let stake_delegations = stakes.stake_delegations_vec();
+        let stake_delegations = self.filter_stake_delegations(stake_delegations);
 
         // Use `EpochStakes` for vote accounts
         let leader_schedule_epoch = self.epoch_schedule().get_leader_schedule_epoch(self.slot());
@@ -445,9 +475,9 @@ impl Bank {
 
     /// Calculates epoch rewards for stake/vote accounts
     /// Returns vote rewards, stake rewards, and the sum of all stake rewards in lamports
-    fn calculate_stake_vote_rewards(
+    fn calculate_stake_vote_rewards<'a>(
         &self,
-        reward_calculate_params: &EpochRewardCalculateParamInfo,
+        reward_calculate_params: &'a EpochRewardCalculateParamInfo<'a>,
         rewarded_epoch: Epoch,
         point_value: PointValue,
         thread_pool: &ThreadPool,
@@ -478,17 +508,20 @@ impl Bank {
                 .par_iter()
                 .zip_eq(stake_rewards.spare_capacity_mut())
                 .with_min_len(500)
-                .filter_map(|((stake_pubkey, stake_account), stake_reward_ref)| {
-                    let maybe_reward_record = self.redeem_delegation_rewards(
-                        rewarded_epoch,
-                        stake_pubkey,
-                        stake_account,
-                        &point_value,
-                        stake_history,
-                        cached_vote_accounts,
-                        reward_calc_tracer.as_ref(),
-                        new_warmup_cooldown_rate_epoch,
-                    );
+                .filter_map(|(maybe_stake_delegation, stake_reward_ref)| {
+                    let maybe_reward_record =
+                        maybe_stake_delegation.and_then(|(stake_pubkey, stake_account)| {
+                            self.redeem_delegation_rewards(
+                                rewarded_epoch,
+                                stake_pubkey,
+                                stake_account,
+                                &point_value,
+                                stake_history,
+                                cached_vote_accounts,
+                                reward_calc_tracer.as_ref(),
+                                new_warmup_cooldown_rate_epoch,
+                            )
+                        });
                     let (stake_reward, maybe_reward_record) = match maybe_reward_record {
                         Some(res) => {
                             let DelegationRewards {
@@ -551,9 +584,9 @@ impl Bank {
 
     /// Calculates epoch reward points from stake/vote accounts.
     /// Returns reward lamports and points for the epoch or none if points == 0.
-    fn calculate_reward_points_partitioned(
+    fn calculate_reward_points_partitioned<'a>(
         &self,
-        reward_calculate_params: &EpochRewardCalculateParamInfo,
+        reward_calculate_params: &'a EpochRewardCalculateParamInfo<'a>,
         rewards: u64,
         thread_pool: &ThreadPool,
         metrics: &RewardsMetrics,
@@ -569,6 +602,7 @@ impl Bank {
         let (points, measure_us) = measure_us!(thread_pool.install(|| {
             stake_delegations
                 .par_iter()
+                .filter_map(|stake_delegation| stake_delegation)
                 .map(|(_stake_pubkey, stake_account)| {
                     let vote_pubkey = stake_account.delegation().voter_pubkey;
 

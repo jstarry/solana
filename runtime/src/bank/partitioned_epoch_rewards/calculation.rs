@@ -128,7 +128,7 @@ impl Bank {
             distributed_rewards,
             distribution_starting_block_height,
             num_partitions,
-            point_value,
+            &point_value,
         );
 
         datapoint_info!(

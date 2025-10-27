@@ -2358,7 +2358,7 @@ impl Bank {
             );
             stake_delegations
         } else {
-            stakes.stake_delegations().iter().collect()
+            stakes.stake_delegations_vec()
         }
     }
 

@@ -291,18 +291,6 @@ pub(super) struct PartitionedRewardsCalculation {
     point_value: PointValue,
 }
 
-pub(super) struct CalculateRewardsAndDistributeVoteRewardsResult {
-    /// distributed vote rewards
-    pub(super) distributed_rewards: u64,
-    /// total rewards and points calculated for the current epoch, where points
-    /// equals the sum of (delegated stake * credits observed) for all
-    /// delegations and rewards are the lamports to split across all stake and
-    /// vote accounts
-    pub(super) point_value: PointValue,
-    /// stake rewards that still need to be distributed
-    pub(super) stake_rewards: Arc<PartitionedStakeRewards>,
-}
-
 pub(crate) type StakeRewards = Vec<StakeReward>;
 
 #[derive(Debug, PartialEq)]
@@ -337,9 +325,10 @@ impl Bank {
 
     pub(crate) fn set_epoch_reward_status_calculation(
         &mut self,
-        distribution_starting_block_height: u64,
         stake_rewards: Arc<PartitionedStakeRewards>,
     ) {
+        let distribution_starting_block_height =
+            self.block_height() + REWARD_CALCULATION_NUM_BLOCKS;
         self.epoch_reward_status =
             EpochRewardStatus::Active(EpochRewardPhase::Calculation(StartBlockHeightAndRewards {
                 distribution_starting_block_height,

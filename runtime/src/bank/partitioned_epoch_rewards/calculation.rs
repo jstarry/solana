@@ -1,7 +1,6 @@
 use {
     super::{
-        epoch_rewards_hasher::hash_rewards_into_partitions, Bank,
-        CalculateRewardsAndDistributeVoteRewardsResult, CalculateValidatorRewardsResult,
+        epoch_rewards_hasher::hash_rewards_into_partitions, Bank, CalculateValidatorRewardsResult,
         EpochRewardCalculateParamInfo, FilteredStakeDelegations, PartitionedRewardsCalculation,
         PartitionedStakeReward, PartitionedStakeRewards, StakeRewardCalculation,
         VoteRewardsAccounts, VoteRewardsAccountsStorable, REWARD_CALCULATION_NUM_BLOCKS,
@@ -103,19 +102,15 @@ impl Bank {
     /// Begin the process of calculating and distributing rewards.
     /// This process can take multiple slots.
     pub(in crate::bank) fn begin_partitioned_rewards(
-        &mut self,
+        &self,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
         parent_epoch: Epoch,
         parent_slot: Slot,
         parent_block_height: u64,
         rewards_metrics: &mut RewardsMetrics,
-    ) {
-        let CalculateRewardsAndDistributeVoteRewardsResult {
-            distributed_rewards,
-            point_value,
-            stake_rewards,
-        } = self.calculate_rewards_and_distribute_vote_rewards(
+    ) -> Arc<PartitionedRewardsCalculation> {
+        let rewards_calculation = self.calculate_rewards(
             parent_epoch,
             reward_calc_tracer,
             thread_pool,
@@ -126,15 +121,25 @@ impl Bank {
         let distribution_starting_block_height =
             self.block_height() + REWARD_CALCULATION_NUM_BLOCKS;
 
-        let num_partitions = self.get_reward_distribution_num_blocks(&stake_rewards);
+        let PartitionedRewardsCalculation {
+            vote_account_rewards,
+            stake_rewards,
+            point_value,
+            ..
+        } = rewards_calculation.as_ref();
+        let VoteRewardsAccounts {
+            total_vote_rewards_lamports,
+            ..
+        } = vote_account_rewards;
+        let StakeRewardCalculation { stake_rewards, .. } = stake_rewards;
 
-        self.set_epoch_reward_status_calculation(distribution_starting_block_height, stake_rewards);
+        let num_partitions = self.get_reward_distribution_num_blocks(stake_rewards);
 
         self.create_epoch_rewards_sysvar(
-            distributed_rewards,
+            *total_vote_rewards_lamports,
             distribution_starting_block_height,
             num_partitions,
-            &point_value,
+            point_value,
         );
 
         datapoint_info!(
@@ -145,16 +150,18 @@ impl Bank {
             ("parent_slot", parent_slot, i64),
             ("parent_block_height", parent_block_height, i64),
         );
+
+        rewards_calculation
     }
 
     // Calculate rewards from previous epoch and distribute vote rewards
-    fn calculate_rewards_and_distribute_vote_rewards(
+    fn calculate_rewards(
         &self,
         prev_epoch: Epoch,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-    ) -> CalculateRewardsAndDistributeVoteRewardsResult {
+    ) -> Arc<PartitionedRewardsCalculation> {
         // We hold the lock here for the epoch rewards calculation cache to prevent
         // rewards computation across multiple forks simultaneously. This aligns with
         // how banks are currently created- all banks are created sequentially.
@@ -190,17 +197,44 @@ impl Bank {
         drop(epoch_rewards_calculation_cache);
 
         let PartitionedRewardsCalculation {
-            vote_account_rewards,
-            stake_rewards,
             validator_rate,
             foundation_rate,
             prev_epoch_duration_in_years,
-            capitalization,
-            point_value,
+            ..
         } = rewards_calculation.as_ref();
 
+        datapoint_info!(
+            "epoch_rewards",
+            ("slot", self.slot, i64),
+            ("epoch", prev_epoch, i64),
+            ("validator_rate", *validator_rate, f64),
+            ("foundation_rate", *foundation_rate, f64),
+            (
+                "epoch_duration_in_years",
+                *prev_epoch_duration_in_years,
+                f64
+            ),
+        );
+
+        rewards_calculation
+    }
+
+    pub(in crate::bank) fn distribute_vote_rewards(
+        &mut self,
+        prev_epoch: Epoch,
+        rewards_calculation: &PartitionedRewardsCalculation,
+        rewards_metrics: &RewardsMetrics,
+    ) {
+        let PartitionedRewardsCalculation {
+            vote_account_rewards,
+            stake_rewards,
+            capitalization,
+            point_value,
+            ..
+        } = rewards_calculation;
+
         let total_vote_rewards = vote_account_rewards.total_vote_rewards_lamports;
-        self.store_vote_accounts_partitioned(vote_account_rewards, metrics);
+        self.store_vote_accounts_partitioned(vote_account_rewards, rewards_metrics);
         self.update_vote_rewards(vote_account_rewards);
 
         let StakeRewardCalculation {
@@ -232,17 +266,10 @@ impl Bank {
             0
         };
 
+        self.set_epoch_reward_status_calculation(Arc::clone(stake_rewards));
+
         datapoint_info!(
-            "epoch_rewards",
-            ("slot", self.slot, i64),
-            ("epoch", prev_epoch, i64),
-            ("validator_rate", *validator_rate, f64),
-            ("foundation_rate", *foundation_rate, f64),
-            (
-                "epoch_duration_in_years",
-                *prev_epoch_duration_in_years,
-                f64
-            ),
+            "epoch_distribution",
             ("validator_rewards", total_vote_rewards, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", *capitalization, i64),
@@ -250,12 +277,6 @@ impl Bank {
             ("num_stake_accounts", num_stake_accounts, i64),
             ("num_vote_accounts", num_vote_accounts, i64),
         );
-
-        CalculateRewardsAndDistributeVoteRewardsResult {
-            distributed_rewards: total_vote_rewards,
-            point_value: point_value.clone(),
-            stake_rewards: Arc::clone(stake_rewards),
-        }
     }
 
     fn store_vote_accounts_partitioned(

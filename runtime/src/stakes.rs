@@ -287,8 +287,8 @@ impl Stakes<StakeAccount> {
         next_epoch: Epoch,
         thread_pool: &ThreadPool,
         new_rate_activation_epoch: Option<Epoch>,
+        stake_delegations: &[(&Pubkey, &StakeAccount)],
     ) -> (StakeHistory, VoteAccounts) {
-        let stake_delegations = self.stake_delegations_vec();
         // Wrap up the prev epoch by adding new stake history entry for the
         // prev epoch.
         let stake_history_entry = thread_pool.install(|| {
@@ -315,7 +315,7 @@ impl Stakes<StakeAccount> {
             thread_pool,
             next_epoch,
             &self.vote_accounts,
-            &stake_delegations,
+            stake_delegations,
             &stake_history,
             new_rate_activation_epoch,
         );
@@ -898,7 +898,8 @@ pub(crate) mod tests {
         let next_epoch = 3;
         let (stake_history, vote_accounts) = {
             let stakes = stakes_cache.stakes();
-            stakes.calculate_activated_stake(next_epoch, &thread_pool, None)
+            let stake_delegations = stakes.stake_delegations_vec();
+            stakes.calculate_activated_stake(next_epoch, &thread_pool, None, &stake_delegations)
         };
         stakes_cache.activate_epoch(next_epoch, stake_history, vote_accounts);
         {

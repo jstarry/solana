@@ -1600,11 +1600,13 @@ impl Bank {
     /// activated stake from the last epoch.
     fn compute_new_epoch_caches_and_rewards(&self, thread_pool: &ThreadPool) -> NewEpochBundle {
         let stakes = self.stakes_cache.stakes();
+        let stake_delegations = stakes.stake_delegations_vec();
         let ((stake_history, vote_accounts), calculate_activated_stake_time_us) =
             measure_us!(stakes.calculate_activated_stake(
                 self.epoch(),
                 thread_pool,
                 self.new_warmup_cooldown_rate_epoch(),
+                &stake_delegations
             ));
         NewEpochBundle {
             stake_history,

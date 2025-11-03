@@ -1718,6 +1718,10 @@
   version "0.11.0"
   resolved "https://registry.yarnpkg.com/@pkgjs/parseargs/-/parseargs-0.11.0.tgz#a77ea742fab25775145434eb1d2328cf5013ac33"
 
+"@pkgr/core@^0.2.9":
+  version "0.2.9"
+  resolved "https://registry.yarnpkg.com/@pkgr/core/-/core-0.2.9.tgz#d229a7b7f9dac167a156992ef23c7f023653f53b"
+
 "@pnpm/config.env-replace@^1.0.0":
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/@pnpm/config.env-replace/-/config.env-replace-1.0.0.tgz#c76fa65847c9554e88d910f264c2ba9a1575e833"
@@ -4092,11 +4096,12 @@ eslint-plugin-mocha@^11.0.0:
     "@eslint-community/eslint-utils" "^4.4.1"
     globals "^15.14.0"
 
-eslint-plugin-prettier@^4.0.0:
-  version "4.2.5"
-  resolved "https://registry.yarnpkg.com/eslint-plugin-prettier/-/eslint-plugin-prettier-4.2.5.tgz#91ca3f2f01a84f1272cce04e9717550494c0fe06"
+eslint-plugin-prettier@^5.5.4:
+  version "5.5.4"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-prettier/-/eslint-plugin-prettier-5.5.4.tgz#9d61c4ea11de5af704d4edf108c82ccfa7f2e61c"
   dependencies:
     prettier-linter-helpers "^1.0.0"
+    synckit "^0.11.7"
 
 eslint-scope@^5.1.1:
   version "5.1.1"
@@ -8818,6 +8823,12 @@ supports-preserve-symlinks-flag@^1.0.0:
 symbol-observable@^1.0.4:
   version "1.2.0"
   resolved "https://registry.npmjs.org/symbol-observable/-/symbol-observable-1.2.0.tgz"
+
+synckit@^0.11.7:
+  version "0.11.11"
+  resolved "https://registry.yarnpkg.com/synckit/-/synckit-0.11.11.tgz#c0b619cf258a97faa209155d9cd1699b5c998cb0"
+  dependencies:
+    "@pkgr/core" "^0.2.9"
 
 tar-fs@^3.1.1:
   version "3.1.1"

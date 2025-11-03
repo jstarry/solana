@@ -82,7 +82,7 @@
     "@commitlint/travis-cli": "^20.0.0",
     "@rollup/plugin-alias": "^5.0.0",
     "@rollup/plugin-babel": "^6.0.0",
-    "@rollup/plugin-commonjs": "^28.0.0",
+    "@rollup/plugin-commonjs": "^29.0.0",
     "@rollup/plugin-json": "^6.0.0",
     "@rollup/plugin-multi-entry": "^7.0.0",
     "@rollup/plugin-node-resolve": "^16.0.0",

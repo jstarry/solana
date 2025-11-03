@@ -1811,8 +1811,8 @@
     resolve "^1.22.1"
 
 "@rollup/plugin-replace@^6.0.1":
-  version "6.0.2"
-  resolved "https://registry.yarnpkg.com/@rollup/plugin-replace/-/plugin-replace-6.0.2.tgz#2f565d312d681e4570ff376c55c5c08eb6f1908d"
+  version "6.0.3"
+  resolved "https://registry.yarnpkg.com/@rollup/plugin-replace/-/plugin-replace-6.0.3.tgz#0f82e41d81f6586ab0f81a1b48bd7fd92fcfb9a2"
   dependencies:
     "@rollup/pluginutils" "^5.0.1"
     magic-string "^0.30.3"

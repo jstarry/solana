@@ -1740,9 +1740,9 @@
     "@pnpm/network.ca-file" "^1.0.1"
     config-chain "^1.1.11"
 
-"@puppeteer/browsers@2.10.12":
-  version "2.10.12"
-  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.10.12.tgz#9d9376c205aa38e7344cadb2809e786df2cf3e78"
+"@puppeteer/browsers@2.10.13":
+  version "2.10.13"
+  resolved "https://registry.yarnpkg.com/@puppeteer/browsers/-/browsers-2.10.13.tgz#42c8b7df14e992f311ca9dca5fed3f0c2182fd17"
   dependencies:
     debug "^4.4.3"
     extract-zip "^2.0.1"
@@ -7621,11 +7621,11 @@ punycode@^2.1.0, punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.1.1.tgz"
 
-puppeteer-core@24.27.0:
-  version "24.27.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.27.0.tgz#dd81d615fc8e4bafad500442e798323f920c89b8"
+puppeteer-core@24.28.0:
+  version "24.28.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.28.0.tgz#5f7353338d38c131dd229d4d5a69b7ab727bc02e"
   dependencies:
-    "@puppeteer/browsers" "2.10.12"
+    "@puppeteer/browsers" "2.10.13"
     chromium-bidi "10.5.1"
     debug "^4.4.3"
     devtools-protocol "0.0.1521046"
@@ -7634,14 +7634,14 @@ puppeteer-core@24.27.0:
     ws "^8.18.3"
 
 puppeteer@^24.0.0:
-  version "24.27.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.27.0.tgz#4867c3a3f028de8491114d253808f20757436830"
+  version "24.28.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.28.0.tgz#fe79687f6ae2d1039d80992a54c59a3624648860"
   dependencies:
-    "@puppeteer/browsers" "2.10.12"
+    "@puppeteer/browsers" "2.10.13"
     chromium-bidi "10.5.1"
     cosmiconfig "^9.0.0"
     devtools-protocol "0.0.1521046"
-    puppeteer-core "24.27.0"
+    puppeteer-core "24.28.0"
     typed-query-selector "^2.12.0"
 
 pvtsutils@^1.3.6:

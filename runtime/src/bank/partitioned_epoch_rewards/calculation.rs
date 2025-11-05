@@ -426,8 +426,9 @@ impl Bank {
         }
     }
 
-    /// calculate and return some reward calc info to avoid recalculation across functions
-    fn get_epoch_reward_calculate_param_info<'a>(
+    /// Retrieves stake history and delegations for stake reward recalculation
+    /// after snapshot restore.
+    fn get_epoch_params_for_recalculation<'a>(
         &'a self,
         stakes: &'a Stakes<StakeAccount<Delegation>>,
     ) -> EpochRewardCalculateParamInfo<'a> {
@@ -712,7 +713,7 @@ impl Bank {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = self.get_epoch_reward_calculate_param_info(&stakes);
+        } = self.get_epoch_params_for_recalculation(&stakes);
 
         // On recalculation, only the `StakeRewardCalculation::stake_rewards`
         // field is relevant. It is assumed that vote-account rewards have
@@ -882,7 +883,7 @@ mod tests {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = bank.get_epoch_reward_calculate_param_info(&stakes);
+        } = bank.get_epoch_params_for_recalculation(&stakes);
         let calculated_rewards = bank.calculate_validator_rewards(
             &stake_history,
             &stake_delegations,
@@ -936,7 +937,7 @@ mod tests {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = bank.get_epoch_reward_calculate_param_info(&stakes);
+        } = bank.get_epoch_params_for_recalculation(&stakes);
 
         let point_value = bank.calculate_reward_points_partitioned(
             &stake_history,
@@ -968,7 +969,7 @@ mod tests {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = bank.get_epoch_reward_calculate_param_info(&stakes);
+        } = bank.get_epoch_params_for_recalculation(&stakes);
 
         let point_value = bank.calculate_reward_points_partitioned(
             &stake_history,
@@ -1015,7 +1016,7 @@ mod tests {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = bank.get_epoch_reward_calculate_param_info(&stakes);
+        } = bank.get_epoch_params_for_recalculation(&stakes);
         let (vote_rewards_accounts, stake_reward_calculation) = bank.calculate_stake_vote_rewards(
             &stake_history,
             &stake_delegations,
@@ -1110,7 +1111,7 @@ mod tests {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = bank.get_epoch_reward_calculate_param_info(&stakes);
+        } = bank.get_epoch_params_for_recalculation(&stakes);
         let PartitionedRewardsCalculation {
             stake_rewards:
                 StakeRewardCalculation {
@@ -1215,7 +1216,7 @@ mod tests {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = bank.get_epoch_reward_calculate_param_info(&stakes);
+        } = bank.get_epoch_params_for_recalculation(&stakes);
         let PartitionedRewardsCalculation {
             stake_rewards:
                 StakeRewardCalculation {
@@ -1290,7 +1291,7 @@ mod tests {
             stake_history,
             stake_delegations,
             cached_vote_accounts,
-        } = bank.get_epoch_reward_calculate_param_info(&stakes);
+        } = bank.get_epoch_params_for_recalculation(&stakes);
         let PartitionedRewardsCalculation {
             stake_rewards:
                 StakeRewardCalculation {

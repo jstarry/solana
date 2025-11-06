@@ -31,10 +31,7 @@ use {
     solana_stake_interface::{stake_history::StakeHistory, state::Delegation},
     solana_sysvar::epoch_rewards::EpochRewards,
     solana_vote::vote_account::VoteAccounts,
-    std::{
-        borrow::Cow,
-        sync::{atomic::Ordering::Relaxed, Arc},
-    },
+    std::sync::{atomic::Ordering::Relaxed, Arc},
 };
 
 #[derive(Debug)]
@@ -99,31 +96,15 @@ impl RewardsAccumulator {
 }
 
 impl Bank {
-    /// Begin the process of calculating and distributing rewards.
-    /// This process can take multiple slots.
-    #[allow(clippy::too_many_arguments)]
     pub(in crate::bank) fn begin_partitioned_rewards(
-        &self,
-        stake_history: &StakeHistory,
-        stake_delegations: &[(&Pubkey, &StakeAccount<Delegation>)],
-        cached_vote_accounts: &VoteAccounts,
-        reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
-        thread_pool: &ThreadPool,
+        &mut self,
         parent_epoch: Epoch,
         parent_slot: Slot,
         parent_block_height: u64,
-        rewards_metrics: &mut RewardsMetrics,
-    ) -> Arc<PartitionedRewardsCalculation> {
-        let stake_delegations = self.filter_stake_delegations(stake_delegations);
-        let rewards_calculation = self.calculate_rewards(
-            stake_history,
-            &stake_delegations,
-            cached_vote_accounts,
-            parent_epoch,
-            reward_calc_tracer,
-            thread_pool,
-            rewards_metrics,
-        );
+        rewards_calculation: &PartitionedRewardsCalculation,
+        rewards_metrics: &RewardsMetrics,
+    ) {
+        self.distribute_vote_rewards(parent_epoch, rewards_calculation, rewards_metrics);
 
         let slot = self.slot();
         let distribution_starting_block_height =
@@ -134,17 +115,17 @@ impl Bank {
             stake_rewards,
             point_value,
             ..
-        } = rewards_calculation.as_ref();
-        let VoteRewardsAccounts {
-            total_vote_rewards_lamports,
-            ..
-        } = vote_account_rewards;
-        let StakeRewardCalculation { stake_rewards, .. } = stake_rewards;
+        } = rewards_calculation;
 
-        let num_partitions = self.get_reward_distribution_num_blocks(stake_rewards);
+        let distributed_rewards = vote_account_rewards.total_vote_rewards_lamports;
+        let stake_rewards = Arc::clone(&stake_rewards.stake_rewards);
+
+        let num_partitions = self.get_reward_distribution_num_blocks(&stake_rewards);
+
+        self.set_epoch_reward_status_calculation(distribution_starting_block_height, stake_rewards);
 
         self.create_epoch_rewards_sysvar(
-            *total_vote_rewards_lamports,
+            distributed_rewards,
             distribution_starting_block_height,
             num_partitions,
             point_value,
@@ -158,15 +139,13 @@ impl Bank {
             ("parent_slot", parent_slot, i64),
             ("parent_block_height", parent_block_height, i64),
         );
-
-        rewards_calculation
     }
 
-    // Calculate rewards from previous epoch and distribute vote rewards
-    fn calculate_rewards<'a>(
+    // Calculate rewards from previous epoch
+    pub(in crate::bank) fn calculate_rewards(
         &self,
         stake_history: &StakeHistory,
-        stake_delegations: &'a FilteredStakeDelegations<'a>,
+        stake_delegations: Vec<(&Pubkey, &StakeAccount<Delegation>)>,
         cached_vote_accounts: &VoteAccounts,
         prev_epoch: Epoch,
         reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
@@ -197,9 +176,10 @@ impl Bank {
         let rewards_calculation = epoch_rewards_calculation_cache
             .entry(self.parent_hash)
             .or_insert_with(|| {
+                let stake_delegations = self.filter_stake_delegations(stake_delegations);
                 Arc::new(self.calculate_rewards_for_partitioning(
                     stake_history,
-                    stake_delegations,
+                    &stake_delegations,
                     cached_vote_accounts,
                     prev_epoch,
                     reward_calc_tracer,
@@ -209,26 +189,6 @@ impl Bank {
             })
             .clone();
         drop(epoch_rewards_calculation_cache);
-
-        let PartitionedRewardsCalculation {
-            validator_rate,
-            foundation_rate,
-            prev_epoch_duration_in_years,
-            ..
-        } = rewards_calculation.as_ref();
-
-        datapoint_info!(
-            "epoch_rewards",
-            ("slot", self.slot, i64),
-            ("epoch", prev_epoch, i64),
-            ("validator_rate", *validator_rate, f64),
-            ("foundation_rate", *foundation_rate, f64),
-            (
-                "epoch_duration_in_years",
-                *prev_epoch_duration_in_years,
-                f64
-            ),
-        );
 
         rewards_calculation
     }
@@ -242,9 +202,11 @@ impl Bank {
         let PartitionedRewardsCalculation {
             vote_account_rewards,
             stake_rewards,
+            validator_rate,
+            foundation_rate,
+            prev_epoch_duration_in_years,
             capitalization,
             point_value,
-            ..
         } = rewards_calculation;
 
         let total_vote_rewards = vote_account_rewards.total_vote_rewards_lamports;
@@ -252,8 +214,8 @@ impl Bank {
         self.update_vote_rewards(vote_account_rewards);
 
         let StakeRewardCalculation {
-            stake_rewards,
             total_stake_rewards_lamports,
+            ..
         } = stake_rewards;
 
         // verify that we didn't pay any more than we expected to
@@ -280,10 +242,17 @@ impl Bank {
             0
         };
 
-        self.set_epoch_reward_status_calculation(Arc::clone(stake_rewards));
-
         datapoint_info!(
-            "epoch_distribution",
+            "epoch_rewards",
+            ("slot", self.slot, i64),
+            ("epoch", prev_epoch, i64),
+            ("validator_rate", *validator_rate, f64),
+            ("foundation_rate", *foundation_rate, f64),
+            (
+                "epoch_duration_in_years",
+                *prev_epoch_duration_in_years,
+                f64
+            ),
             ("validator_rewards", total_vote_rewards, i64),
             ("active_stake", active_stake, i64),
             ("pre_capitalization", *capitalization, i64),
@@ -405,7 +374,7 @@ impl Bank {
 
     pub(in crate::bank) fn filter_stake_delegations<'a>(
         &self,
-        stake_delegations: impl Into<Cow<'a, [(&'a Pubkey, &'a StakeAccount<Delegation>)]>>,
+        stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
     ) -> FilteredStakeDelegations<'a> {
         let min_stake_delegation = if self
             .feature_set
@@ -421,7 +390,7 @@ impl Bank {
             None
         };
         FilteredStakeDelegations {
-            stake_delegations: stake_delegations.into(),
+            stake_delegations,
             min_stake_delegation,
         }
     }

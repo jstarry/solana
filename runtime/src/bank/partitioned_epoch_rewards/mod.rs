@@ -21,7 +21,7 @@ use {
     solana_reward_info::RewardInfo,
     solana_stake_interface::state::{Delegation, Stake},
     solana_vote::vote_account::VoteAccounts,
-    std::{borrow::Cow, mem::MaybeUninit, sync::Arc},
+    std::{mem::MaybeUninit, sync::Arc},
 };
 
 /// Number of blocks for reward calculation and storing vote accounts.
@@ -233,7 +233,7 @@ impl Default for CalculateValidatorRewardsResult {
 }
 
 pub(super) struct FilteredStakeDelegations<'a> {
-    stake_delegations: Cow<'a, [(&'a Pubkey, &'a StakeAccount<Delegation>)]>,
+    stake_delegations: Vec<(&'a Pubkey, &'a StakeAccount<Delegation>)>,
     min_stake_delegation: Option<u64>,
 }
 
@@ -325,10 +325,9 @@ impl Bank {
 
     pub(crate) fn set_epoch_reward_status_calculation(
         &mut self,
+        distribution_starting_block_height: u64,
         stake_rewards: Arc<PartitionedStakeRewards>,
     ) {
-        let distribution_starting_block_height =
-            self.block_height() + REWARD_CALCULATION_NUM_BLOCKS;
         self.epoch_reward_status =
             EpochRewardStatus::Active(EpochRewardPhase::Calculation(StartBlockHeightAndRewards {
                 distribution_starting_block_height,

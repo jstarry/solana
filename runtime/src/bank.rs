@@ -1604,11 +1604,12 @@ impl Bank {
         &self,
         thread_pool: &ThreadPool,
         parent_epoch: Epoch,
-        parent_slot: Slot,
-        parent_height: u64,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         rewards_metrics: &mut RewardsMetrics,
     ) -> NewEpochBundle {
+        // Add new entry to stakes.stake_history, set appropriate epoch and
+        // update vote accounts with warmed up stakes before saving a
+        // snapshot of stakes in epoch stakes
         let stakes = self.stakes_cache.stakes();
         let stake_delegations = stakes.stake_delegations_vec();
         let ((stake_history, vote_accounts), calculate_activated_stake_time_us) =
@@ -1620,15 +1621,13 @@ impl Bank {
             ));
         // Apply stake rewards and commission using new snapshots.
         let (rewards_calculation, update_rewards_with_thread_pool_time_us) = measure_us!(self
-            .begin_partitioned_rewards(
+            .calculate_rewards(
                 &stake_history,
-                &stake_delegations,
+                stake_delegations,
                 &vote_accounts,
+                parent_epoch,
                 reward_calc_tracer,
                 thread_pool,
-                parent_epoch,
-                parent_slot,
-                parent_height,
                 rewards_metrics,
             ));
         NewEpochBundle {
@@ -1659,9 +1658,6 @@ impl Bank {
             thread_pool.install(|| { self.compute_and_apply_new_feature_activations() })
         );
 
-        // Add new entry to stakes.stake_history, set appropriate epoch and
-        // update vote accounts with warmed up stakes before saving a
-        // snapshot of stakes in epoch stakes
         let mut rewards_metrics = RewardsMetrics::default();
         let NewEpochBundle {
             stake_history,
@@ -1672,11 +1668,10 @@ impl Bank {
         } = self.compute_new_epoch_caches_and_rewards(
             &thread_pool,
             parent_epoch,
-            parent_slot,
-            parent_height,
             reward_calc_tracer,
             &mut rewards_metrics,
         );
+
         self.stakes_cache
             .activate_epoch(epoch, stake_history, vote_accounts);
 
@@ -1687,7 +1682,13 @@ impl Bank {
 
         // Distribute rewards commission to vote accounts and cache stake rewards
         // for partitioned distribution in the upcoming slots.
-        self.distribute_vote_rewards(parent_epoch, &rewards_calculation, &rewards_metrics);
+        self.begin_partitioned_rewards(
+            parent_slot,
+            parent_height,
+            parent_epoch,
+            &rewards_calculation,
+            &rewards_metrics,
+        );
 
         report_new_epoch_metrics(
             epoch,

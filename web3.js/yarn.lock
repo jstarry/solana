@@ -26,7 +26,7 @@
   version "1.1.3"
   resolved "https://registry.yarnpkg.com/@actions/io/-/io-1.1.3.tgz#4cdb6254da7962b07473ff5c335f3da485d94d71"
 
-"@babel/code-frame@^7.0.0", "@babel/code-frame@^7.10.4", "@babel/code-frame@^7.18.6", "@babel/code-frame@^7.22.13", "@babel/code-frame@^7.27.1":
+"@babel/code-frame@^7.0.0", "@babel/code-frame@^7.10.4", "@babel/code-frame@^7.18.6", "@babel/code-frame@^7.22.13", "@babel/code-frame@^7.26.2", "@babel/code-frame@^7.27.1":
   version "7.27.1"
   resolved "https://registry.yarnpkg.com/@babel/code-frame/-/code-frame-7.27.1.tgz#200f715e66d52a23b221a9435534a91cc13ad5be"
   dependencies:
@@ -2170,6 +2170,10 @@
 "@types/normalize-package-data@^2.4.3":
   version "2.4.3"
   resolved "https://registry.yarnpkg.com/@types/normalize-package-data/-/normalize-package-data-2.4.3.tgz#291c243e4b94dbfbc0c0ee26b7666f1d5c030e2c"
+
+"@types/normalize-package-data@^2.4.4":
+  version "2.4.4"
+  resolved "https://registry.yarnpkg.com/@types/normalize-package-data/-/normalize-package-data-2.4.4.tgz#56e2cc26c397c038fab0e3a917a12d5c5909e901"
 
 "@types/qs@*":
   version "6.9.7"
@@ -4484,6 +4488,10 @@ find-up-simple@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/find-up-simple/-/find-up-simple-1.0.0.tgz#21d035fde9fdbd56c8f4d2f63f32fd93a1cfc368"
 
+find-up-simple@^1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/find-up-simple/-/find-up-simple-1.0.1.tgz#18fb90ad49e45252c4d7fca56baade04fa3fca1e"
+
 find-up@^2.0.0:
   version "2.1.0"
   resolved "https://registry.npmjs.org/find-up/-/find-up-2.1.0.tgz"
@@ -5286,6 +5294,10 @@ indent-string@^5.0.0:
 index-to-position@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/index-to-position/-/index-to-position-0.1.0.tgz#9723e10d73190ab5f176d128703112d1d1ee6a3e"
+
+index-to-position@^1.1.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/index-to-position/-/index-to-position-1.2.0.tgz#c800eb34dacf4dbf96b9b06c7eb78d5f704138b4"
 
 inflight@^1.0.4:
   version "1.0.6"
@@ -6803,6 +6815,14 @@ normalize-package-data@^6.0.0:
     semver "^7.3.5"
     validate-npm-package-license "^3.0.4"
 
+normalize-package-data@^8.0.0:
+  version "8.0.0"
+  resolved "https://registry.yarnpkg.com/normalize-package-data/-/normalize-package-data-8.0.0.tgz#bdce7ff2d6ba891b853e179e45a5337766e304a7"
+  dependencies:
+    hosted-git-info "^9.0.0"
+    semver "^7.3.5"
+    validate-npm-package-license "^3.0.4"
+
 normalize-url@^8.0.0:
   version "8.0.0"
   resolved "https://registry.yarnpkg.com/normalize-url/-/normalize-url-8.0.0.tgz#593dbd284f743e8dcf6a5ddf8fadff149c82701a"
@@ -7335,6 +7355,14 @@ parse-json@^8.0.0:
     json-parse-even-better-errors "^3.0.0"
     type-fest "^4.6.0"
 
+parse-json@^8.3.0:
+  version "8.3.0"
+  resolved "https://registry.yarnpkg.com/parse-json/-/parse-json-8.3.0.tgz#88a195a2157025139a2317a4f2f9252b61304ed5"
+  dependencies:
+    "@babel/code-frame" "^7.26.2"
+    index-to-position "^1.1.0"
+    type-fest "^4.39.1"
+
 parse-ms@^4.0.0:
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/parse-ms/-/parse-ms-4.0.0.tgz#c0c058edd47c2a590151a718990533fd62803df4"
@@ -7719,6 +7747,24 @@ read-package-up@^11.0.0:
     find-up-simple "^1.0.0"
     read-pkg "^9.0.0"
     type-fest "^4.6.0"
+
+read-package-up@^12.0.0:
+  version "12.0.0"
+  resolved "https://registry.yarnpkg.com/read-package-up/-/read-package-up-12.0.0.tgz#7ae889586f397b7a291ca59ce08caf7e9f68a61c"
+  dependencies:
+    find-up-simple "^1.0.1"
+    read-pkg "^10.0.0"
+    type-fest "^5.2.0"
+
+read-pkg@^10.0.0:
+  version "10.0.0"
+  resolved "https://registry.yarnpkg.com/read-pkg/-/read-pkg-10.0.0.tgz#06401f0331115e9fba9880cb3f2ae1efa3db00e4"
+  dependencies:
+    "@types/normalize-package-data" "^2.4.4"
+    normalize-package-data "^8.0.0"
+    parse-json "^8.3.0"
+    type-fest "^5.2.0"
+    unicorn-magic "^0.3.0"
 
 read-pkg@^3.0.0:
   version "3.0.0"
@@ -8114,8 +8160,8 @@ secure-compare@3.0.1:
   resolved "https://registry.npmjs.org/secure-compare/-/secure-compare-3.0.1.tgz"
 
 semantic-release@^25.0.0:
-  version "25.0.1"
-  resolved "https://registry.yarnpkg.com/semantic-release/-/semantic-release-25.0.1.tgz#0a5b165ef0d9799bc860c5198605842dc4f50028"
+  version "25.0.2"
+  resolved "https://registry.yarnpkg.com/semantic-release/-/semantic-release-25.0.2.tgz#efd4fa16ce3518a747e737baf3f69fd82979d98e"
   dependencies:
     "@semantic-release/commit-analyzer" "^13.0.1"
     "@semantic-release/error" "^4.0.0"
@@ -8140,7 +8186,7 @@ semantic-release@^25.0.0:
     micromatch "^4.0.2"
     p-each-series "^3.0.0"
     p-reduce "^3.0.0"
-    read-package-up "^11.0.0"
+    read-package-up "^12.0.0"
     resolve-from "^5.0.0"
     semver "^7.3.2"
     semver-diff "^5.0.0"
@@ -8811,6 +8857,10 @@ synckit@^0.11.7:
   dependencies:
     "@pkgr/core" "^0.2.9"
 
+tagged-tag@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/tagged-tag/-/tagged-tag-1.0.0.tgz#a0b5917c2864cba54841495abfa3f6b13edcf4d6"
+
 tar-fs@^3.1.1:
   version "3.1.1"
   resolved "https://registry.yarnpkg.com/tar-fs/-/tar-fs-3.1.1.tgz#4f164e59fb60f103d472360731e8c6bb4a7fe9ef"
@@ -9063,9 +9113,19 @@ type-fest@^2.12.2:
   version "2.19.0"
   resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-2.19.0.tgz#88068015bb33036a598b952e55e9311a60fd3a9b"
 
+type-fest@^4.39.1:
+  version "4.41.0"
+  resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-4.41.0.tgz#6ae1c8e5731273c2bf1f58ad39cbae2c91a46c58"
+
 type-fest@^4.6.0:
   version "4.6.0"
   resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-4.6.0.tgz#9c575f7e20530defef4f9cdc5e2c85d6e4ea0fc9"
+
+type-fest@^5.2.0:
+  version "5.2.0"
+  resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-5.2.0.tgz#7dd671273eb6bcba71af0babe303e8dbab60f795"
+  dependencies:
+    tagged-tag "^1.0.0"
 
 type-is@~1.6.18:
   version "1.6.18"
@@ -9293,6 +9353,10 @@ unicode-property-aliases-ecmascript@^2.0.0:
 unicorn-magic@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/unicorn-magic/-/unicorn-magic-0.1.0.tgz#1bb9a51c823aaf9d73a8bfcd3d1a23dde94b0ce4"
+
+unicorn-magic@^0.3.0:
+  version "0.3.0"
+  resolved "https://registry.yarnpkg.com/unicorn-magic/-/unicorn-magic-0.3.0.tgz#4efd45c85a69e0dd576d25532fbfa22aa5c8a104"
 
 union@~0.5.0:
   version "0.5.0"

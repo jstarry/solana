@@ -52,7 +52,7 @@
     "react-router-dom": "^7.9.6",
     "react-scripts": "^5.0.1",
     "react-select": "^5.10.2",
-    "sass": "^1.94.0",
+    "sass": "^1.94.1",
     "superstruct": "^2.0.2",
     "typescript": "^5.9.3"
   },

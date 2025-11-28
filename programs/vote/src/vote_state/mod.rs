@@ -7,7 +7,9 @@ pub mod handler;
 pub(crate) mod handler;
 
 pub use solana_vote_interface::state::{vote_state_versions::*, *};
+
 use {
+    crate::vote_processor::CommissionKind,
     handler::{VoteStateHandle, VoteStateHandler, VoteStateTargetVersion},
     log::*,
     solana_account::{AccountSharedData, WritableAccount},
@@ -17,6 +19,7 @@ use {
     solana_instruction::error::InstructionError,
     solana_pubkey::Pubkey,
     solana_rent::Rent,
+    solana_sdk_ids::system_program,
     solana_slot_hashes::SlotHash,
     solana_transaction_context::{
         instruction::InstructionContext, instruction_accounts::BorrowedInstructionAccount,
@@ -764,6 +767,7 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
     vote_account: &mut BorrowedInstructionAccount,
     target_version: VoteStateTargetVersion,
     node_pubkey: &Pubkey,
+    update_commission_collector_enabled: bool,
     signers: &HashSet<Pubkey, S>,
 ) -> Result<(), InstructionError> {
     let mut vote_state = get_vote_state_handler_checked(
@@ -778,9 +782,12 @@ pub fn update_validator_identity<S: std::hash::BuildHasher>(
     verify_authorized_signer(node_pubkey, signers)?;
 
     vote_state.set_node_pubkey(*node_pubkey);
+
     // Keep block_revenue_collector in sync with node_pubkey until SIMD-0232
     // is implemented.
-    vote_state.set_block_revenue_collector(*node_pubkey);
+    if !update_commission_collector_enabled {
+        vote_state.set_block_revenue_collector(*node_pubkey);
+    }
 
     vote_state.set_vote_account_state(vote_account)
 }
@@ -815,6 +822,53 @@ pub fn update_commission<S: std::hash::BuildHasher>(
     verify_authorized_signer(vote_state.authorized_withdrawer(), signers)?;
 
     vote_state.set_commission(commission);
+
+    vote_state.set_vote_account_state(vote_account)
+}
+
+pub fn update_commission_collector<S: std::hash::BuildHasher>(
+    vote_account: &mut BorrowedInstructionAccount,
+    new_collector_account: &BorrowedInstructionAccount,
+    commission_kind: CommissionKind,
+    signers: &HashSet<Pubkey, S>,
+) -> Result<(), InstructionError> {
+    // Only v4 vote accounts support commission collectors
+    let mut vote_state =
+        get_vote_state_handler_checked(vote_account, PreserveBehaviorInHandlerHelper::V4)?;
+
+    // New collector account must be approved by the authorized withdrawer
+    verify_authorized_signer(vote_state.authorized_withdrawer(), signers)?;
+
+    let new_collector_address = new_collector_account.get_key();
+
+    // New collector account can be either set to the vote account itself or
+    // to a system account.
+    if new_collector_address != vote_account.get_key()
+        && new_collector_account.get_owner() != &system_program::id()
+    {
+        return Err(InstructionError::InvalidAccountData);
+    }
+
+    // New collector account must be rent exempt
+    if !new_collector_account.is_rent_exempt_at_data_length(new_collector_account.get_data().len())
+    {
+        return Err(InstructionError::InsufficientFunds);
+    }
+
+    // New collector account must be writable to ensure it is not a reserved
+    // account.
+    if !new_collector_account.is_writable() {
+        return Err(InstructionError::InvalidArgument);
+    }
+
+    match commission_kind {
+        CommissionKind::InflationRewards => {
+            vote_state.set_inflation_rewards_collector(*new_collector_address);
+        }
+        CommissionKind::BlockRevenue => {
+            vote_state.set_block_revenue_collector(*new_collector_address);
+        }
+    }
 
     vote_state.set_vote_account_state(vote_account)
 }
@@ -3746,8 +3800,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_update_validator_identity_syncs_block_revenue_collector() {
+    #[test_case(true; "update_commission_collector_enabled")]
+    #[test_case(false; "update_commission_collector_disabled")]
+    fn test_update_validator_identity_syncs_block_revenue_collector(
+        update_commission_collector_enabled: bool,
+    ) {
         let vote_state =
             vote_state_new_for_test(&solana_pubkey::new_rand(), VoteStateTargetVersion::V4);
         let node_pubkey = *vote_state.node_pubkey();
@@ -3788,6 +3845,7 @@ mod tests {
             &mut borrowed_account,
             VoteStateTargetVersion::V4,
             &new_node_pubkey,
+            update_commission_collector_enabled,
             &signers,
         )
         .unwrap();
@@ -3797,7 +3855,11 @@ mod tests {
         let vote_state =
             VoteStateV4::deserialize(borrowed_account.get_data(), &new_node_pubkey).unwrap();
         assert_eq!(vote_state.node_pubkey, new_node_pubkey);
-        assert_eq!(vote_state.block_revenue_collector, new_node_pubkey);
+        if update_commission_collector_enabled {
+            assert_eq!(vote_state.block_revenue_collector, node_pubkey);
+        } else {
+            assert_eq!(vote_state.block_revenue_collector, new_node_pubkey);
+        };
 
         // Run it again.
         let new_node_pubkey = solana_pubkey::new_rand();
@@ -3809,6 +3871,7 @@ mod tests {
             &mut borrowed_account,
             VoteStateTargetVersion::V4,
             &new_node_pubkey,
+            update_commission_collector_enabled,
             &signers,
         )
         .unwrap();
@@ -3816,6 +3879,10 @@ mod tests {
         let vote_state =
             VoteStateV4::deserialize(borrowed_account.get_data(), &new_node_pubkey).unwrap();
         assert_eq!(vote_state.node_pubkey, new_node_pubkey);
-        assert_eq!(vote_state.block_revenue_collector, new_node_pubkey);
+        if update_commission_collector_enabled {
+            assert_eq!(vote_state.block_revenue_collector, node_pubkey);
+        } else {
+            assert_eq!(vote_state.block_revenue_collector, new_node_pubkey);
+        };
     }
 }

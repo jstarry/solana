@@ -3,7 +3,9 @@
 use {
     crate::vote_state::{self, handler::VoteStateTargetVersion},
     log::*,
+    serde::{Deserialize, Serialize},
     solana_bincode::limited_deserialize,
+    solana_hash::Hash,
     solana_instruction::error::InstructionError,
     solana_program_runtime::{
         declare_process_instruction, invoke_context::InvokeContext,
@@ -13,9 +15,195 @@ use {
     solana_transaction_context::{
         instruction::InstructionContext, instruction_accounts::BorrowedInstructionAccount,
     },
-    solana_vote_interface::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
+    solana_vote_interface::{
+        program::id,
+        state::{
+            TowerSync, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+            VoteAuthorizeWithSeedArgs, VoteInit, VoteStateUpdate,
+        },
+    },
     std::collections::HashSet,
 };
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+pub struct VoteInitV2;
+
+#[repr(u8)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
+pub enum CommissionKind {
+    InflationRewards = 0,
+    BlockRevenue = 1,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
+pub enum VoteInstruction {
+    /// Initialize a vote account
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Uninitialized vote account
+    ///   1. `[]` Rent sysvar
+    ///   2. `[]` Clock sysvar
+    ///   3. `[SIGNER]` New validator identity (node_pubkey)
+    InitializeAccount(VoteInit),
+
+    /// Authorize a key to send votes or issue a withdrawal
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to be updated with the Pubkey for authorization
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Vote or withdraw authority
+    ///
+    /// When SIMD-0387 is enabled, the `VoteAuthorize::Voter` variant is
+    /// disallowed for any vote accounts whose BLS pubkey is set to `Some`.
+    Authorize(Pubkey, VoteAuthorize),
+
+    /// A Vote instruction with recent votes
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to vote with
+    ///   1. `[]` Slot hashes sysvar
+    ///   2. `[]` Clock sysvar
+    ///   3. `[SIGNER]` Vote authority
+    Vote(Vote),
+
+    /// Withdraw some amount of funds
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to withdraw from
+    ///   1. `[WRITE]` Recipient account
+    ///   2. `[SIGNER]` Withdraw authority
+    Withdraw(u64),
+
+    /// Update the vote account's validator identity (node_pubkey)
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to be updated with the given authority public key
+    ///   1. `[SIGNER]` New validator identity (node_pubkey)
+    ///   2. `[SIGNER]` Withdraw authority
+    UpdateValidatorIdentity,
+
+    /// Update the commission for the vote account
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to be updated
+    ///   1. `[SIGNER]` Withdraw authority
+    UpdateCommission(u8),
+
+    /// A Vote instruction with recent votes
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to vote with
+    ///   1. `[]` Slot hashes sysvar
+    ///   2. `[]` Clock sysvar
+    ///   3. `[SIGNER]` Vote authority
+    VoteSwitch(Vote, Hash),
+
+    /// Authorize a key to send votes or issue a withdrawal
+    ///
+    /// This instruction behaves like `Authorize` with the additional requirement that the new vote
+    /// or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to be updated with the Pubkey for authorization
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Vote or withdraw authority
+    ///   3. `[SIGNER]` New vote or withdraw authority
+    ///
+    /// When SIMD-0387 is enabled, the `VoteAuthorize::Voter` variant is
+    /// disallowed for any vote accounts whose BLS pubkey is set to `Some`.
+    AuthorizeChecked(VoteAuthorize),
+
+    /// Update the onchain vote state for the signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    UpdateVoteState(VoteStateUpdate),
+
+    /// Update the onchain vote state for the signer along with a switching proof.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    UpdateVoteStateSwitch(VoteStateUpdate, Hash),
+
+    /// Given that the current Voter or Withdrawer authority is a derived key,
+    /// this instruction allows someone who can sign for that derived key's
+    /// base key to authorize a new Voter or Withdrawer for a vote account.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to be updated
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Base key of current Voter or Withdrawer authority's derived key
+    ///
+    /// When SIMD-0387 is enabled, the `VoteAuthorize::Voter` variant in
+    /// `authorization_type` is disallowed for any vote accounts whose BLS
+    /// pubkey is set to `Some`.
+    AuthorizeWithSeed(VoteAuthorizeWithSeedArgs),
+
+    /// Given that the current Voter or Withdrawer authority is a derived key,
+    /// this instruction allows someone who can sign for that derived key's
+    /// base key to authorize a new Voter or Withdrawer for a vote account.
+    ///
+    /// This instruction behaves like `AuthorizeWithSeed` with the additional requirement
+    /// that the new vote or withdraw authority must also be a signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to be updated
+    ///   1. `[]` Clock sysvar
+    ///   2. `[SIGNER]` Base key of current Voter or Withdrawer authority's derived key
+    ///   3. `[SIGNER]` New vote or withdraw authority
+    ///
+    /// When SIMD-0387 is enabled, the `VoteAuthorize::Voter` variant in
+    /// `authorization_type` is disallowed for any vote accounts whose BLS
+    /// pubkey is set to `Some`.
+    AuthorizeCheckedWithSeed(VoteAuthorizeCheckedWithSeedArgs),
+
+    /// Update the onchain vote state for the signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    CompactUpdateVoteState(VoteStateUpdate),
+
+    /// Update the onchain vote state for the signer along with a switching proof.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    CompactUpdateVoteStateSwitch(VoteStateUpdate, Hash),
+
+    /// Sync the onchain vote state with local tower
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    TowerSync(TowerSync),
+
+    /// Sync the onchain vote state with local tower along with a switching proof
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    TowerSyncSwitch(TowerSync, Hash),
+
+    // Initialize a vote account using VoteInitV2
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Uninitialized vote account
+    ///   1. `[SIGNER]` New validator identity (node_pubkey)
+    InitializeAccountV2(VoteInitV2),
+
+    /// Update the commission collector for the vote account
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Vote account to be updated with the new collector public key
+    ///   1. `[WRITE]` New collector account. Must be set to the vote account or
+    ///      a system program owned account. Must be writable to ensure the
+    ///      account is not reserved.
+    ///   2. `[SIGNER]` Vote account withdraw authority
+    UpdateCommissionCollector(CommissionKind),
+}
 
 fn process_authorize_with_seed_instruction(
     invoke_context: &InvokeContext,
@@ -132,7 +320,16 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
         VoteInstruction::UpdateValidatorIdentity => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             let node_pubkey = instruction_context.get_key_of_instruction_account(1)?;
-            vote_state::update_validator_identity(&mut me, target_version, node_pubkey, &signers)
+            let update_vote_commission_collector_enabled = invoke_context
+                .get_feature_set()
+                .update_vote_commission_collector;
+            vote_state::update_validator_identity(
+                &mut me,
+                target_version,
+                node_pubkey,
+                update_vote_commission_collector_enabled,
+                &signers,
+            )
         }
         VoteInstruction::UpdateCommission(commission) => {
             let sysvar_cache = invoke_context.get_sysvar_cache();
@@ -254,6 +451,25 @@ declare_process_instruction!(Entrypoint, DEFAULT_COMPUTE_UNITS, |invoke_context|
                 &signers,
                 &clock,
             )
+        }
+        VoteInstruction::InitializeAccountV2(_) => Err(InstructionError::InvalidInstructionData),
+        VoteInstruction::UpdateCommissionCollector(kind) => {
+            if invoke_context
+                .get_feature_set()
+                .update_vote_commission_collector
+            {
+                instruction_context.check_number_of_instruction_accounts(2)?;
+                let new_collector_account =
+                    instruction_context.try_borrow_instruction_account(1)?;
+                vote_state::update_commission_collector(
+                    &mut me,
+                    &new_collector_account,
+                    kind,
+                    &signers,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
         }
     }
 });

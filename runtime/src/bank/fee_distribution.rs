@@ -56,7 +56,6 @@ impl Bank {
 
         let FeeDistribution { deposit, burn } =
             self.calculate_reward_and_burn_fee_details(&fee_details);
-
         let total_burn = self.deposit_or_burn_fee(deposit).saturating_add(burn);
         self.capitalization.fetch_sub(total_burn, Relaxed);
     }
@@ -80,6 +79,24 @@ impl Bank {
             burn: _,
         } = self.calculate_reward_and_burn_fee_details(&CollectorFeeDetails::from(fee_details));
         reward
+    }
+
+    pub fn fee_collector_id(&self) -> Pubkey {
+        // TODO
+        let leader_vote_address = Pubkey::new_unique();
+
+        // Vote account state from the beginning of the previous epoch.
+        let previous_epoch_vote_account = self
+            .epoch_stakes(self.epoch())
+            .map(|epoch_stakes| epoch_stakes.stakes().vote_accounts())
+            .and_then(|vote_accounts| vote_accounts.get(&leader_vote_address))
+            .expect("leader vote account should exist in epoch stakes");
+
+        previous_epoch_vote_account
+            .vote_state_view()
+            .block_revenue_collector()
+            .copied()
+            .unwrap_or(self.leader_id)
     }
 
     pub fn calculate_reward_and_burn_fee_details(
@@ -114,10 +131,11 @@ impl Bank {
             return 0;
         }
 
-        match self.deposit_fees(&self.leader_id, deposit) {
+        let fee_collector_id = self.fee_collector_id();
+        match self.deposit_fees(&fee_collector_id, deposit) {
             Ok(post_balance) => {
                 self.rewards.write().unwrap().push((
-                    self.leader_id,
+                    fee_collector_id,
                     RewardInfo {
                         reward_type: RewardType::Fee,
                         lamports: deposit as i64,
@@ -129,8 +147,8 @@ impl Bank {
             }
             Err(err) => {
                 debug!(
-                    "Burned {} lamport tx fee instead of sending to {} due to {}",
-                    deposit, self.leader_id, err
+                    "Burned {} lamport tx fee instead of sending to {}'s collector address {} due to {}",
+                    deposit, self.leader_id, fee_collector_id, err
                 );
                 datapoint_warn!(
                     "bank-burned_fee",

@@ -491,6 +491,7 @@ impl SimulatorLoop {
                 let new_bank = Bank::new_from_parent(
                     bank.clone_without_scheduler(),
                     &self.simulated_leader,
+                    &Pubkey::new_unique(),
                     new_slot,
                 );
                 // make sure parent is frozen for finalized hashes via the above

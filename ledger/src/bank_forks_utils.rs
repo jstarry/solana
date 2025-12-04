@@ -197,6 +197,8 @@ pub fn load_bank_forks(
             (bank_forks, None)
         };
 
+    // we create the leader schedule cache here but could create it earlier
+    // during snapshot loading because the root bank is available then
     let mut leader_schedule_cache =
         LeaderScheduleCache::new_from_bank(&bank_forks.read().unwrap().root_bank());
     if process_options.full_leader_cache {
@@ -353,6 +355,9 @@ fn bank_forks_from_snapshot(
         full: full_snapshot_hash,
         incremental: incremental_snapshot_hash,
     };
+
+    // TODO: should we set the bank's leader vote address here?
+    // or since this bank is frozen, we don't need to set it
 
     Ok((BankForks::new_rw_arc(bank), starting_snapshot_hashes))
 }

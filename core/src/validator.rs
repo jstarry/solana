@@ -2423,6 +2423,7 @@ fn maybe_warp_slot(
         bank_forks.insert(Bank::warp_from_parent(
             root_bank,
             &Pubkey::default(),
+            &Pubkey::default(),
             warp_slot,
         ));
         bank_forks.set_root(warp_slot, Some(snapshot_controller), Some(warp_slot));

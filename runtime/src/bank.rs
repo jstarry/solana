@@ -541,6 +541,7 @@ impl PartialEq for Bank {
             epoch,
             block_height,
             leader_id,
+            leader_vote_address,
             collector_fees,
             fee_rate_governor,
             rent_collector,
@@ -603,6 +604,7 @@ impl PartialEq for Bank {
             && epoch == &other.epoch
             && block_height == &other.block_height
             && leader_id == &other.leader_id
+            && leader_vote_address == &other.leader_vote_address
             && collector_fees.load(Relaxed) == other.collector_fees.load(Relaxed)
             && fee_rate_governor == &other.fee_rate_governor
             && rent_collector == &other.rent_collector
@@ -834,6 +836,9 @@ pub struct Bank {
 
     /// The validator identity of the leader who produced this block.
     leader_id: Pubkey,
+
+    /// The vote address of the leader who produced this block.
+    leader_vote_address: Pubkey,
 
     /// Fees that have been collected
     collector_fees: AtomicU64,
@@ -1114,6 +1119,7 @@ impl Bank {
             epoch: Epoch::default(),
             block_height: u64::default(),
             leader_id: Pubkey::default(),
+            leader_vote_address: Pubkey::default(),
             collector_fees: AtomicU64::default(),
             fee_rate_governor: FeeRateGovernor::default(),
             rent_collector: RentCollector::default(),
@@ -1223,10 +1229,16 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: Arc<Bank>, leader_id: &Pubkey, slot: Slot) -> Self {
+    pub fn new_from_parent(
+        parent: Arc<Bank>,
+        leader_id: &Pubkey,
+        leader_vote_address: &Pubkey,
+        slot: Slot,
+    ) -> Self {
         Self::_new_from_parent(
             parent,
             leader_id,
+            leader_vote_address,
             slot,
             null_tracer(),
             NewBankOptions::default(),
@@ -1236,21 +1248,31 @@ impl Bank {
     pub fn new_from_parent_with_options(
         parent: Arc<Bank>,
         leader_id: &Pubkey,
+        leader_vote_address: &Pubkey,
         slot: Slot,
         new_bank_options: NewBankOptions,
     ) -> Self {
-        Self::_new_from_parent(parent, leader_id, slot, null_tracer(), new_bank_options)
+        Self::_new_from_parent(
+            parent,
+            leader_id,
+            leader_vote_address,
+            slot,
+            null_tracer(),
+            new_bank_options,
+        )
     }
 
     pub fn new_from_parent_with_tracer(
         parent: Arc<Bank>,
         leader_id: &Pubkey,
+        leader_vote_address: &Pubkey,
         slot: Slot,
         reward_calc_tracer: impl RewardCalcTracer,
     ) -> Self {
         Self::_new_from_parent(
             parent,
             leader_id,
+            leader_vote_address,
             slot,
             Some(reward_calc_tracer),
             NewBankOptions::default(),
@@ -1264,6 +1286,7 @@ impl Bank {
     fn _new_from_parent(
         parent: Arc<Bank>,
         leader_id: &Pubkey,
+        leader_vote_address: &Pubkey,
         slot: Slot,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         new_bank_options: NewBankOptions,
@@ -1356,6 +1379,7 @@ impl Bank {
             parent_hash: parent.hash(),
             parent_slot: parent.slot(),
             leader_id: *leader_id,
+            leader_vote_address: *leader_vote_address,
             collector_fees: AtomicU64::new(0),
             ancestors: Ancestors::default(),
             freeze_state: RwLock::new(BankFreezeState::Active),
@@ -1798,10 +1822,15 @@ impl Bank {
     ///   in the past
     /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
-    pub fn warp_from_parent(parent: Arc<Bank>, leader_id: &Pubkey, slot: Slot) -> Self {
+    pub fn warp_from_parent(
+        parent: Arc<Bank>,
+        leader_id: &Pubkey,
+        leader_vote_address: &Pubkey,
+        slot: Slot,
+    ) -> Self {
         parent.freeze();
         let parent_timestamp = parent.clock().unix_timestamp;
-        let mut new = Bank::new_from_parent(parent, leader_id, slot);
+        let mut new = Bank::new_from_parent(parent, leader_id, leader_vote_address, slot);
         new.update_epoch_stakes(new.epoch_schedule().get_epoch(slot));
         new.tick_height.store(new.max_tick_height(), Relaxed);
 
@@ -1883,6 +1912,7 @@ impl Bank {
             epoch: fields.epoch,
             block_height: fields.block_height,
             leader_id: fields.leader_id,
+            leader_vote_address: Pubkey::default(), // TODO: this is set after bank creation
             collector_fees: AtomicU64::new(fields.collector_fees),
             fee_rate_governor: fields.fee_rate_governor,
             // clone()-ing is needed to consider a gated behavior in rent_collector
@@ -2017,6 +2047,10 @@ impl Bank {
 
     pub fn leader_id(&self) -> &Pubkey {
         &self.leader_id
+    }
+
+    pub fn leader_vote_address(&self) -> &Pubkey {
+        &self.leader_vote_address
     }
 
     pub fn genesis_creation_time(&self) -> UnixTimestamp {
@@ -2675,6 +2709,8 @@ impl Bank {
         let leader_id = leader_id.or(leader_id_for_tests);
         self.leader_id =
             leader_id.expect("genesis processing failed because no staked nodes exist");
+
+        // TODO: set leader vote address here
 
         #[cfg(not(feature = "dev-context-only-utils"))]
         let genesis_hash = genesis_config.hash();
@@ -6046,9 +6082,10 @@ impl Bank {
         bank_forks: &RwLock<BankForks>,
         parent: Arc<Bank>,
         leader_id: &Pubkey,
+        leader_vote_address: &Pubkey,
         slot: Slot,
     ) -> Arc<Self> {
-        let bank = Bank::new_from_parent(parent, leader_id, slot);
+        let bank = Bank::new_from_parent(parent, leader_id, leader_vote_address, slot);
         bank_forks
             .write()
             .unwrap()

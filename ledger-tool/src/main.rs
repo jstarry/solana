@@ -2481,6 +2481,7 @@ fn main() {
                         Arc::new(Bank::warp_from_parent(
                             bank.clone(),
                             bank.leader_id(),
+                            bank.leader_vote_address(),
                             warp_slot,
                         ))
                     } else {

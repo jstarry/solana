@@ -546,7 +546,8 @@ fn main() {
                 assert_matches!(result, Ok(_));
             }
             let new_slot = bank.slot() + 1;
-            let new_bank = Bank::new_from_parent(bank.clone(), &collector, new_slot);
+            let new_bank =
+                Bank::new_from_parent(bank.clone(), &collector, &Pubkey::new_unique(), new_slot);
             new_bank_time.stop();
 
             let mut insert_time = Measure::start("insert_time");

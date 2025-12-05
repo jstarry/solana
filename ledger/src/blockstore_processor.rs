@@ -15,9 +15,7 @@ use {
     log::*,
     rayon::{prelude::*, ThreadPool},
     scopeguard::defer,
-    solana_accounts_db::{
-        accounts_db::AccountsDbConfig, accounts_update_notifier_interface::AccountsUpdateNotifier,
-    },
+    solana_accounts_db::accounts_db::AccountsDbConfig,
     solana_clock::{Slot, MAX_PROCESSING_AGE},
     solana_cost_model::{cost_model::CostModel, transaction_cost::TransactionCost},
     solana_entry::entry::{self, create_ticks, Entry, EntrySlice, EntryType},
@@ -63,7 +61,6 @@ use {
         collections::{HashMap, HashSet},
         num::Saturating,
         ops::Index,
-        path::PathBuf,
         result,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         time::{Duration, Instant},
@@ -136,7 +133,7 @@ fn get_first_error<T, Tx: SVMTransaction>(
         .unwrap_or(Ok(()))
 }
 
-fn create_thread_pool(num_threads: usize) -> ThreadPool {
+pub(crate) fn create_thread_pool(num_threads: usize) -> ThreadPool {
     rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .thread_name(|i| format!("solReplayTx{i:02}"))
@@ -884,50 +881,6 @@ pub fn test_process_blockstore(
     .unwrap();
 
     (bank_forks, leader_schedule_cache)
-}
-
-pub(crate) fn process_blockstore_for_bank_0(
-    genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
-    account_paths: Vec<PathBuf>,
-    opts: &ProcessOptions,
-    transaction_status_sender: Option<&TransactionStatusSender>,
-    entry_notification_sender: Option<&EntryNotifierSender>,
-    accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    exit: Arc<AtomicBool>,
-) -> result::Result<Arc<RwLock<BankForks>>, BlockstoreProcessorError> {
-    // Setup bank for slot 0
-    let bank0 = Bank::new_from_genesis(
-        genesis_config,
-        Arc::new(opts.runtime_config.clone()),
-        account_paths,
-        opts.debug_keys.clone(),
-        opts.accounts_db_config.clone(),
-        accounts_update_notifier,
-        None,
-        exit,
-        None,
-        None,
-    );
-    let bank0_slot = bank0.slot();
-    let bank_forks = BankForks::new_rw_arc(bank0);
-
-    info!("Processing ledger for slot 0...");
-    let replay_tx_thread_pool = create_thread_pool(num_cpus::get());
-    process_bank_0(
-        &bank_forks
-            .read()
-            .unwrap()
-            .get_with_scheduler(bank0_slot)
-            .unwrap(),
-        blockstore,
-        &replay_tx_thread_pool,
-        opts,
-        transaction_status_sender,
-        entry_notification_sender,
-    )?;
-
-    Ok(bank_forks)
 }
 
 /// Process blockstore from a known root bank

@@ -20,7 +20,7 @@ use {
     log::*,
     solana_accounts_db::accounts_update_notifier_interface::AccountsUpdateNotifier,
     solana_genesis_config::GenesisConfig,
-    solana_runtime::{bank_forks::BankForks, snapshot_bank_utils, snapshot_utils},
+    solana_runtime::{bank::Bank, bank_forks::BankForks, snapshot_bank_utils, snapshot_utils},
     std::{
         path::PathBuf,
         result,
@@ -183,7 +183,7 @@ pub fn load_bank_forks(
             (bank_forks, Some(starting_snapshot_hashes))
         } else {
             info!("Processing ledger from genesis");
-            let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
+            let bank_forks = bank_forks_from_genesis(
                 genesis_config,
                 blockstore,
                 account_paths,
@@ -211,6 +211,50 @@ pub fn load_bank_forks(
     }
 
     Ok((bank_forks, leader_schedule_cache, starting_snapshot_hashes))
+}
+
+fn bank_forks_from_genesis(
+    genesis_config: &GenesisConfig,
+    blockstore: &Blockstore,
+    account_paths: Vec<PathBuf>,
+    opts: &ProcessOptions,
+    transaction_status_sender: Option<&TransactionStatusSender>,
+    entry_notification_sender: Option<&EntryNotifierSender>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: Arc<AtomicBool>,
+) -> result::Result<Arc<RwLock<BankForks>>, BlockstoreProcessorError> {
+    // Setup bank for slot 0
+    let bank0 = Bank::new_from_genesis(
+        genesis_config,
+        Arc::new(opts.runtime_config.clone()),
+        account_paths,
+        opts.debug_keys.clone(),
+        opts.accounts_db_config.clone(),
+        accounts_update_notifier,
+        None,
+        exit,
+        None,
+        None,
+    );
+    let bank0_slot = bank0.slot();
+    let bank_forks = BankForks::new_rw_arc(bank0);
+
+    info!("Processing ledger for slot 0...");
+    let replay_tx_thread_pool = blockstore_processor::create_thread_pool(num_cpus::get());
+    blockstore_processor::process_bank_0(
+        &bank_forks
+            .read()
+            .unwrap()
+            .get_with_scheduler(bank0_slot)
+            .unwrap(),
+        blockstore,
+        &replay_tx_thread_pool,
+        opts,
+        transaction_status_sender,
+        entry_notification_sender,
+    )?;
+
+    Ok(bank_forks)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -17,13 +17,13 @@ use {
     solana_clock::Slot,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::Protocol},
     solana_ledger::{
+        leader_schedule::SlotLeader,
         leader_schedule_cache::LeaderScheduleCache,
         shred::{self, ShredFlags, ShredId, ShredType},
     },
     solana_measure::measure::Measure,
     solana_net_utils::SocketAddrSpace,
     solana_perf::deduper::Deduper,
-    solana_pubkey::Pubkey,
     solana_rpc::{
         max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions,
         slot_status_notifier::SlotStatusNotifier,
@@ -457,7 +457,7 @@ fn retransmit_shred(
     shred: shred::Payload,
     root_bank: &Bank,
     shred_deduper: &ShredDeduper,
-    cache: &HashMap<Slot, (/*leader:*/ Pubkey, Arc<ClusterNodes<RetransmitStage>>)>,
+    cache: &HashMap<Slot, (SlotLeader, Arc<ClusterNodes<RetransmitStage>>)>,
     addr_cache: &AddrCache,
     socket_addr_space: &SocketAddrSpace,
     socket: RetransmitSocket<'_>,
@@ -542,7 +542,7 @@ fn retransmit_shred(
 
 fn get_retransmit_addrs<'a>(
     shred: &ShredId,
-    cache: &HashMap<Slot, (/*leader:*/ Pubkey, Arc<ClusterNodes<RetransmitStage>>)>,
+    cache: &HashMap<Slot, (SlotLeader, Arc<ClusterNodes<RetransmitStage>>)>,
     addr_cache: &'a AddrCache,
     socket_addr_space: &SocketAddrSpace,
     stats: &RetransmitStats,
@@ -553,7 +553,7 @@ fn get_retransmit_addrs<'a>(
     }
     let (slot_leader, cluster_nodes) = cache.get(&shred.slot())?;
     let (root_distance, addrs) = cluster_nodes
-        .get_retransmit_addrs(slot_leader, shred, DATA_PLANE_FANOUT, socket_addr_space)
+        .get_retransmit_addrs(&slot_leader.id, shred, DATA_PLANE_FANOUT, socket_addr_space)
         .inspect_err(|err| match err {
             Error::Loopback { .. } => {
                 stats.num_loopback_errs.fetch_add(1, Ordering::Relaxed);
@@ -602,7 +602,12 @@ fn cache_retransmit_addrs(
     let get_retransmit_addrs = |shred: ShredId| {
         let (slot_leader, cluster_nodes) = cache.get(&shred.slot())?;
         let (root_distance, addrs) = cluster_nodes
-            .get_retransmit_addrs(slot_leader, &shred, DATA_PLANE_FANOUT, socket_addr_space)
+            .get_retransmit_addrs(
+                &slot_leader.id,
+                &shred,
+                DATA_PLANE_FANOUT,
+                socket_addr_space,
+            )
             .ok()?;
         Some((shred, (root_distance, addrs.into_boxed_slice())))
     };

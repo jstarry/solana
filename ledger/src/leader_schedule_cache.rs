@@ -1,7 +1,7 @@
 use {
     crate::{
         blockstore::Blockstore,
-        leader_schedule::{FixedSchedule, LeaderSchedule},
+        leader_schedule::{FixedSchedule, LeaderSchedule, SlotLeader},
         leader_schedule_utils,
     },
     itertools::Itertools,
@@ -90,7 +90,7 @@ impl LeaderScheduleCache {
         }
     }
 
-    pub fn slot_leader_at(&self, slot: Slot, bank: Option<&Bank>) -> Option<Pubkey> {
+    pub fn slot_leader_at(&self, slot: Slot, bank: Option<&Bank>) -> Option<SlotLeader> {
         if let Some(bank) = bank {
             self.slot_leader_at_else_compute(slot, bank)
         } else if self.epoch_schedule.slots_per_epoch == 0 {
@@ -161,7 +161,7 @@ impl LeaderScheduleCache {
         self.fixed_schedule = fixed_schedule.map(Arc::new);
     }
 
-    fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {
+    fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<SlotLeader> {
         let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
         if let Some(ref fixed_schedule) = self.fixed_schedule {
             return Some(fixed_schedule.leader_schedule[slot_index]);
@@ -174,7 +174,7 @@ impl LeaderScheduleCache {
             .map(|schedule| schedule[slot_index])
     }
 
-    fn slot_leader_at_else_compute(&self, slot: Slot, bank: &Bank) -> Option<Pubkey> {
+    fn slot_leader_at_else_compute(&self, slot: Slot, bank: &Bank) -> Option<SlotLeader> {
         let cache_result = self.slot_leader_at_no_compute(slot);
         // Forbid asking for slots in an unconfirmed epoch
         let bank_epoch = self.epoch_schedule.get_epoch_and_slot_index(slot).0;
@@ -251,7 +251,7 @@ mod tests {
                 create_genesis_config_with_leader, GenesisConfigInfo,
             },
             get_tmp_ledger_path_auto_delete,
-            leader_schedule::IdentityKeyedLeaderSchedule,
+            leader_schedule::LeaderSchedule,
             staking_utils::tests::setup_vote_and_stake_accounts,
         },
         crossbeam_channel::unbounded,
@@ -308,10 +308,7 @@ mod tests {
         let mut cached_schedules: HashMap<Epoch, Arc<LeaderSchedule>> = HashMap::new();
         let mut order = VecDeque::new();
         for i in 0..=MAX_SCHEDULES {
-            cached_schedules.insert(
-                i as u64,
-                Arc::new(Box::new(IdentityKeyedLeaderSchedule::default())),
-            );
+            cached_schedules.insert(i as u64, Arc::new(Box::new(LeaderSchedule::default())));
             order.push_back(i as u64);
         }
         LeaderScheduleCache::retain_latest(&mut cached_schedules, &mut order, MAX_SCHEDULES);

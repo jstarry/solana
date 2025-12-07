@@ -1,5 +1,5 @@
 use {
-    crate::leader_schedule::{LeaderSchedule, VoteKeyedLeaderSchedule},
+    crate::leader_schedule::LeaderSchedule,
     solana_clock::{Epoch, Slot, NUM_CONSECUTIVE_LEADER_SLOTS},
     solana_pubkey::Pubkey,
     solana_runtime::bank::Bank,
@@ -9,12 +9,12 @@ use {
 /// Return the leader schedule for the given epoch.
 pub fn leader_schedule(epoch: Epoch, bank: &Bank) -> Option<LeaderSchedule> {
     bank.epoch_vote_accounts(epoch).map(|vote_accounts_map| {
-        Box::new(VoteKeyedLeaderSchedule::new(
+        LeaderSchedule::new(
             vote_accounts_map,
             epoch,
             bank.get_slots_in_epoch(epoch),
             NUM_CONSECUTIVE_LEADER_SLOTS,
-        )) as LeaderSchedule
+        )
     })
 }
 
@@ -43,7 +43,7 @@ pub fn leader_schedule_by_identity<'a>(
 pub fn slot_leader_at(slot: Slot, bank: &Bank) -> Option<Pubkey> {
     let (epoch, slot_index) = bank.get_epoch_and_slot_index(slot);
 
-    leader_schedule(epoch, bank).map(|leader_schedule| leader_schedule[slot_index])
+    leader_schedule(epoch, bank).map(|leader_schedule| leader_schedule[slot_index].id)
 }
 
 // Returns the number of ticks remaining from the specified tick_height to the end of the

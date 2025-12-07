@@ -359,7 +359,7 @@ fn verify_retransmitter_signature(
     let cluster_nodes =
         cluster_nodes_cache.get(shred.slot(), root_bank, working_bank, cluster_info);
     let data_plane_fanout = cluster_nodes::get_data_plane_fanout(shred.slot(), root_bank);
-    let parent = match cluster_nodes.get_retransmit_parent(&leader, &shred, data_plane_fanout) {
+    let parent = match cluster_nodes.get_retransmit_parent(&leader.id, &shred, data_plane_fanout) {
         Ok(Some(parent)) => parent,
         Ok(None) => {
             stats
@@ -422,6 +422,7 @@ fn get_slot_leaders<'a>(
             let slot = shred.and_then(shred::layout::get_slot)?;
             let leader = leader_schedule_cache
                 .slot_leader_at(slot, Some(bank))
+                .map(|slot_leader| slot_leader.id)
                 .filter(|leader| leader != self_pubkey);
             if leader.is_none() {
                 packet.meta_mut().set_discard(true);

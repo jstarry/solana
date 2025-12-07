@@ -1032,7 +1032,7 @@ impl ReplayStage {
                                 &my_pubkey,
                                 vote_bank.slot(),
                                 &mut current_leader,
-                                &votable_leader,
+                                &votable_leader.id,
                             );
                         }
 
@@ -1610,7 +1610,9 @@ impl ReplayStage {
 
                     // Should not dump slots for which we were the leader
                     if Some(*my_pubkey)
-                        == leader_schedule_cache.slot_leader_at(*duplicate_slot, None)
+                        == leader_schedule_cache
+                            .slot_leader_at(*duplicate_slot, None)
+                            .map(|slot_leader| slot_leader.id)
                     {
                         if let Some(bank) = bank_forks.read().unwrap().get(*duplicate_slot) {
                             bank_hash_details::write_bank_hash_details_file(&bank)
@@ -2200,7 +2202,10 @@ impl ReplayStage {
         }
         trace!("{my_pubkey} poh_slot {poh_slot} parent_slot {parent_slot}");
 
-        if let Some(next_leader) = leader_schedule_cache.slot_leader_at(poh_slot, Some(&parent)) {
+        if let Some(next_leader) = leader_schedule_cache
+            .slot_leader_at(poh_slot, Some(&parent))
+            .map(|slot_leader| slot_leader.id)
+        {
             if !has_new_vote_been_rooted {
                 info!("Haven't landed a vote, so skipping my leader slot");
                 return None;
@@ -4283,7 +4288,7 @@ impl ReplayStage {
                     parent_bank.clone(),
                     child_slot,
                     forks.root(),
-                    &leader,
+                    &leader.id,
                     rpc_subscriptions,
                     slot_status_notifier,
                     NewBankOptions::default(),
@@ -4293,7 +4298,7 @@ impl ReplayStage {
                 Self::update_fork_propagated_threshold_from_votes(
                     progress,
                     empty,
-                    vec![leader],
+                    vec![leader.id],
                     parent_bank.slot(),
                     &forks,
                 );

@@ -3,15 +3,18 @@ use {
     rand_chacha::{rand_core::SeedableRng, ChaChaRng},
     solana_clock::Epoch,
     solana_pubkey::Pubkey,
-    std::{collections::HashMap, convert::identity, ops::Index, sync::Arc},
+    std::sync::Arc,
 };
 
-mod identity_keyed;
 mod vote_keyed;
-pub use {
-    identity_keyed::LeaderSchedule as IdentityKeyedLeaderSchedule,
-    vote_keyed::LeaderSchedule as VoteKeyedLeaderSchedule,
-};
+/// Stake-weighted leader schedule for one epoch.
+pub use vote_keyed::LeaderSchedule;
+
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
+pub struct SlotLeader {
+    pub id: Pubkey,
+    pub vote_address: Pubkey,
+}
 
 // Used for testing
 #[derive(Clone, Debug)]
@@ -19,72 +22,20 @@ pub struct FixedSchedule {
     pub leader_schedule: Arc<LeaderSchedule>,
 }
 
-/// Stake-weighted leader schedule for one epoch.
-pub type LeaderSchedule = Box<dyn LeaderScheduleVariant>;
-
-pub trait LeaderScheduleVariant:
-    std::fmt::Debug + Send + Sync + Index<u64, Output = Pubkey>
-{
-    fn get_slot_leaders(&self) -> &[Pubkey];
-    fn get_leader_slots_map(&self) -> &HashMap<Pubkey, Vec<usize>>;
-
-    /// Get the vote account address for the given epoch slot index. This is
-    /// guaranteed to be Some if the leader schedule is keyed by vote account
-    fn get_vote_key_at_slot_index(&self, _epoch_slot_index: usize) -> Option<&Pubkey> {
-        None
-    }
-
-    fn get_leader_upcoming_slots(
-        &self,
-        pubkey: &Pubkey,
-        offset: usize, // Starting index.
-    ) -> Box<dyn Iterator<Item = usize> + '_> {
-        let index = self.get_leader_slots_map().get(pubkey);
-        let num_slots = self.num_slots();
-
-        match index {
-            Some(index) if !index.is_empty() => {
-                let size = index.len();
-                let start_offset = index
-                    .binary_search(&(offset % num_slots))
-                    .unwrap_or_else(identity)
-                    + offset / num_slots * size;
-                // The modular arithmetic here and above replicate Index implementation
-                // for LeaderSchedule, where the schedule keeps repeating endlessly.
-                // The '%' returns where in a cycle we are and the '/' returns how many
-                // times the schedule is repeated.
-                Box::new(
-                    (start_offset..=usize::MAX)
-                        .map(move |k| index[k % size] + k / size * num_slots),
-                )
-            }
-            _ => {
-                // Empty iterator for pubkeys not in schedule
-                #[allow(clippy::reversed_empty_ranges)]
-                Box::new((1..=0).map(|_| 0))
-            }
-        }
-    }
-
-    fn num_slots(&self) -> usize {
-        self.get_slot_leaders().len()
-    }
-}
-
 // Note: passing in zero keyed stakes will cause a panic.
 fn stake_weighted_slot_leaders(
-    mut keyed_stakes: Vec<(&Pubkey, u64)>,
+    mut slot_leader_stakes: Vec<(SlotLeader, u64)>,
     epoch: Epoch,
     len: u64,
     repeat: u64,
-) -> Vec<Pubkey> {
-    sort_stakes(&mut keyed_stakes);
-    let (keys, stakes): (Vec<_>, Vec<_>) = keyed_stakes.into_iter().unzip();
+) -> Vec<SlotLeader> {
+    sort_stakes(&mut slot_leader_stakes);
+    let (keys, stakes): (Vec<_>, Vec<_>) = slot_leader_stakes.into_iter().unzip();
     let weighted_index = WeightedU64Index::new(stakes).unwrap();
     let mut seed = [0u8; 32];
     seed[0..8].copy_from_slice(&epoch.to_le_bytes());
     let rng = &mut ChaChaRng::from_seed(seed);
-    let mut current_slot_leader = Pubkey::default();
+    let mut current_slot_leader = SlotLeader::default();
     (0..len)
         .map(|i| {
             if i % repeat == 0 {
@@ -95,13 +46,13 @@ fn stake_weighted_slot_leaders(
         .collect()
 }
 
-fn sort_stakes(stakes: &mut Vec<(&Pubkey, u64)>) {
+fn sort_stakes(stakes: &mut Vec<(SlotLeader, u64)>) {
     // Sort first by stake. If stakes are the same, sort by pubkey to ensure a
     // deterministic result.
     // Note: Use unstable sort, because we dedup right after to remove the equal elements.
-    stakes.sort_unstable_by(|(l_pubkey, l_stake), (r_pubkey, r_stake)| {
+    stakes.sort_unstable_by(|(l_leader, l_stake), (r_leader, r_stake)| {
         if r_stake == l_stake {
-            r_pubkey.cmp(l_pubkey)
+            r_leader.vote_address.cmp(&l_leader.vote_address)
         } else {
             r_stake.cmp(l_stake)
         }
@@ -123,7 +74,7 @@ mod tests {
         let schedule: Vec<_> = repeat_with(|| pubkeys[rng.random_range(0..3)])
             .take(19)
             .collect();
-        let schedule = IdentityKeyedLeaderSchedule::new_from_schedule(schedule);
+        let schedule = LeaderSchedule::new_from_schedule(schedule);
         let leaders = (0..NUM_SLOTS)
             .map(|i| (schedule[i as u64], i))
             .into_group_map();

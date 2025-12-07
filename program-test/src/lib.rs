@@ -1230,6 +1230,7 @@ impl ProgramTestContext {
         bank_forks.insert(Bank::new_from_parent(
             warp_bank,
             &Pubkey::default(),
+            &Pubkey::default(),
             warp_slot,
         ));
 

@@ -22,6 +22,11 @@ use {
 type CachedSchedules = (HashMap<Epoch, Arc<LeaderSchedule>>, VecDeque<u64>);
 const MAX_SCHEDULES: usize = 10;
 
+pub struct SlotLeader {
+    id: Pubkey,
+    vote_address: Pubkey,
+}
+
 struct CacheCapacity(usize);
 impl Default for CacheCapacity {
     fn default() -> Self {
@@ -90,7 +95,7 @@ impl LeaderScheduleCache {
         }
     }
 
-    pub fn slot_leader_at(&self, slot: Slot, bank: Option<&Bank>) -> Option<Pubkey> {
+    pub fn slot_leader_at(&self, slot: Slot, bank: Option<&Bank>) -> Option<SlotLeader> {
         if let Some(bank) = bank {
             self.slot_leader_at_else_compute(slot, bank)
         } else if self.epoch_schedule.slots_per_epoch == 0 {
@@ -161,7 +166,7 @@ impl LeaderScheduleCache {
         self.fixed_schedule = fixed_schedule.map(Arc::new);
     }
 
-    fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {
+    fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<SlotLeader> {
         let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
         if let Some(ref fixed_schedule) = self.fixed_schedule {
             return Some(fixed_schedule.leader_schedule[slot_index]);
@@ -174,7 +179,7 @@ impl LeaderScheduleCache {
             .map(|schedule| schedule[slot_index])
     }
 
-    fn slot_leader_at_else_compute(&self, slot: Slot, bank: &Bank) -> Option<Pubkey> {
+    fn slot_leader_at_else_compute(&self, slot: Slot, bank: &Bank) -> Option<SlotLeader> {
         let cache_result = self.slot_leader_at_no_compute(slot);
         // Forbid asking for slots in an unconfirmed epoch
         let bank_epoch = self.epoch_schedule.get_epoch_and_slot_index(slot).0;

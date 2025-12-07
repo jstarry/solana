@@ -733,7 +733,10 @@ struct HashOverride {
 #[derive(Default, Clone, PartialEq)]
 pub enum BankFreezeState {
     #[default]
-    Active,
+    Active {
+        /// The vote address of the leader who produced this block.
+        leader_vote_address: Pubkey,
+    },
     Frozen {
         hash: Hash,
     },
@@ -836,9 +839,6 @@ pub struct Bank {
 
     /// The validator identity of the leader who produced this block.
     leader_id: Pubkey,
-
-    /// The vote address of the leader who produced this block.
-    leader_vote_address: Pubkey,
 
     /// Fees that have been collected
     collector_fees: AtomicU64,
@@ -1119,7 +1119,6 @@ impl Bank {
             epoch: Epoch::default(),
             block_height: u64::default(),
             leader_id: Pubkey::default(),
-            leader_vote_address: Pubkey::default(),
             collector_fees: AtomicU64::default(),
             fee_rate_governor: FeeRateGovernor::default(),
             rent_collector: RentCollector::default(),
@@ -1379,10 +1378,11 @@ impl Bank {
             parent_hash: parent.hash(),
             parent_slot: parent.slot(),
             leader_id: *leader_id,
-            leader_vote_address: *leader_vote_address,
             collector_fees: AtomicU64::new(0),
             ancestors: Ancestors::default(),
-            freeze_state: RwLock::new(BankFreezeState::Active),
+            freeze_state: RwLock::new(BankFreezeState::Active {
+                leader_vote_address: *leader_vote_address,
+            }),
             is_delta: AtomicBool::new(false),
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
@@ -1912,7 +1912,6 @@ impl Bank {
             epoch: fields.epoch,
             block_height: fields.block_height,
             leader_id: fields.leader_id,
-            leader_vote_address: Pubkey::default(), // TODO: this is set after bank creation
             collector_fees: AtomicU64::new(fields.collector_fees),
             fee_rate_governor: fields.fee_rate_governor,
             // clone()-ing is needed to consider a gated behavior in rent_collector
@@ -2047,10 +2046,6 @@ impl Bank {
 
     pub fn leader_id(&self) -> &Pubkey {
         &self.leader_id
-    }
-
-    pub fn leader_vote_address(&self) -> &Pubkey {
-        &self.leader_vote_address
     }
 
     pub fn genesis_creation_time(&self) -> UnixTimestamp {

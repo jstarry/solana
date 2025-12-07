@@ -1,19 +1,17 @@
 use {
-    super::{stake_weighted_slot_leaders, IdentityKeyedLeaderSchedule, LeaderScheduleVariant},
+    super::{stake_weighted_slot_leaders, SlotLeader},
+    itertools::Itertools,
     solana_clock::Epoch,
     solana_pubkey::Pubkey,
     solana_vote::vote_account::VoteAccountsHashMap,
     std::{collections::HashMap, ops::Index},
 };
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct LeaderSchedule {
-    vote_keyed_slot_leaders: Vec<Pubkey>,
-    // cached leader schedule keyed by validator identities created by mapping
-    // vote account addresses to the validator identity designated at the time
-    // of leader schedule generation. This is used to avoid the need to look up
-    // the validator identity address for each slot.
-    identity_keyed_leader_schedule: IdentityKeyedLeaderSchedule,
+    slot_leaders: Vec<SlotLeader>,
+    // Inverted index from leader id to indices where they are the leader.
+    leader_slots_map: HashMap<Pubkey, Vec<usize>>,
 }
 
 impl LeaderSchedule {
@@ -24,76 +22,84 @@ impl LeaderSchedule {
         len: u64,
         repeat: u64,
     ) -> Self {
-        let keyed_stakes: Vec<_> = vote_accounts_map
+        let slot_leader_stakes: Vec<_> = vote_accounts_map
             .iter()
             .filter(|(_pubkey, (stake, _account))| *stake > 0)
-            .map(|(vote_pubkey, (stake, _account))| (vote_pubkey, *stake))
-            .collect();
-        let vote_keyed_slot_leaders = stake_weighted_slot_leaders(keyed_stakes, epoch, len, repeat);
-        Self::new_from_schedule(vote_keyed_slot_leaders, vote_accounts_map)
-    }
-
-    fn new_from_schedule(
-        vote_keyed_slot_leaders: Vec<Pubkey>,
-        vote_accounts_map: &VoteAccountsHashMap,
-    ) -> Self {
-        struct SlotLeaderInfo<'a> {
-            vote_account_address: &'a Pubkey,
-            validator_identity_address: &'a Pubkey,
-        }
-
-        let default_pubkey = Pubkey::default();
-        let mut current_slot_leader_info = SlotLeaderInfo {
-            vote_account_address: &default_pubkey,
-            validator_identity_address: &default_pubkey,
-        };
-
-        let slot_leaders: Vec<Pubkey> = vote_keyed_slot_leaders
-            .iter()
-            .map(|vote_account_address| {
-                if vote_account_address != current_slot_leader_info.vote_account_address {
-                    let validator_identity_address = vote_accounts_map
-                        .get(vote_account_address)
-                        .expect("vote account must be in vote_accounts_map")
-                        .1
-                        .node_pubkey();
-                    current_slot_leader_info = SlotLeaderInfo {
-                        vote_account_address,
-                        validator_identity_address,
-                    };
-                }
-                *current_slot_leader_info.validator_identity_address
+            .map(|(&vote_address, (stake, vote_account))| {
+                (
+                    SlotLeader {
+                        vote_address,
+                        id: *vote_account.node_pubkey(),
+                    },
+                    *stake,
+                )
             })
             .collect();
+        let slot_leaders = stake_weighted_slot_leaders(slot_leader_stakes, epoch, len, repeat);
+        Self::new_from_schedule(slot_leaders)
+    }
 
+    pub fn new_from_schedule(slot_leaders: Vec<SlotLeader>) -> Self {
+        let leader_slots_map = Self::invert_slot_leaders(&slot_leaders);
         Self {
-            vote_keyed_slot_leaders,
-            identity_keyed_leader_schedule: IdentityKeyedLeaderSchedule::new_from_schedule(
-                slot_leaders,
-            ),
+            slot_leaders,
+            leader_slots_map,
         }
     }
-}
 
-impl LeaderScheduleVariant for LeaderSchedule {
-    fn get_slot_leaders(&self) -> &[Pubkey] {
-        self.identity_keyed_leader_schedule.get_slot_leaders()
+    fn invert_slot_leaders(slot_leaders: &[SlotLeader]) -> HashMap<Pubkey, Vec<usize>> {
+        slot_leaders
+            .iter()
+            .enumerate()
+            .map(|(i, leader)| (leader.id, i))
+            .into_group_map()
     }
 
-    fn get_leader_slots_map(&self) -> &HashMap<Pubkey, Vec<usize>> {
-        self.identity_keyed_leader_schedule.get_leader_slots_map()
+    pub fn slot_leaders(&self) -> &[SlotLeader] {
+        &self.slot_leaders
     }
 
-    fn get_vote_key_at_slot_index(&self, index: usize) -> Option<&Pubkey> {
-        let slot_vote_addresses = &self.vote_keyed_slot_leaders;
-        Some(&slot_vote_addresses[index % slot_vote_addresses.len()])
+    pub fn get_leader_upcoming_slots(
+        &self,
+        leader_id: &Pubkey,
+        offset: usize, // Starting index.
+    ) -> Box<dyn Iterator<Item = usize> + '_> {
+        let index = self.leader_slots_map.get(leader_id);
+        let num_slots = self.num_slots();
+
+        match index {
+            Some(index) if !index.is_empty() => {
+                let size = index.len();
+                let start_offset = index
+                    .binary_search(&(offset % num_slots))
+                    .unwrap_or_else(std::convert::identity)
+                    + offset / num_slots * size;
+                // The modular arithmetic here and above replicate Index implementation
+                // for LeaderSchedule, where the schedule keeps repeating endlessly.
+                // The '%' returns where in a cycle we are and the '/' returns how many
+                // times the schedule is repeated.
+                Box::new(
+                    (start_offset..=usize::MAX)
+                        .map(move |k| index[k % size] + k / size * num_slots),
+                )
+            }
+            _ => {
+                // Empty iterator for pubkeys not in schedule
+                #[allow(clippy::reversed_empty_ranges)]
+                Box::new((1..=0).map(|_| 0))
+            }
+        }
+    }
+
+    pub fn num_slots(&self) -> usize {
+        self.slot_leaders.len()
     }
 }
 
 impl Index<u64> for LeaderSchedule {
     type Output = Pubkey;
     fn index(&self, index: u64) -> &Pubkey {
-        &self.get_slot_leaders()[index as usize % self.num_slots()]
+        &self.slot_leaders[index as usize % self.num_slots()].id
     }
 }
 

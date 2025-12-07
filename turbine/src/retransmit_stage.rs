@@ -457,7 +457,7 @@ fn retransmit_shred(
     shred: shred::Payload,
     root_bank: &Bank,
     shred_deduper: &ShredDeduper,
-    cache: &HashMap<Slot, (/*leader:*/ Pubkey, Arc<ClusterNodes<RetransmitStage>>)>,
+    cache: &HashMap<Slot, (/* leader */ Pubkey, Arc<ClusterNodes<RetransmitStage>>)>,
     addr_cache: &AddrCache,
     socket_addr_space: &SocketAddrSpace,
     socket: RetransmitSocket<'_>,
@@ -542,7 +542,7 @@ fn retransmit_shred(
 
 fn get_retransmit_addrs<'a>(
     shred: &ShredId,
-    cache: &HashMap<Slot, (/*leader:*/ Pubkey, Arc<ClusterNodes<RetransmitStage>>)>,
+    cache: &HashMap<Slot, (/* leader */ Pubkey, Arc<ClusterNodes<RetransmitStage>>)>,
     addr_cache: &'a AddrCache,
     socket_addr_space: &SocketAddrSpace,
     stats: &RetransmitStats,

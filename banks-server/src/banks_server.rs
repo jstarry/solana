@@ -98,8 +98,8 @@ impl BanksServer {
                 // bank forks lock released, now verify bank hasn't been frozen yet
                 // in the mean-time the bank can not be frozen until this tx batch
                 // has been processed
-                let lock = bank.freeze_lock();
-                if *lock == Hash::default() {
+                let freeze_state_guard = bank.freeze_lock();
+                if !freeze_state_guard.is_frozen() {
                     let _ = bank.try_process_entry_transactions(transactions);
                     // break out of inner loop and release bank freeze lock
                     break;

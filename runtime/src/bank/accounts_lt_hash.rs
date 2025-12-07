@@ -3,7 +3,6 @@ use {
     rayon::prelude::*,
     solana_account::{accounts_equal, AccountSharedData},
     solana_accounts_db::accounts_db::AccountsDb,
-    solana_hash::Hash,
     solana_lattice_hash::lt_hash::LtHash,
     solana_measure::{meas_dur, measure::Measure},
     solana_pubkey::Pubkey,
@@ -299,9 +298,8 @@ impl Bank {
         if !is_in_cache {
             // We need to check if the bank is frozen.  In order to do that safely, we
             // must hold a read lock on Bank::hash to read the frozen state.
-            let freeze_guard = self.freeze_lock();
-            let is_frozen = *freeze_guard != Hash::default();
-            if is_frozen {
+            let freeze_state_guard = self.freeze_lock();
+            if freeze_state_guard.is_frozen() {
                 // If the bank is frozen, do not add this account to the cache.
                 // It is possible for the leader to be executing transactions after freeze has
                 // started, i.e. while any deferred changes to account state is finishing up.
@@ -327,7 +325,7 @@ impl Bank {
                         CacheValue::InspectAccount(initial_state_of_account)
                     });
             });
-            drop(freeze_guard);
+            drop(freeze_state_guard);
 
             self.stats_for_accounts_lt_hash
                 .num_inspect_account_misses

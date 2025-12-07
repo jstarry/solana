@@ -366,7 +366,7 @@ impl TransactionBalancesSet {
 }
 pub type TransactionBalances = Vec<Vec<u64>>;
 
-pub type PreCommitResult<'a> = Result<Option<RwLockReadGuard<'a, Hash>>>;
+pub type PreCommitResult<'a> = Result<Option<RwLockReadGuard<'a, BankFreezeState>>>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 pub enum TransactionLogCollectorFilter {
@@ -518,7 +518,7 @@ impl PartialEq for Bank {
             status_cache: _,
             blockhash_queue,
             ancestors,
-            hash,
+            freeze_state,
             parent_hash,
             parent_slot,
             hard_forks,
@@ -585,7 +585,7 @@ impl PartialEq for Bank {
         } = self;
         *blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
             && ancestors == &other.ancestors
-            && *hash.read().unwrap() == *other.hash.read().unwrap()
+            && *freeze_state.read().unwrap() == *other.freeze_state.read().unwrap()
             && parent_hash == &other.parent_hash
             && parent_slot == &other.parent_slot
             && *hard_forks.read().unwrap() == *other.hard_forks.read().unwrap()
@@ -728,6 +728,28 @@ struct HashOverride {
     bank_hash: Hash,
 }
 
+#[derive(Default, Clone, PartialEq)]
+pub enum BankFreezeState {
+    #[default]
+    Active,
+    Frozen {
+        hash: Hash,
+    },
+}
+
+impl BankFreezeState {
+    pub fn is_frozen(&self) -> bool {
+        matches!(self, BankFreezeState::Frozen { .. })
+    }
+
+    pub fn get_hash(&self) -> Option<Hash> {
+        match self {
+            BankFreezeState::Active => None,
+            BankFreezeState::Frozen { hash } => Some(*hash),
+        }
+    }
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 pub struct Bank {
     /// References to accounts, parent and signature status
@@ -742,8 +764,8 @@ pub struct Bank {
     /// The set of parents including this bank
     pub ancestors: Ancestors,
 
-    /// Hash of this Bank's state. Only meaningful after freezing.
-    hash: RwLock<Hash>,
+    /// Bank freeze state. Contains bank hash when frozen
+    freeze_state: RwLock<BankFreezeState>,
 
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
@@ -1069,7 +1091,7 @@ impl Bank {
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
             ancestors: Ancestors::default(),
-            hash: RwLock::<Hash>::default(),
+            freeze_state: RwLock::<BankFreezeState>::default(),
             parent_hash: Hash::default(),
             parent_slot: Slot::default(),
             hard_forks: Arc::<RwLock<HardForks>>::default(),
@@ -1336,7 +1358,7 @@ impl Bank {
             leader_id: *leader_id,
             collector_fees: AtomicU64::new(0),
             ancestors: Ancestors::default(),
-            hash: RwLock::new(Hash::default()),
+            freeze_state: RwLock::new(BankFreezeState::Active),
             is_delta: AtomicBool::new(false),
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
@@ -1836,7 +1858,9 @@ impl Bank {
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
             ancestors,
-            hash: RwLock::new(fields.hash),
+            // todo: assert
+            freeze_state: RwLock::new(BankFreezeState::Frozen { hash: fields.hash }),
+            freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             parent_hash: fields.parent_hash,
             parent_slot: fields.parent_slot,
             hard_forks: Arc::new(RwLock::new(fields.hard_forks)),
@@ -1877,7 +1901,6 @@ impl Bank {
             feature_set: Arc::<FeatureSet>::default(),
             reserved_account_keys: Arc::<ReservedAccountKeys>::default(),
             drop_callback: RwLock::new(OptionalDropCallback(None)),
-            freeze_started: AtomicBool::new(fields.hash != Hash::default()),
             vote_only_bank: false,
             cost_tracker: RwLock::new(CostTracker::default()),
             accounts_data_size_initial,
@@ -1961,7 +1984,7 @@ impl Bank {
         BankFieldsToSerialize {
             blockhash_queue: self.blockhash_queue.read().unwrap().clone(),
             ancestors: AncestorsForSerialization::from(&self.ancestors),
-            hash: *self.hash.read().unwrap(),
+            hash: self.hash(),
             parent_hash: self.parent_hash,
             parent_slot: self.parent_slot,
             hard_forks: self.hard_forks.read().unwrap().clone(),
@@ -2016,16 +2039,20 @@ impl Bank {
         self.epoch_schedule().first_normal_epoch
     }
 
-    pub fn freeze_lock(&self) -> RwLockReadGuard<'_, Hash> {
-        self.hash.read().unwrap()
+    pub fn freeze_lock(&self) -> RwLockReadGuard<'_, BankFreezeState> {
+        self.freeze_state.read().unwrap()
     }
 
     pub fn hash(&self) -> Hash {
-        *self.hash.read().unwrap()
+        self.freeze_state
+            .read()
+            .unwrap()
+            .get_hash()
+            .unwrap_or_default()
     }
 
     pub fn is_frozen(&self) -> bool {
-        *self.hash.read().unwrap() != Hash::default()
+        self.freeze_state.read().unwrap().is_frozen()
     }
 
     pub fn freeze_started(&self) -> bool {
@@ -2507,11 +2534,11 @@ impl Bank {
     /// Note that the account state is *not* allowed to change by rehashing.
     /// If modifying accounts in ledger-tool is needed, create a new bank.
     pub fn rehash(&self) {
-        let mut hash = self.hash.write().unwrap();
+        let mut freeze_state = self.freeze_state.write().unwrap();
         let new = self.hash_internal_state();
-        if new != *hash {
+        if Some(new) != freeze_state.get_hash() {
             warn!("Updating bank hash to {new}");
-            *hash = new;
+            *freeze_state = BankFreezeState::Frozen { hash: new };
         }
     }
 
@@ -2527,8 +2554,8 @@ impl Bank {
         // BankingStage doesn't release this hash lock until both
         // record and commit are finished, those transactions will be
         // committed before this write lock can be obtained here.
-        let mut hash = self.hash.write().unwrap();
-        if *hash == Hash::default() {
+        let mut freeze_state = self.freeze_state.write().unwrap();
+        if !freeze_state.is_frozen() {
             // finish up any deferred changes to account state
             self.distribute_transaction_fee_details();
             self.update_slot_history();
@@ -2539,7 +2566,9 @@ impl Bank {
             // updating the accounts lt hash must happen *outside* of hash_internal_state() so
             // that rehash() can be called and *not* modify self.accounts_lt_hash.
             self.update_accounts_lt_hash();
-            *hash = self.hash_internal_state();
+            *freeze_state = BankFreezeState::Frozen {
+                hash: self.hash_internal_state(),
+            };
             self.rc.accounts.accounts_db.mark_slot_frozen(self.slot());
         }
     }
@@ -4280,14 +4309,13 @@ impl Bank {
     pub fn register_hard_fork(&self, new_hard_fork_slot: Slot) {
         let bank_slot = self.slot();
 
-        let lock = self.freeze_lock();
-        let bank_frozen = *lock != Hash::default();
+        let freeze_state_guard = self.freeze_lock();
         if new_hard_fork_slot < bank_slot {
             warn!(
                 "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is older than the \
                  bank at slot {bank_slot} that attempted to register it."
             );
-        } else if (new_hard_fork_slot == bank_slot) && bank_frozen {
+        } else if (new_hard_fork_slot == bank_slot) && freeze_state_guard.is_frozen() {
             warn!(
                 "Hard fork at slot {new_hard_fork_slot} ignored, the hard fork is the same slot \
                  as the bank at slot {bank_slot} that attempted to register it, but that bank is \

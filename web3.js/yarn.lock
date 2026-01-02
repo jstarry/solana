@@ -892,13 +892,13 @@
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@colors/colors/-/colors-1.5.0.tgz#bb504579c1cae923e6576a4f5da43d25f97bdbd9"
 
-"@commitlint/cli@^20.2.0":
-  version "20.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-20.2.0.tgz#4164499d3848447aacd795d298c8a768fb13a80c"
+"@commitlint/cli@^20.3.0":
+  version "20.3.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/cli/-/cli-20.3.0.tgz#5fff38a99393e23a36256754ed05e9c05a4dcac6"
   dependencies:
     "@commitlint/format" "^20.2.0"
-    "@commitlint/lint" "^20.2.0"
-    "@commitlint/load" "^20.2.0"
+    "@commitlint/lint" "^20.3.0"
+    "@commitlint/load" "^20.3.0"
     "@commitlint/read" "^20.2.0"
     "@commitlint/types" "^20.2.0"
     tinyexec "^1.0.0"
@@ -947,18 +947,18 @@
     "@commitlint/types" "^20.2.0"
     semver "^7.6.0"
 
-"@commitlint/lint@^20.2.0":
-  version "20.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-20.2.0.tgz#535f63f419cef7244b0a2907b5bf27ecb1f55bda"
+"@commitlint/lint@^20.3.0":
+  version "20.3.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/lint/-/lint-20.3.0.tgz#67b67e2a8b72425170245ccf10b219fe712f65fe"
   dependencies:
     "@commitlint/is-ignored" "^20.2.0"
     "@commitlint/parse" "^20.2.0"
-    "@commitlint/rules" "^20.2.0"
+    "@commitlint/rules" "^20.3.0"
     "@commitlint/types" "^20.2.0"
 
-"@commitlint/load@^20.2.0":
-  version "20.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-20.2.0.tgz#0864d7296c9dc7f0759c811e7e497e2df03292db"
+"@commitlint/load@^20.3.0":
+  version "20.3.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/load/-/load-20.3.0.tgz#4084c1af223e5f845e513f6dbbc9911df2c31abf"
   dependencies:
     "@commitlint/config-validator" "^20.2.0"
     "@commitlint/execute-rule" "^20.0.0"
@@ -1004,9 +1004,9 @@
     lodash.mergewith "^4.6.2"
     resolve-from "^5.0.0"
 
-"@commitlint/rules@^20.2.0":
-  version "20.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/rules/-/rules-20.2.0.tgz#0fd03c9bf55dccd3ddc1948f6ea36cd5ed162e8d"
+"@commitlint/rules@^20.3.0":
+  version "20.3.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/rules/-/rules-20.3.0.tgz#edc80cc68e148b38302c154e0189ccc5ff70b36e"
   dependencies:
     "@commitlint/ensure" "^20.2.0"
     "@commitlint/message" "^20.0.0"
@@ -1024,10 +1024,10 @@
     find-up "^7.0.0"
 
 "@commitlint/travis-cli@^20.0.0":
-  version "20.2.0"
-  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-20.2.0.tgz#af71cfaa98c4760ad561d6ee6db59ad68a2d59ee"
+  version "20.3.0"
+  resolved "https://registry.yarnpkg.com/@commitlint/travis-cli/-/travis-cli-20.3.0.tgz#80fbdf0c91997e7122d01660516bfd88c55e297e"
   dependencies:
-    "@commitlint/cli" "^20.2.0"
+    "@commitlint/cli" "^20.3.0"
     tinyexec "^1.0.0"
 
 "@commitlint/types@^20.2.0":

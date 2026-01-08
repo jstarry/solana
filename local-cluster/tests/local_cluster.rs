@@ -40,7 +40,7 @@ use {
         bank_forks_utils,
         blockstore::{entries_to_test_shreds, Blockstore},
         blockstore_processor::ProcessOptions,
-        leader_schedule::{FixedSchedule, LeaderSchedule},
+        leader_schedule::{FixedSchedule, LeaderSchedule, SlotLeader},
         shred::{ProcessShredsStats, ReedSolomonCache, Shred, Shredder},
         use_snapshot_archives_at_startup::UseSnapshotArchivesAtStartup,
     },
@@ -54,7 +54,7 @@ use {
             purge_slots_with_count, remove_tower, remove_tower_if_exists, restore_tower,
             run_cluster_partition, run_kill_partition_switch_threshold, save_tower,
             setup_snapshot_validator_config, test_faulty_node, wait_for_duplicate_proof,
-            wait_for_last_vote_in_tower_to_land_in_ledger, SnapshotValidatorConfig,
+            wait_for_last_vote_in_tower_to_land_in_ledger, SnapshotValidatorConfig, ValidatorKeys,
             ValidatorTestConfig, DEFAULT_NODE_STAKE, RUST_LOG_FILTER,
         },
         local_cluster::{ClusterConfig, LocalCluster, DEFAULT_MINT_LAMPORTS},
@@ -5854,18 +5854,29 @@ fn test_invalid_forks_persisted_on_restart() {
     agave_logger::setup_with("info,solana_metrics=off,solana_ledger=off");
 
     let dup_slot = 10;
-    let validator_keypairs = [
-        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+    let validator_keypairs = vec![
+        (ValidatorKeys {
+            node_keypair: Arc::new(Keypair::from_base58_string(
+                "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+            )),
+            vote_keypair: Arc::new(Keypair::new()),
+        }, true),
+        (ValidatorKeys {
+            node_keypair: Arc::new(Keypair::from_base58_string(
         "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
-    ]
-    .iter()
-    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
-    .collect::<Vec<_>>();
-    let majority_keypair = validator_keypairs[1].0.clone();
+            )),
+            vote_keypair: Arc::new(Keypair::new()),
+        },  true),
+    ];
+
+    let majority_keypair = validator_keypairs[1].0.node_keypair.clone();
 
     let validators = validator_keypairs
         .iter()
-        .map(|(kp, _)| kp.pubkey())
+        .map(|(keys, _)| SlotLeader {
+            id: keys.node_keypair.pubkey(),
+            vote_address: keys.vote_keypair.pubkey(),
+        })
         .collect::<Vec<_>>();
 
     let node_stakes = vec![DEFAULT_NODE_STAKE, 100 * DEFAULT_NODE_STAKE];

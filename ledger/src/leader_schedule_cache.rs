@@ -308,7 +308,7 @@ mod tests {
         let mut cached_schedules: HashMap<Epoch, Arc<LeaderSchedule>> = HashMap::new();
         let mut order = VecDeque::new();
         for i in 0..=MAX_SCHEDULES {
-            cached_schedules.insert(i as u64, Arc::new(Box::new(LeaderSchedule::default())));
+            cached_schedules.insert(i as u64, Arc::new(LeaderSchedule::default()));
             order.push_back(i as u64);
         }
         LeaderScheduleCache::retain_latest(&mut cached_schedules, &mut order, MAX_SCHEDULES);

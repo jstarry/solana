@@ -986,7 +986,7 @@ impl JsonRpcRequestProcessor {
             {
                 slot_leaders.extend(
                     leader_schedule
-                        .slot_leaders()
+                        .get_slot_leaders()
                         .iter()
                         .map(|slot_leader| slot_leader.id)
                         .skip(slot_index as usize)
@@ -2930,7 +2930,7 @@ pub mod rpc_minimal {
                     let mut schedule_by_identity =
                         solana_ledger::leader_schedule_utils::leader_schedule_by_identity(
                             leader_schedule
-                                .slot_leaders()
+                                .get_slot_leaders()
                                 .iter()
                                 .map(|slot_leader| &slot_leader.id)
                                 .enumerate(),

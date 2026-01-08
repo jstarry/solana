@@ -55,7 +55,7 @@ impl LeaderSchedule {
             .into_group_map()
     }
 
-    pub fn slot_leaders(&self) -> &[SlotLeader] {
+    pub fn get_slot_leaders(&self) -> &[SlotLeader] {
         &self.slot_leaders
     }
 
@@ -94,6 +94,11 @@ impl LeaderSchedule {
     pub fn num_slots(&self) -> usize {
         self.slot_leaders.len()
     }
+
+    #[cfg(test)]
+    fn get_vote_key_at_slot_index(&self, index: usize) -> &Pubkey {
+        &self.slot_leaders[index % self.num_slots()].vote_address
+    }
 }
 
 impl Index<u64> for LeaderSchedule {
@@ -109,57 +114,28 @@ mod tests {
 
     #[test]
     fn test_index() {
-        let pubkey0 = solana_pubkey::new_rand();
-        let pubkey1 = solana_pubkey::new_rand();
-        let vote_keyed_slot_leaders = vec![pubkey0, pubkey1];
-        let vote_accounts_map: VoteAccountsHashMap = [
-            (pubkey0, (0, VoteAccount::new_random())),
-            (pubkey1, (0, VoteAccount::new_random())),
-        ]
-        .into_iter()
-        .collect();
-
-        let leader_schedule =
-            LeaderSchedule::new_from_schedule(vote_keyed_slot_leaders, &vote_accounts_map);
-        assert_eq!(
-            &leader_schedule[0],
-            vote_accounts_map.get(&pubkey0).unwrap().1.node_pubkey()
-        );
-        assert_eq!(
-            &leader_schedule[1],
-            vote_accounts_map.get(&pubkey1).unwrap().1.node_pubkey()
-        );
-        assert_eq!(
-            &leader_schedule[2],
-            vote_accounts_map.get(&pubkey0).unwrap().1.node_pubkey()
-        );
+        let slot_leaders = vec![SlotLeader::new_unique(), SlotLeader::new_unique()];
+        let leader_schedule = LeaderSchedule::new_from_schedule(slot_leaders.clone());
+        assert_eq!(leader_schedule[0], slot_leaders[0].id);
+        assert_eq!(leader_schedule[1], slot_leaders[1].id);
+        assert_eq!(leader_schedule[2], slot_leaders[0].id);
     }
 
     #[test]
     fn test_get_vote_key_at_slot_index() {
-        let pubkey0 = solana_pubkey::new_rand();
-        let pubkey1 = solana_pubkey::new_rand();
-        let vote_keyed_slot_leaders = vec![pubkey0, pubkey1];
-        let vote_accounts_map: VoteAccountsHashMap = [
-            (pubkey0, (0, VoteAccount::new_random())),
-            (pubkey1, (0, VoteAccount::new_random())),
-        ]
-        .into_iter()
-        .collect();
-
-        let leader_schedule =
-            LeaderSchedule::new_from_schedule(vote_keyed_slot_leaders, &vote_accounts_map);
+        let slot_leaders = vec![SlotLeader::new_unique(), SlotLeader::new_unique()];
+        let leader_schedule = LeaderSchedule::new_from_schedule(slot_leaders.clone());
         assert_eq!(
             leader_schedule.get_vote_key_at_slot_index(0),
-            Some(&pubkey0)
+            &slot_leaders[0].vote_address
         );
         assert_eq!(
             leader_schedule.get_vote_key_at_slot_index(1),
-            Some(&pubkey1)
+            &slot_leaders[1].vote_address
         );
         assert_eq!(
             leader_schedule.get_vote_key_at_slot_index(2),
-            Some(&pubkey0)
+            &slot_leaders[0].vote_address
         );
     }
 
@@ -191,7 +167,7 @@ mod tests {
         let repeat = 8;
         let leader_schedule = LeaderSchedule::new(&vote_accounts_map, epoch, len, repeat);
         assert_eq!(leader_schedule.num_slots() as u64, len);
-        let mut leader_node = Pubkey::default();
+        let mut leader_node = SlotLeader::default();
         for (i, node) in leader_schedule.get_slot_leaders().iter().enumerate() {
             if i % repeat as usize == 0 {
                 leader_node = *node;
@@ -211,8 +187,14 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        let alice_pubkey = *vote_accounts_map.get(&vote_key0).unwrap().1.node_pubkey();
-        let bob_pubkey = *vote_accounts_map.get(&vote_key1).unwrap().1.node_pubkey();
+        let leader_alice = SlotLeader {
+            id: *vote_accounts_map.get(&vote_key0).unwrap().1.node_pubkey(),
+            vote_address: vote_key0,
+        };
+        let leader_bob = SlotLeader {
+            id: *vote_accounts_map.get(&vote_key1).unwrap().1.node_pubkey(),
+            vote_address: vote_key1,
+        };
 
         let epoch = 0;
         let len = 8;
@@ -228,24 +210,24 @@ mod tests {
         assert_eq!(leaders1.len(), leaders2.len());
 
         let leaders1_expected = vec![
-            alice_pubkey,
-            alice_pubkey,
-            alice_pubkey,
-            bob_pubkey,
-            alice_pubkey,
-            alice_pubkey,
-            alice_pubkey,
-            alice_pubkey,
+            leader_alice,
+            leader_alice,
+            leader_alice,
+            leader_bob,
+            leader_alice,
+            leader_alice,
+            leader_alice,
+            leader_alice,
         ];
         let leaders2_expected = vec![
-            alice_pubkey,
-            alice_pubkey,
-            alice_pubkey,
-            alice_pubkey,
-            alice_pubkey,
-            alice_pubkey,
-            bob_pubkey,
-            bob_pubkey,
+            leader_alice,
+            leader_alice,
+            leader_alice,
+            leader_alice,
+            leader_alice,
+            leader_alice,
+            leader_bob,
+            leader_bob,
         ];
 
         assert_eq!(leaders1, leaders1_expected);

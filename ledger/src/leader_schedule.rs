@@ -16,6 +16,15 @@ pub struct SlotLeader {
     pub vote_address: Pubkey,
 }
 
+impl SlotLeader {
+    pub fn new_unique() -> Self {
+        SlotLeader {
+            id: Pubkey::new_unique(),
+            vote_address: Pubkey::new_unique(),
+        }
+    }
+}
+
 // Used for testing
 #[derive(Clone, Debug)]
 pub struct FixedSchedule {
@@ -71,52 +80,52 @@ mod tests {
     fn test_get_leader_upcoming_slots() {
         const NUM_SLOTS: usize = 97;
         let mut rng = rand::rng();
-        let pubkeys: Vec<_> = repeat_with(Pubkey::new_unique).take(4).collect();
-        let schedule: Vec<_> = repeat_with(|| pubkeys[rng.random_range(0..3)])
+        let unique_leaders: Vec<_> = repeat_with(SlotLeader::new_unique).take(4).collect();
+        let schedule: Vec<_> = repeat_with(|| unique_leaders[rng.random_range(0..3)])
             .take(19)
             .collect();
         let schedule = LeaderSchedule::new_from_schedule(schedule);
         let leaders = (0..NUM_SLOTS)
             .map(|i| (schedule[i as u64], i))
             .into_group_map();
-        for pubkey in &pubkeys {
-            let index = leaders.get(pubkey).cloned().unwrap_or_default();
+        for leader in &unique_leaders {
+            let index = leaders.get(&leader.id).cloned().unwrap_or_default();
             for offset in 0..NUM_SLOTS {
-                let schedule: Vec<_> = schedule
-                    .get_leader_upcoming_slots(pubkey, offset)
+                let upcoming_slots: Vec<_> = schedule
+                    .get_leader_upcoming_slots(&leader.id, offset)
                     .take_while(|s| *s < NUM_SLOTS)
                     .collect();
-                let index: Vec<_> = index.iter().copied().skip_while(|s| *s < offset).collect();
-                assert_eq!(schedule, index);
+                let expected: Vec<_> = index.iter().copied().skip_while(|s| *s < offset).collect();
+                assert_eq!(upcoming_slots, expected);
             }
         }
     }
 
     #[test]
     fn test_sort_stakes_basic() {
-        let pubkey0 = solana_pubkey::new_rand();
-        let pubkey1 = solana_pubkey::new_rand();
-        let mut stakes = vec![(&pubkey0, 1), (&pubkey1, 2)];
+        let leader0 = SlotLeader::new_rand();
+        let leader1 = SlotLeader::new_rand();
+        let mut stakes = vec![(leader0, 1), (leader1, 2)];
         sort_stakes(&mut stakes);
-        assert_eq!(stakes, vec![(&pubkey1, 2), (&pubkey0, 1)]);
+        assert_eq!(stakes, vec![(leader1, 2), (leader0, 1)]);
     }
 
     #[test]
     fn test_sort_stakes_with_dup() {
-        let pubkey0 = solana_pubkey::new_rand();
-        let pubkey1 = solana_pubkey::new_rand();
-        let mut stakes = vec![(&pubkey0, 1), (&pubkey1, 2), (&pubkey0, 1)];
+        let leader0 = SlotLeader::new_rand();
+        let leader1 = SlotLeader::new_rand();
+        let mut stakes = vec![(leader0, 1), (leader1, 2), (leader0, 1)];
         sort_stakes(&mut stakes);
-        assert_eq!(stakes, vec![(&pubkey1, 2), (&pubkey0, 1)]);
+        assert_eq!(stakes, vec![(leader1, 2), (leader0, 1)]);
     }
 
     #[test]
     fn test_sort_stakes_with_equal_stakes() {
-        let pubkey0 = Pubkey::default();
-        let pubkey1 = solana_pubkey::new_rand();
-        let mut stakes = vec![(&pubkey0, 1), (&pubkey1, 1)];
+        let leader0 = SlotLeader::default();
+        let leader1 = SlotLeader::new_rand();
+        let mut stakes = vec![(leader0, 1), (leader1, 1)];
         sort_stakes(&mut stakes);
-        assert_eq!(stakes, vec![(&pubkey1, 1), (&pubkey0, 1)]);
+        assert_eq!(stakes, vec![(leader1, 1), (leader0, 1)]);
     }
 
     fn pubkey_from_u16(n: u16) -> Pubkey {
@@ -154,14 +163,23 @@ mod tests {
         repeat: u64,
         expected_order: &[usize],
     ) {
-        let pubkeys: Vec<_> = (0..stakes.len() as u16).map(pubkey_from_u16).collect();
-        let stakes = pubkeys.iter().zip(stakes.iter().copied()).collect();
+        let slot_leaders: Vec<_> = (0..stakes.len() as u16)
+            .map(|seed| SlotLeader {
+                id: pubkey_from_u16(seed),
+                vote_address: Pubkey::new_unique(),
+            })
+            .collect();
+        let stakes = slot_leaders
+            .iter()
+            .copied()
+            .zip(stakes.iter().copied())
+            .collect();
         let order: Vec<_> = stake_weighted_slot_leaders(stakes, epoch, len, repeat)
             .into_iter()
-            .map(|pubkey| {
-                pubkeys
+            .map(|slot_leader| {
+                slot_leaders
                     .iter()
-                    .find_position(|item| *item == &pubkey)
+                    .find_position(|item| *item == &slot_leader)
                     .unwrap()
                     .0
             })
@@ -188,29 +206,44 @@ mod tests {
         stake_pow: u32,
         expected_hash: &str,
     ) {
-        fn hash_pubkeys(v: &[Pubkey]) -> String {
+        fn hash_slot_leader_vote_addresses(v: &[SlotLeader]) -> String {
             use sha2::{Digest, Sha256};
 
-            let hasher = v.iter().fold(Sha256::new(), |hasher, pk| {
-                hasher.chain_update(pk.to_bytes())
+            let hasher = v.iter().fold(Sha256::new(), |hasher, slot_leader| {
+                hasher.chain_update(slot_leader.vote_address.to_bytes())
             });
             bs58::encode(hasher.finalize()).into_string()
         }
-        let pubkeys: Vec<_> = (0..=u16::MAX).map(pubkey_from_u16).collect();
-        let stakes = pubkeys
+        let slot_leaders: Vec<_> = (0..=u16::MAX)
+            .map(|seed| SlotLeader {
+                vote_address: pubkey_from_u16(seed),
+                id: Pubkey::new_unique(),
+            })
+            .collect();
+        let stakes = slot_leaders
             .iter()
+            .copied()
             .enumerate()
-            .map(|(i, pk)| (pk, i.pow(stake_pow) as u64))
+            .map(|(i, slot_leader)| (slot_leader, i.pow(stake_pow) as u64))
             .collect();
         let schedule = stake_weighted_slot_leaders(stakes, epoch, len, 1);
-        assert_eq!(hash_pubkeys(&schedule), expected_hash);
+        assert_eq!(hash_slot_leader_vote_addresses(&schedule), expected_hash);
+    }
+
+    impl SlotLeader {
+        pub fn new_rand() -> Self {
+            SlotLeader {
+                id: solana_pubkey::new_rand(),
+                vote_address: solana_pubkey::new_rand(),
+            }
+        }
     }
 
     #[test]
     #[should_panic]
     fn test_zero_stake_panics() {
         let _ = stake_weighted_slot_leaders(
-            vec![(&pubkey_from_u16(1), 0), (&pubkey_from_u16(2), 0)],
+            vec![(SlotLeader::new_unique(), 0), (SlotLeader::new_unique(), 0)],
             0,
             5,
             1,

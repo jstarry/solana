@@ -145,8 +145,15 @@ use {
 impl RewardCommission {
     pub fn new_random() -> Self {
         let mut rng = rand::rng();
+        let vote_pubkey = solana_pubkey::new_rand();
+        let vote_account = AccountSharedData::new(
+            LAMPORTS_PER_SOL,
+            0,
+            &solana_sdk_ids::system_program::id(),
+        );
         Self {
-            vote_pubkey: solana_pubkey::new_rand(),
+            vote_pubkey,
+            vote_account,
             commission_bps: rng.random_range(100..2_000),
             commission_lamports: rng.random_range(1..200),
         }
@@ -11408,59 +11415,75 @@ fn test_system_instruction_unsigned_transaction() {
 
 #[test]
 fn test_calculate_commission_accounts_empty() {
+    let GenesisConfigInfo {
+        genesis_config, ..
+    } = genesis_utils::create_genesis_config(0);
+    let bank = Bank::new_for_tests(&genesis_config);
     let reward_commissions = HashMap::default();
-    let result = Bank::calculate_commission_accounts(reward_commissions);
+    let result = bank.calculate_commission_accounts(reward_commissions);
     assert!(result.accounts_with_rewards.is_empty());
 }
 
 #[test]
 fn test_calculate_commission_accounts_overflow() {
+    let GenesisConfigInfo {
+        genesis_config, ..
+    } = genesis_utils::create_genesis_config(0);
+    let bank = Bank::new_for_tests(&genesis_config);
     let mut reward_commissions = HashMap::default();
-    let pubkey = solana_pubkey::new_rand();
-    let mut commission_account = AccountSharedData::default();
-    commission_account.set_lamports(u64::MAX);
+    let vote_pubkey = solana_pubkey::new_rand();
+    let mut vote_account = AccountSharedData::default();
+    vote_account.set_lamports(u64::MAX);
     reward_commissions.insert(
-        pubkey,
+        vote_pubkey,
         RewardCommission {
-            commission_account,
+            vote_pubkey,
+            vote_account,
             commission_bps: 0,
             commission_lamports: 1, // enough to overflow
         },
     );
-    let result = Bank::calculate_commission_accounts(reward_commissions);
+    let result = bank.calculate_commission_accounts(reward_commissions);
     assert!(result.accounts_with_rewards.is_empty());
 }
 
 #[test]
 fn test_calculate_commission_accounts_normal() {
-    let pubkey = solana_pubkey::new_rand();
+    let GenesisConfigInfo {
+        genesis_config, ..
+    } = genesis_utils::create_genesis_config(0);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let rent = bank.rent_collector().rent.clone();
+    let vote_pubkey = solana_pubkey::new_rand();
     for commission_bps in [0, 100] {
         for commission_lamports in 0..2 {
             let mut reward_commissions = HashMap::default();
-            let mut commission_account = AccountSharedData::default();
-            commission_account.set_lamports(1);
+            let min_balance = rent.minimum_balance(0);
+            let mut vote_account = AccountSharedData::default();
+            vote_account.set_lamports(min_balance);
             reward_commissions.insert(
-                pubkey,
+                vote_pubkey,
                 RewardCommission {
-                    commission_account: commission_account.clone(),
+                    vote_pubkey,
+                    vote_account: vote_account.clone(),
                     commission_bps,
                     commission_lamports,
                 },
             );
-            let result = Bank::calculate_commission_accounts(reward_commissions);
+            let result = bank.calculate_commission_accounts(reward_commissions);
             assert_eq!(result.accounts_with_rewards.len(), 1);
             let (pubkey_result, rewards, account) = &result.accounts_with_rewards[0];
-            _ = commission_account.checked_add_lamports(commission_lamports);
-            assert!(accounts_equal(account, &commission_account));
+            _ = vote_account.checked_add_lamports(commission_lamports);
+            assert!(accounts_equal(account, &vote_account));
 
             let expected_reward_info = RewardInfo {
                 reward_type: RewardType::Voting,
                 lamports: commission_lamports as i64,
-                post_balance: commission_account.lamports(),
+                post_balance: vote_account.lamports(),
                 commission_bps: Some(commission_bps),
             };
             assert_eq!(*rewards, expected_reward_info);
-            assert_eq!(*pubkey_result, pubkey);
+            assert_eq!(*pubkey_result, vote_pubkey);
         }
     }
 }

@@ -854,7 +854,7 @@ mod tests {
                 reward_commission_accounts.accounts_with_rewards.push((
                     *commission_pubkey,
                     info,
-                    reward_commission.commission_account.clone(),
+                    reward_commission.vote_account.clone(),
                 ));
                 reward_commission_accounts.total_reward_commission_lamports +=
                     reward_commission.commission_lamports;
@@ -885,7 +885,7 @@ mod tests {
                     .unwrap();
                 assert!(accounts_equal(
                     &loaded_account.0,
-                    &reward_commission.commission_account
+                    &reward_commission.vote_account
                 ));
             });
     }
@@ -1959,46 +1959,50 @@ mod tests {
         let mut accumulator1 = RewardsAccumulator::default();
         let mut accumulator2 = RewardsAccumulator::default();
 
-        let commission_pubkey_a = Pubkey::new_unique();
-        let commission_account_a = AccountSharedData::default();
+        let vote_pubkey_a = Pubkey::new_unique();
+        let vote_account_a = AccountSharedData::default();
 
-        let commission_pubkey_b = Pubkey::new_unique();
-        let commission_account_b = AccountSharedData::default();
+        let vote_pubkey_b = Pubkey::new_unique();
+        let vote_account_b = AccountSharedData::default();
 
-        let commission_pubkey_c = Pubkey::new_unique();
-        let commission_account_c = AccountSharedData::default();
+        let vote_pubkey_c = Pubkey::new_unique();
+        let vote_account_c = AccountSharedData::default();
 
         accumulator1.add_reward(
-            commission_pubkey_a,
+            vote_pubkey_a,
             RewardCommission {
-                commission_account: commission_account_a.clone(),
+                vote_pubkey: vote_pubkey_a,
+                vote_account: vote_account_a.clone(),
                 commission_bps: 1_000,
                 commission_lamports: 50,
             },
             50,
         );
         accumulator1.add_reward(
-            commission_pubkey_b,
+            vote_pubkey_b,
             RewardCommission {
-                commission_account: commission_account_b.clone(),
+                vote_pubkey: vote_pubkey_b,
+                vote_account: vote_account_b.clone(),
                 commission_bps: 1_000,
                 commission_lamports: 50,
             },
             50,
         );
         accumulator2.add_reward(
-            commission_pubkey_b,
+            vote_pubkey_b,
             RewardCommission {
-                commission_account: commission_account_b,
+                vote_pubkey: vote_pubkey_b,
+                vote_account: vote_account_b,
                 commission_bps: 1_000,
                 commission_lamports: 30,
             },
             30,
         );
         accumulator2.add_reward(
-            commission_pubkey_c,
+            vote_pubkey_c,
             RewardCommission {
-                commission_account: commission_account_c,
+                vote_pubkey: vote_pubkey_c,
+                vote_account: vote_account_c,
                 commission_bps: 1_000,
                 commission_lamports: 50,
             },
@@ -2009,28 +2013,28 @@ mod tests {
         assert_eq!(accumulator1.total_stake_rewards_lamports, 100);
         let reward_commission_a_1 = accumulator1
             .reward_commissions
-            .get(&commission_pubkey_a)
+            .get(&vote_pubkey_a)
             .unwrap();
         assert_eq!(reward_commission_a_1.commission_bps, 1_000);
         assert_eq!(reward_commission_a_1.commission_lamports, 50);
 
         let reward_commission_b_1 = accumulator1
             .reward_commissions
-            .get(&commission_pubkey_b)
+            .get(&vote_pubkey_b)
             .unwrap();
         assert_eq!(reward_commission_b_1.commission_bps, 1_000);
         assert_eq!(reward_commission_b_1.commission_lamports, 50);
 
         let reward_commission_b_2 = accumulator2
             .reward_commissions
-            .get(&commission_pubkey_b)
+            .get(&vote_pubkey_b)
             .unwrap();
         assert_eq!(reward_commission_b_2.commission_bps, 1_000);
         assert_eq!(reward_commission_b_2.commission_lamports, 30);
 
         let reward_commission_c_2 = accumulator2
             .reward_commissions
-            .get(&commission_pubkey_c)
+            .get(&vote_pubkey_c)
             .unwrap();
         assert_eq!(reward_commission_c_2.commission_bps, 1_000);
         assert_eq!(reward_commission_c_2.commission_lamports, 50);
@@ -2041,14 +2045,14 @@ mod tests {
         assert_eq!(accumulator.total_stake_rewards_lamports, 180);
         let reward_commission_a = accumulator
             .reward_commissions
-            .get(&commission_pubkey_a)
+            .get(&vote_pubkey_a)
             .unwrap();
         assert_eq!(reward_commission_a.commission_bps, 1_000);
         assert_eq!(reward_commission_a.commission_lamports, 50);
 
         let reward_commission_b = accumulator
             .reward_commissions
-            .get(&commission_pubkey_b)
+            .get(&vote_pubkey_b)
             .unwrap();
         assert_eq!(reward_commission_b.commission_bps, 1_000);
         // sum of the reward commissions from both accumulators
@@ -2056,7 +2060,7 @@ mod tests {
 
         let reward_commission_c = accumulator
             .reward_commissions
-            .get(&commission_pubkey_c)
+            .get(&vote_pubkey_c)
             .unwrap();
         assert_eq!(reward_commission_c.commission_bps, 1_000);
         assert_eq!(reward_commission_c.commission_lamports, 50);

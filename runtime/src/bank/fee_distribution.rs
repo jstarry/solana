@@ -219,11 +219,13 @@ pub mod tests {
     use {
         super::*,
         crate::genesis_utils::{create_genesis_config, create_genesis_config_with_leader},
+        agave_feature_set::custom_commission_collector,
         solana_account::AccountSharedData,
         solana_pubkey as pubkey,
         solana_rent::Rent,
         solana_signer::Signer,
         std::sync::RwLock,
+        test_case::test_case,
     };
 
     #[test]
@@ -259,7 +261,11 @@ pub mod tests {
             let rent = Rent::default();
             let min_rent_exempt_balance = rent.minimum_balance(0);
             genesis.genesis_config.rent = rent; // Ensure rent is non-zero, as genesis_utils sets Rent::free by default
-            let bank = Bank::new_for_tests(&genesis.genesis_config);
+            let mut bank = Bank::new_for_tests(&genesis.genesis_config);
+            // Genesis banks don't have a real leader, so disable the
+            // custom_commission_collector feature to avoid the leader vote
+            // account lookup in deposit_or_burn_fee.
+            bank.deactivate_feature(&custom_commission_collector::id());
 
             let deposit = 100;
             let mut burn = 100;
@@ -317,8 +323,9 @@ pub mod tests {
         }
     }
 
-    #[test]
-    fn test_deposit_fees() {
+    #[test_case(false ; "feature_disabled")]
+    #[test_case(true ; "feature_enabled")]
+    fn test_deposit_fees(custom_commission_collector: bool) {
         let initial_balance = 1_000_000_000;
         let genesis = create_genesis_config(initial_balance);
         let bank = Bank::new_for_tests(&genesis.genesis_config);
@@ -326,14 +333,15 @@ pub mod tests {
         let deposit_amount = 500;
 
         assert_eq!(
-            bank.deposit_fees(&pubkey, deposit_amount),
+            bank.deposit_fees(custom_commission_collector, &pubkey, deposit_amount),
             Ok(initial_balance + deposit_amount),
             "New balance should be the sum of the initial balance and deposit amount"
         );
     }
 
-    #[test]
-    fn test_deposit_fees_with_overflow() {
+    #[test_case(false ; "feature_disabled")]
+    #[test_case(true ; "feature_enabled")]
+    fn test_deposit_fees_with_overflow(custom_commission_collector: bool) {
         let initial_balance = u64::MAX;
         let genesis = create_genesis_config(initial_balance);
         let bank = Bank::new_for_tests(&genesis.genesis_config);
@@ -341,24 +349,56 @@ pub mod tests {
         let deposit_amount = 500;
 
         assert_eq!(
-            bank.deposit_fees(&pubkey, deposit_amount),
+            bank.deposit_fees(custom_commission_collector, &pubkey, deposit_amount),
             Err(DepositFeeError::LamportOverflow),
             "Expected an error due to lamport overflow"
         );
     }
 
-    #[test]
-    fn test_deposit_fees_invalid_account_owner() {
+    #[test_case(false ; "feature_disabled")]
+    #[test_case(true ; "feature_enabled")]
+    fn test_deposit_fees_invalid_account_owner(custom_commission_collector: bool) {
         let initial_balance = 1000;
         let genesis = create_genesis_config_with_leader(0, &pubkey::new_rand(), initial_balance);
         let bank = Bank::new_for_tests(&genesis.genesis_config);
-        let pubkey = genesis.voting_keypair.pubkey();
         let deposit_amount = 500;
 
+        // Use a non-system-owned account that is NOT the leader's vote
+        // address. Both feature states should reject this account.
+        let non_system_pubkey = pubkey::new_rand();
+        let non_system_account =
+            AccountSharedData::new(initial_balance, 0, &pubkey::new_rand());
+        bank.store_account(&non_system_pubkey, &non_system_account);
+
         assert_eq!(
-            bank.deposit_fees(&pubkey, deposit_amount),
+            bank.deposit_fees(custom_commission_collector, &non_system_pubkey, deposit_amount),
             Err(DepositFeeError::InvalidAccountOwner),
             "Expected an error due to invalid account owner"
+        );
+    }
+
+    /// When custom_commission_collector is enabled, the leader's vote
+    /// account is allowed as a fee collector even though it is not
+    /// system-owned.
+    #[test]
+    fn test_deposit_fees_vote_account_allowed_when_feature_enabled() {
+        let initial_balance = 1000;
+        let genesis = create_genesis_config_with_leader(0, &pubkey::new_rand(), initial_balance);
+        let bank = Bank::new_for_tests(&genesis.genesis_config);
+        let vote_pubkey = genesis.voting_keypair.pubkey();
+        let deposit_amount = 500;
+
+        // With feature disabled, the vote account owner check fails.
+        assert_eq!(
+            bank.deposit_fees(false, &vote_pubkey, deposit_amount),
+            Err(DepositFeeError::InvalidAccountOwner),
+        );
+
+        // With feature enabled, the leader's vote address is allowed.
+        let vote_balance = bank.get_balance(&vote_pubkey);
+        assert_eq!(
+            bank.deposit_fees(true, &vote_pubkey, deposit_amount),
+            Ok(vote_balance + deposit_amount),
         );
     }
 
@@ -366,6 +406,7 @@ pub mod tests {
     fn test_distribute_transaction_fee_details_normal() {
         let genesis = create_genesis_config(0);
         let mut bank = Bank::new_for_tests(&genesis.genesis_config);
+        bank.deactivate_feature(&custom_commission_collector::id());
         let transaction_fee = 100;
         let priority_fee = 200;
         bank.collector_fee_details = RwLock::new(CollectorFeeDetails {
@@ -434,6 +475,7 @@ pub mod tests {
     fn test_distribute_transaction_fee_details_overflow_failure() {
         let genesis = create_genesis_config(0);
         let mut bank = Bank::new_for_tests(&genesis.genesis_config);
+        bank.deactivate_feature(&custom_commission_collector::id());
         let transaction_fee = 100;
         let priority_fee = 200;
         bank.collector_fee_details = RwLock::new(CollectorFeeDetails {

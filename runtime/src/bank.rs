@@ -2520,23 +2520,24 @@ impl Bank {
                     continue;
                 }
 
+                if self.rent_collector().rent.is_exempt(
+                    commission_account
+                        .lamports()
+                        .saturating_add(commission_lamports),
+                    commission_account.data().len(),
+                ) {
+                    debug!(
+                        "reward redemption failed for {commission_pubkey}: \
+                         commission account not rent-exempt after commission deposit"
+                    );
+                    continue;
+                }
+
                 commission_account
             };
 
             if let Err(err) = commission_account.checked_add_lamports(commission_lamports) {
                 debug!("reward redemption failed for {commission_pubkey}: {err:?}");
-                continue;
-            }
-
-            let rent = &self.rent_collector().rent;
-            if !rent.is_exempt(
-                commission_account.lamports(),
-                commission_account.data().len(),
-            ) {
-                debug!(
-                    "reward redemption failed for {commission_pubkey}: \
-                         commission account not rent-exempt"
-                );
                 continue;
             }
 

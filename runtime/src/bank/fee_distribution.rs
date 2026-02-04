@@ -136,7 +136,13 @@ impl Bank {
             self.leader.id
         };
 
-        match self.deposit_fees(custom_commission_collector, &fee_collector_id, deposit) {
+        let deposit_result = if custom_commission_collector {
+            self.deposit_fees_for_custom_collector(&fee_collector_id, deposit)
+        } else {
+            self.deposit_fees(&fee_collector_id, deposit)
+        };
+
+        match deposit_result {
             Ok(post_balance) => {
                 self.rewards.write().unwrap().push((
                     fee_collector_id,
@@ -166,42 +172,66 @@ impl Bank {
         }
     }
 
-    // Deposits fees into a specified account and if successful, returns the new
-    // balance of that account
-    fn deposit_fees(
+    fn deposit_fees_for_custom_collector(
         &self,
-        custom_commission_collector: bool,
         fee_collector_id: &Pubkey,
         fees: u64,
     ) -> Result<u64, DepositFeeError> {
-        if custom_commission_collector && self.reserved_account_keys.is_reserved(fee_collector_id) {
+        if self.reserved_account_keys.is_reserved(fee_collector_id) {
             return Err(DepositFeeError::InvalidReservedAccount);
         }
 
-        let mut fee_collector_account = self
+        let mut account = self
             .get_account_with_fixed_root_no_cache(fee_collector_id)
             .unwrap_or_default();
 
-        if custom_commission_collector && self.leader.vote_address == *fee_collector_id {
+        if self.leader.vote_address == *fee_collector_id {
             // OK!
-        } else if !system_program::check_id(fee_collector_account.owner()) {
+        } else if !system_program::check_id(account.owner()) {
+            return Err(DepositFeeError::InvalidAccountOwner);
+        }
+
+        account
+            .checked_add_lamports(fees)
+            .map_err(|_| DepositFeeError::LamportOverflow)?;
+
+        if self
+            .rent_collector()
+            .rent
+            .is_exempt(account.lamports(), account.data().len())
+        {
+            return Err(DepositFeeError::InvalidRentPayingAccount);
+        }
+
+        self.store_account(fee_collector_id, &account);
+        Ok(account.lamports())
+    }
+
+    // Deposits fees into a specified account and if successful, returns the new
+    // balance of that account
+    fn deposit_fees(&self, pubkey: &Pubkey, fees: u64) -> Result<u64, DepositFeeError> {
+        let mut account = self
+            .get_account_with_fixed_root_no_cache(pubkey)
+            .unwrap_or_default();
+
+        if !system_program::check_id(account.owner()) {
             return Err(DepositFeeError::InvalidAccountOwner);
         }
 
         let recipient_pre_rent_state = get_account_rent_state(
             &self.rent_collector().rent,
-            fee_collector_account.lamports(),
-            fee_collector_account.data().len(),
+            account.lamports(),
+            account.data().len(),
         );
-        let distribution = fee_collector_account.checked_add_lamports(fees);
+        let distribution = account.checked_add_lamports(fees);
         if distribution.is_err() {
             return Err(DepositFeeError::LamportOverflow);
         }
 
         let recipient_post_rent_state = get_account_rent_state(
             &self.rent_collector().rent,
-            fee_collector_account.lamports(),
-            fee_collector_account.data().len(),
+            account.lamports(),
+            account.data().len(),
         );
         let rent_state_transition_allowed =
             transition_allowed(&recipient_pre_rent_state, &recipient_post_rent_state);
@@ -209,8 +239,8 @@ impl Bank {
             return Err(DepositFeeError::InvalidRentPayingAccount);
         }
 
-        self.store_account(fee_collector_id, &fee_collector_account);
-        Ok(fee_collector_account.lamports())
+        self.store_account(pubkey, &account);
+        Ok(account.lamports())
     }
 }
 

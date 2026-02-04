@@ -132,7 +132,7 @@ use {
     solana_runtime_transaction::{
         runtime_transaction::RuntimeTransaction, transaction_with_meta::TransactionWithMeta,
     },
-    solana_sdk_ids::{bpf_loader_upgradeable, incinerator, native_loader},
+    solana_sdk_ids::{bpf_loader_upgradeable, incinerator, native_loader, system_program},
     solana_sha256_hasher::hashv,
     solana_signature::Signature,
     solana_slot_hashes::SlotHashes,
@@ -942,7 +942,8 @@ pub struct Bank {
 
 #[derive(Debug)]
 struct RewardCommission {
-    commission_account: AccountSharedData,
+    vote_pubkey: Pubkey,
+    vote_account: AccountSharedData,
     commission_bps: u16,
     commission_lamports: u64,
 }
@@ -2482,6 +2483,7 @@ impl Bank {
     /// for storage by combining previously separate rewards and accounts
     /// vectors into a single accounts_with_rewards vector.
     fn calculate_commission_accounts(
+        &self,
         reward_commissions: RewardCommissions,
     ) -> RewardCommissionAccounts {
         let mut result = RewardCommissionAccounts {
@@ -2491,14 +2493,50 @@ impl Bank {
         for (
             commission_pubkey,
             RewardCommission {
-                mut commission_account,
+                vote_pubkey,
+                vote_account,
                 commission_bps,
                 commission_lamports,
             },
         ) in reward_commissions
         {
+            let mut commission_account = if commission_pubkey == vote_pubkey {
+                vote_account
+            } else {
+                let commission_account = self.get_account(&commission_pubkey).unwrap_or_default();
+                if commission_account.owner() != &system_program::id() {
+                    debug!(
+                        "reward redemption failed for {commission_pubkey}: \
+                         commission account not owned by system program"
+                    );
+                    continue;
+                }
+
+                if self.reserved_account_keys.is_reserved(&commission_pubkey) {
+                    debug!(
+                        "reward redemption failed for {commission_pubkey}: \
+                         commission account is reserved"
+                    );
+                    continue;
+                }
+
+                commission_account
+            };
+
             if let Err(err) = commission_account.checked_add_lamports(commission_lamports) {
                 debug!("reward redemption failed for {commission_pubkey}: {err:?}");
+                continue;
+            }
+
+            let rent = &self.rent_collector().rent;
+            if !rent.is_exempt(
+                commission_account.lamports(),
+                commission_account.data().len(),
+            ) {
+                debug!(
+                    "reward redemption failed for {commission_pubkey}: \
+                         commission account not rent-exempt"
+                );
                 continue;
             }
 

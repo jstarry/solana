@@ -23,6 +23,13 @@ struct CalculatedStakeRewards {
     new_credits_observed: u64,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CommissionFeatures {
+    pub(crate) delay_commission_updates: bool,
+    pub(crate) commission_rate_in_basis_points: bool,
+    pub(crate) custom_commission_collector: bool,
+}
+
 /// Redeems rewards for the given epoch, stake state and vote state.
 /// Returns a tuple of:
 /// * Stakers reward

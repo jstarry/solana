@@ -1,6 +1,7 @@
 use {
     super::Bank,
     crate::{bank::CollectorFeeDetails, reward_info::RewardInfo},
+    agave_feature_set::custom_commission_collector,
     log::debug,
     solana_account::{ReadableAccount, WritableAccount},
     solana_fee::FeeFeatures,
@@ -22,6 +23,8 @@ enum DepositFeeError {
     LamportOverflow,
     #[error("invalid fee account owner")]
     InvalidAccountOwner,
+    #[error("fee account is reserved")]
+    InvalidReservedAccount,
 }
 
 #[derive(Default)]
@@ -56,7 +59,6 @@ impl Bank {
 
         let FeeDistribution { deposit, burn } =
             self.calculate_reward_and_burn_fee_details(&fee_details);
-
         let total_burn = self.deposit_or_burn_fee(deposit).saturating_add(burn);
         self.capitalization.fetch_sub(total_burn, Relaxed);
     }
@@ -114,10 +116,30 @@ impl Bank {
             return 0;
         }
 
-        match self.deposit_fees(&self.leader.id, deposit) {
+        let custom_commission_collector = self
+            .feature_set
+            .is_active(&custom_commission_collector::id());
+
+        let fee_collector_id = if custom_commission_collector {
+            let previous_epoch_vote_account = self
+                .epoch_stakes(self.epoch())
+                .map(|epoch_stakes| epoch_stakes.stakes().vote_accounts())
+                .and_then(|vote_accounts| vote_accounts.get(&self.leader.vote_address))
+                .expect("leader vote account should exist in epoch stakes");
+
+            previous_epoch_vote_account
+                .vote_state_view()
+                .block_revenue_collector()
+                .copied()
+                .unwrap_or(self.leader.id)
+        } else {
+            self.leader.id
+        };
+
+        match self.deposit_fees(custom_commission_collector, &fee_collector_id, deposit) {
             Ok(post_balance) => {
                 self.rewards.write().unwrap().push((
-                    self.leader.id,
+                    fee_collector_id,
                     RewardInfo {
                         reward_type: RewardType::Fee,
                         lamports: deposit as i64,
@@ -129,8 +151,9 @@ impl Bank {
             }
             Err(err) => {
                 debug!(
-                    "Burned {} lamport tx fee instead of sending to {} due to {}",
-                    deposit, self.leader.id, err
+                    "Burned {} lamport tx fee instead of sending to leader's \
+                     ({}) collector address ({}) due to {}",
+                    deposit, self.leader.id, fee_collector_id, err
                 );
                 datapoint_warn!(
                     "bank-burned_fee",
@@ -143,30 +166,42 @@ impl Bank {
         }
     }
 
-    // Deposits fees into a specified account and if successful, returns the new balance of that account
-    fn deposit_fees(&self, pubkey: &Pubkey, fees: u64) -> Result<u64, DepositFeeError> {
-        let mut account = self
-            .get_account_with_fixed_root_no_cache(pubkey)
+    // Deposits fees into a specified account and if successful, returns the new
+    // balance of that account
+    fn deposit_fees(
+        &self,
+        custom_commission_collector: bool,
+        fee_collector_id: &Pubkey,
+        fees: u64,
+    ) -> Result<u64, DepositFeeError> {
+        if custom_commission_collector && self.reserved_account_keys.is_reserved(fee_collector_id) {
+            return Err(DepositFeeError::InvalidReservedAccount);
+        }
+
+        let mut fee_collector_account = self
+            .get_account_with_fixed_root_no_cache(fee_collector_id)
             .unwrap_or_default();
 
-        if !system_program::check_id(account.owner()) {
+        if custom_commission_collector && self.leader.vote_address == *fee_collector_id {
+            // OK!
+        } else if !system_program::check_id(fee_collector_account.owner()) {
             return Err(DepositFeeError::InvalidAccountOwner);
         }
 
         let recipient_pre_rent_state = get_account_rent_state(
             &self.rent_collector().rent,
-            account.lamports(),
-            account.data().len(),
+            fee_collector_account.lamports(),
+            fee_collector_account.data().len(),
         );
-        let distribution = account.checked_add_lamports(fees);
+        let distribution = fee_collector_account.checked_add_lamports(fees);
         if distribution.is_err() {
             return Err(DepositFeeError::LamportOverflow);
         }
 
         let recipient_post_rent_state = get_account_rent_state(
             &self.rent_collector().rent,
-            account.lamports(),
-            account.data().len(),
+            fee_collector_account.lamports(),
+            fee_collector_account.data().len(),
         );
         let rent_state_transition_allowed =
             transition_allowed(&recipient_pre_rent_state, &recipient_post_rent_state);
@@ -174,8 +209,8 @@ impl Bank {
             return Err(DepositFeeError::InvalidRentPayingAccount);
         }
 
-        self.store_account(pubkey, &account);
-        Ok(account.lamports())
+        self.store_account(fee_collector_id, &fee_collector_account);
+        Ok(fee_collector_account.lamports())
     }
 }
 

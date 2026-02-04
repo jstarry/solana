@@ -13,7 +13,7 @@ use {
         },
         inflation_rewards::{
             points::{calculate_points, DelegatedVoteState, PointValue},
-            redeem_rewards,
+            redeem_rewards, CommissionFeatures,
         },
         stake_account::StakeAccount,
         stake_utils,
@@ -438,8 +438,7 @@ impl Bank {
         cached_vote_accounts: &CachedVoteAccounts<'_>,
         reward_calc_tracer: Option<impl RewardCalcTracer>,
         new_rate_activation_epoch: Option<Epoch>,
-        delay_commission_updates: bool,
-        commission_rate_in_basis_points: bool,
+        commission_features: CommissionFeatures,
     ) -> Option<DelegationRewards> {
         // curry closure to add the contextual stake_pubkey
         let reward_calc_tracer = reward_calc_tracer.as_ref().map(|outer| {
@@ -470,21 +469,30 @@ impl Bank {
         // When `commission_rate_in_basis_points` is true, use the new field
         // `inflation_rewards_commission_bps`; otherwise use the legacy
         // percentage field and convert to basis points by multiplying by 100.
-        let commission_bps = if delay_commission_updates {
+        let commission_bps = if commission_features.delay_commission_updates {
             let vote_state_for_commission = snapshot_epoch_vote_accounts
                 .and_then(|eva| eva.get(&vote_pubkey))
                 .or_else(|| rewarded_epoch_vote_accounts.and_then(|eva| eva.get(&vote_pubkey)))
                 .map(|vote_account| vote_account.vote_state_view())
                 .unwrap_or(vote_state);
-            if commission_rate_in_basis_points {
+            if commission_features.commission_rate_in_basis_points {
                 vote_state_for_commission.inflation_rewards_commission()
             } else {
                 vote_state_for_commission.commission() as u16 * 100
             }
-        } else if commission_rate_in_basis_points {
+        } else if commission_features.commission_rate_in_basis_points {
             vote_state.inflation_rewards_commission()
         } else {
             vote_state.commission() as u16 * 100
+        };
+
+        let commission_pubkey = if commission_features.custom_commission_collector {
+            vote_state
+                .inflation_rewards_collector()
+                .copied()
+                .unwrap_or(vote_pubkey)
+        } else {
+            vote_pubkey
         };
 
         match redeem_rewards(
@@ -496,7 +504,7 @@ impl Bank {
             stake_history,
             reward_calc_tracer,
             new_rate_activation_epoch,
-            commission_rate_in_basis_points,
+            commission_features.commission_rate_in_basis_points,
         ) {
             Ok((stake_reward, commission_lamports, stake)) => {
                 let stake_reward = PartitionedStakeReward {
@@ -507,13 +515,14 @@ impl Bank {
                 };
                 let vote_account = vote_account.into();
                 let reward_commission = RewardCommission {
+                    vote_pubkey,
+                    vote_account,
                     commission_bps,
-                    commission_account: vote_account,
                     commission_lamports,
                 };
                 Some(DelegationRewards {
                     stake_reward,
-                    commission_pubkey: vote_pubkey,
+                    commission_pubkey,
                     reward_commission,
                 })
             }
@@ -538,12 +547,17 @@ impl Bank {
         metrics: &mut RewardsMetrics,
     ) -> (RewardCommissionAccounts, StakeRewardCalculation) {
         let new_warmup_cooldown_rate_epoch = self.new_warmup_cooldown_rate_epoch();
-        let delay_commission_updates = self
-            .feature_set
-            .is_active(&agave_feature_set::delay_commission_updates::id());
-        let commission_rate_in_basis_points = self
-            .feature_set
-            .is_active(&feature_set::commission_rate_in_basis_points::id());
+        let commission_features = CommissionFeatures {
+            delay_commission_updates: self
+                .feature_set
+                .is_active(&agave_feature_set::delay_commission_updates::id()),
+            commission_rate_in_basis_points: self
+                .feature_set
+                .is_active(&feature_set::commission_rate_in_basis_points::id()),
+            custom_commission_collector: self
+                .feature_set
+                .is_active(&agave_feature_set::custom_commission_collector::id()),
+        };
 
         let mut measure_redeem_rewards = Measure::start("redeem-rewards");
         // For N stake delegations, where N is >1,000,000, we produce:
@@ -573,8 +587,7 @@ impl Bank {
                                 &cached_vote_accounts,
                                 reward_calc_tracer.as_ref(),
                                 new_warmup_cooldown_rate_epoch,
-                                delay_commission_updates,
-                                commission_rate_in_basis_points,
+                                commission_features,
                             )
                         });
                     let (stake_reward, maybe_reward_record) = match maybe_reward_record {
@@ -629,7 +642,7 @@ impl Bank {
         unsafe {
             stake_rewards.assume_init(num_stake_rewards);
         }
-        let reward_commission_accounts = Self::calculate_commission_accounts(reward_commissions);
+        let reward_commission_accounts = self.calculate_commission_accounts(reward_commissions);
         measure_redeem_rewards.stop();
         metrics.redeem_rewards_us = measure_redeem_rewards.as_us();
 

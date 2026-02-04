@@ -145,16 +145,9 @@ use {
 impl RewardCommission {
     pub fn new_random() -> Self {
         let mut rng = rand::rng();
-
-        let commission_balance = rng.random_range(1..200);
-        let commission_bps: u16 = rng.random_range(100..2_000);
-
-        let mut commission_account = AccountSharedData::default();
-        commission_account.set_lamports(commission_balance);
-
         Self {
-            commission_account,
-            commission_bps,
+            vote_pubkey: solana_pubkey::new_rand(),
+            commission_bps: rng.random_range(100..2_000),
             commission_lamports: rng.random_range(1..200),
         }
     }

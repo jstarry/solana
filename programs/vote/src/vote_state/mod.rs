@@ -4249,26 +4249,27 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_update_validator_identity_syncs_block_revenue_collector() {
-        // Feature disabled; block revenue collector should always sync.
-        let custom_commission_collector_enabled = false;
-
+    #[test_case(false ; "feature_disabled")]
+    #[test_case(true ; "feature_enabled")]
+    fn test_update_validator_identity_syncs_block_revenue_collector(
+        custom_commission_collector_enabled: bool,
+    ) {
         let vote_state =
             vote_state_new_for_test(&solana_pubkey::new_rand(), VoteStateTargetVersion::V4);
-        let node_pubkey = *vote_state.node_pubkey();
+        let original_block_revenue_collector = vote_state.as_ref_v4().block_revenue_collector;
         let withdrawer_pubkey = *vote_state.authorized_withdrawer();
 
         let serialized = vote_state.serialize();
         let serialized_len = serialized.len();
         let rent = Rent::default();
         let lamports = rent.minimum_balance(serialized_len);
+        let vote_pubkey = solana_pubkey::new_rand();
         let mut vote_account = AccountSharedData::new(lamports, serialized_len, &id());
         vote_account.set_data_from_slice(&serialized);
 
         let processor_account = AccountSharedData::new(0, 0, &solana_sdk_ids::native_loader::id());
         let mut transaction_context = TransactionContext::new(
-            vec![(id(), processor_account), (node_pubkey, vote_account)],
+            vec![(id(), processor_account), (vote_pubkey, vote_account)],
             rent,
             0,
             0,
@@ -4300,32 +4301,48 @@ mod tests {
         )
         .unwrap();
 
-        // Both `node_pubkey` and `block_revenue_collector` should be set to
-        // the new node pubkey.
         let vote_state =
             VoteStateV4::deserialize(borrowed_account.get_data(), &new_node_pubkey).unwrap();
         assert_eq!(vote_state.node_pubkey, new_node_pubkey);
-        assert_eq!(vote_state.block_revenue_collector, new_node_pubkey);
+        if custom_commission_collector_enabled {
+            // SIMD-0232 enabled: block_revenue_collector is NOT synced
+            // with node_pubkey, it stays at its original value.
+            assert_eq!(
+                vote_state.block_revenue_collector,
+                original_block_revenue_collector,
+            );
+        } else {
+            // SIMD-0232 disabled: block_revenue_collector is synced
+            // with node_pubkey.
+            assert_eq!(vote_state.block_revenue_collector, new_node_pubkey);
+        }
 
-        // Run it again.
-        let new_node_pubkey = solana_pubkey::new_rand();
-        let signers: HashSet<Pubkey> = vec![withdrawer_pubkey, new_node_pubkey]
+        // Run it again with a different identity.
+        let new_node_pubkey_2 = solana_pubkey::new_rand();
+        let signers: HashSet<Pubkey> = vec![withdrawer_pubkey, new_node_pubkey_2]
             .into_iter()
             .collect();
 
         update_validator_identity(
             &mut borrowed_account,
             VoteStateTargetVersion::V4,
-            &new_node_pubkey,
+            &new_node_pubkey_2,
             &signers,
             custom_commission_collector_enabled,
         )
         .unwrap();
 
         let vote_state =
-            VoteStateV4::deserialize(borrowed_account.get_data(), &new_node_pubkey).unwrap();
-        assert_eq!(vote_state.node_pubkey, new_node_pubkey);
-        assert_eq!(vote_state.block_revenue_collector, new_node_pubkey);
+            VoteStateV4::deserialize(borrowed_account.get_data(), &new_node_pubkey_2).unwrap();
+        assert_eq!(vote_state.node_pubkey, new_node_pubkey_2);
+        if custom_commission_collector_enabled {
+            assert_eq!(
+                vote_state.block_revenue_collector,
+                original_block_revenue_collector,
+            );
+        } else {
+            assert_eq!(vote_state.block_revenue_collector, new_node_pubkey_2);
+        }
     }
 
     #[test]

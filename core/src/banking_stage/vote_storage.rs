@@ -374,11 +374,8 @@ pub(crate) mod tests {
         solana_epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         solana_genesis_config::GenesisConfig,
         solana_hash::Hash,
-<<<<<<< HEAD
         solana_keypair::Keypair,
-=======
         solana_leader_schedule::SlotLeader,
->>>>>>> parent of 22a73235b0 (Revert bank leader changes (#10381))
         solana_perf::packet::{BytesPacket, PacketFlags},
         solana_runtime::genesis_utils::{self, ValidatorVoteKeypairs},
         solana_signer::Signer,
